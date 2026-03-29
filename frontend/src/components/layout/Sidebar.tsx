@@ -78,6 +78,35 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Learning Path */}
+        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+          <p className="px-6 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+            Learning Path
+          </p>
+          {[
+            { label: "Introduction to FL", level: "beginner" },
+            { label: "FedAvg Algorithm", level: "beginner" },
+            { label: "Non-IID Data", level: "intermediate" },
+            { label: "FL Healthcare", level: "intermediate" },
+            { label: "Differential Privacy", level: "advanced" },
+            { label: "Personalization", level: "advanced" },
+          ].map((topic) => (
+            <Link
+              key={topic.label}
+              href="/compendium"
+              className="flex items-center gap-2.5 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
+            >
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                topic.level === "beginner" && "bg-emerald-400",
+                topic.level === "intermediate" && "bg-amber-400",
+                topic.level === "advanced" && "bg-red-400",
+              )} />
+              {topic.label}
+            </Link>
+          ))}
+        </div>
       </nav>
 
       {/* Footer: Theme Toggle + Status */}

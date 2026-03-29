@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** Phase 5 — COMPLETATA
-**Current Version:** v1.0.0
-**Status:** Production-ready release
+**Current Phase:** v1.2.0 — FedCompendium integration (Opzione C)
+**Current Version:** v1.2.0
+**Status:** Compendium unified as educational module
 
 ---
 
@@ -88,3 +88,23 @@
 | v1.0.0 | Polish | Complete documentation, production-ready |
 
 **Total files:** ~85 | **Total lines:** ~10,000+ | **Real papers tested:** 9/9 validated
+
+#### v1.1.0 — FedCompendium XL embed
+- FedCompendium embedded as iframe at /compendium
+- 27 papers imported, dark/light theme toggle
+
+#### v1.2.0 — Compendium Integration (Opzione C)
+- **Papers page unified** with 3 tabs: All / API Sources / Compendium
+  - Tab switcher with visual distinction
+  - Compendium banner with link to full sub-app
+  - Compendium papers marked with purple left border
+  - Source filter adapts to active tab
+- **Paper detail**: "Open in Compendium" button for compendium papers
+- **Sidebar Learning Path**: 6 educational topics with difficulty indicators
+  - Beginner (green): Introduction to FL, FedAvg
+  - Intermediate (amber): Non-IID Data, FL Healthcare
+  - Advanced (red): Differential Privacy, Personalization
+- **DOI enrichment**: 4/27 compendium papers enriched via Semantic Scholar
+  - Most compendium papers are custom/unpublished titles (not indexed in S2)
+- **Source colors**: Compendium gets purple (#a855f7) badge
+- **314 total papers** in DB: 148 PubMed + 93 bioRxiv + 46 medRxiv + 27 Compendium

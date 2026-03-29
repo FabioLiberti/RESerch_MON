@@ -28,6 +28,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   biorxiv: "#f59e0b",
   medrxiv: "#f97316",
   ieee: "#3b82f6",
+  compendium: "#a855f7",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -37,4 +38,5 @@ export const SOURCE_LABELS: Record<string, string> = {
   biorxiv: "bioRxiv",
   medrxiv: "medRxiv",
   ieee: "IEEE Xplore",
+  compendium: "Compendium",
 };
