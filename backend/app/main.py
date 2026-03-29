@@ -102,9 +102,20 @@ async def lifespan(app: FastAPI):
     # Seed defaults
     await seed_default_topics()
 
+    # Start scheduler (only in production)
+    if settings.app_env != "development":
+        from app.tasks.scheduler import setup_scheduler
+        sched = setup_scheduler()
+        sched.start()
+        logger.info("Scheduler started")
+
     yield
 
-    # Shutdown
+    # Shutdown scheduler
+    if settings.app_env != "development":
+        from app.tasks.scheduler import scheduler
+        scheduler.shutdown(wait=False)
+
     await engine.dispose()
     logger.info("Application shutdown")
 
@@ -112,7 +123,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FL-RESEARCH-MONITOR",
     description="Automated scientific paper discovery system for Federated Learning research",
-    version="0.1.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 

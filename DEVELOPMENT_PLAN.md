@@ -51,15 +51,16 @@
 
 ---
 
-## Phase 4: Automation + Analysis (v0.4.0) — PIANIFICATA
+## Phase 4: Automation + Analysis (v0.4.0) — COMPLETATA
 
-- [ ] AnalysisService (synthetic paper analysis: key findings, methodology, relevance score)
-- [ ] ReportGenerator (daily HTML/PDF summary via Jinja2)
-- [ ] ZoteroClient + ZoteroSyncService
-- [ ] APScheduler integration nel backend (daily fetch job)
-- [ ] GitHub Actions: scheduled-fetch migliorato con report generation
-- [ ] Email report template (preparazione per integrazione futura)
-- [ ] Push v0.4.0
+- [x] AnalysisService (FL technique detection, methodology, key findings, relevance score)
+- [x] ReportGenerator (daily HTML report via Jinja2 dark-theme template)
+- [x] ZoteroClient + ZoteroSyncService (Web API v3, collection management)
+- [x] APScheduler (daily 06:00 UTC, full pipeline)
+- [x] Reports API (list, view HTML, trigger generation)
+- [x] Reports frontend (list, iframe viewer, generate button)
+- [x] GitHub Actions: analysis + report + export in scheduled job
+- [x] Push v0.4.0
 
 ---
 

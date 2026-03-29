@@ -27,14 +27,45 @@ jobs:
           SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
           IEEE_API_KEY: ${{ secrets.IEEE_API_KEY }}
         run: |
-          mkdir -p data/db data/registry
+          mkdir -p data/db data/registry data/reports data/pdfs
           python scripts/fetch_papers.py --max-per-source 50
+
+      - name: Validate papers
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./data/db/research_monitor.db
+        run: python scripts/validate_papers.py
+
+      - name: Generate analyses and report
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./data/db/research_monitor.db
+        run: |
+          python -c "
+          import asyncio, sys; sys.path.insert(0, '.')
+          from app.database import async_session, engine
+          from app.models.paper import Base
+          from app.services.analysis import AnalysisService
+          from app.services.report_generator import ReportGenerator
+          from app.services.export_service import ExportService
+
+          async def main():
+              async with engine.begin() as conn:
+                  await conn.run_sync(Base.metadata.create_all)
+              async with async_session() as db:
+                  await AnalysisService().analyze_all_papers(db)
+                  await ReportGenerator().generate_daily_report(db)
+                  await ExportService().export_json(db)
+                  await ExportService().export_xlsx(db)
+                  await db.commit()
+              await engine.dispose()
+          asyncio.run(main())
+          "
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: discovery-results-${{ github.run_number }}
+          name: discovery-${{ github.run_number }}
           path: |
             backend/data/db/research_monitor.db
             backend/data/registry/
+            backend/data/reports/
           retention-days: 30
