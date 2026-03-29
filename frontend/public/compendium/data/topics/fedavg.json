@@ -1,0 +1,37 @@
+{
+    "id": "fedavg",
+    "title": "Federated Averaging (FedAvg)",
+    "category": ["algorithms"],
+    "difficulty": "beginner",
+    "description": "Understand the canonical federated averaging algorithm, its implementation details and convergence properties.",
+    "content": "<p>Federated Averaging (FedAvg) is the foundational algorithm in federated learning, introduced by McMahan et al. in their seminal paper 'Communication-Efficient Learning of Deep Networks from Decentralized Data'.</p><h3>Algorithm Overview</h3><p>FedAvg works by iteratively:</p><ol><li>Selecting a subset of clients to participate in the current training round</li><li>Sending the current global model to selected clients</li><li>Having each client train the model on their local data for several epochs</li><li>Aggregating the resulting model updates (typically by averaging)</li><li>Updating the global model</li></ol><h3>Key Properties</h3><ul><li><strong>Communication Efficiency:</strong> By performing multiple local training steps before communication, FedAvg reduces the communication overhead compared to distributed SGD.</li><li><strong>Privacy Preservation:</strong> Raw data never leaves client devices, only model updates are shared.</li><li><strong>Resilience to Unbalanced Data:</strong> FedAvg can handle situations where clients have different amounts of training data.</li></ul><h3>Mathematical Formulation</h3><p>Let w be the global model parameters and w_i be the local model parameters for client i. The FedAvg update rule can be written as:</p><p>w_{t+1} = \\sum_{i=1}^{K} \\frac{n_i}{n} w_i^t</p><p>Where n_i is the number of samples at client i, n is the total number of samples across all clients, and K is the number of clients participating in the current round.</p><h3>Convergence Properties</h3><p>FedAvg convergence depends on several factors:</p><ul><li>The degree of non-IID data distribution among clients</li><li>The number of local epochs performed by each client</li><li>The fraction of clients participating in each round</li><li>The learning rate schedule</li></ul><p>Under certain conditions on the loss function (e.g., convexity, smoothness) and with appropriate hyperparameter settings, FedAvg can be shown to converge to an optimal or near-optimal solution.</p>",
+    "relatedTopics": [
+      {"id": "personalization", "title": "Personalization in Federated Learning"},
+      {"id": "non-iid-data", "title": "Dealing with Non-IID Data"},
+      {"id": "edge-computing", "title": "Federated Learning on Edge Devices"}
+    ],
+    "relatedPapers": [
+      {
+        "id": "mcmahan2017",
+        "title": "Communication-Efficient Learning of Deep Networks from Decentralized Data",
+        "authors": "McMahan, H. B., Moore, E., Ramage, D., Hampson, S., & Arcas, B. A."
+      },
+      {
+        "id": "li2020federated",
+        "title": "Federated Optimization in Heterogeneous Networks",
+        "authors": "Li, T., Sahu, A. K., Zaheer, M., Sanjabi, M., Talwalkar, A., & Smith, V."
+      }
+    ],
+    "codeExamples": [
+      {
+        "title": "FedAvg Implementation in PyTorch",
+        "language": "python",
+        "code": "import torch\n\ndef federated_avg(global_model, client_models, client_data_sizes):\n    \"\"\"Perform federated averaging on client models\n    \n    Args:\n        global_model: The global model to be updated\n        client_models: List of client models after local training\n        client_data_sizes: List of data sizes for each client\n        \n    Returns:\n        Updated global model\n    \"\"\"\n    # Get the total data size\n    total_data_size = sum(client_data_sizes)\n    \n    # Initialize a dictionary to store the averaged parameters\n    global_params = {}\n    for name, param in global_model.named_parameters():\n        global_params[name] = torch.zeros_like(param.data)\n    \n    # Perform weighted averaging of model parameters\n    for client_idx, client_model in enumerate(client_models):\n        weight = client_data_sizes[client_idx] / total_data_size\n        for name, param in client_model.named_parameters():\n            global_params[name] += param.data * weight\n    \n    # Update the global model parameters\n    for name, param in global_model.named_parameters():\n        param.data = global_params[name]\n    \n    return global_model\n\n# Example client update function\ndef client_update(client_model, optimizer, train_loader, epochs):\n    \"\"\"Update client model on local data\n    \n    Args:\n        client_model: Model to be updated\n        optimizer: Optimizer for training\n        train_loader: DataLoader for client's training data\n        epochs: Number of local training epochs\n        \n    Returns:\n        Updated client model\n    \"\"\"\n    client_model.train()\n    for _ in range(epochs):\n        for data, target in train_loader:\n            optimizer.zero_grad()\n            output = client_model(data)\n            loss = torch.nn.functional.cross_entropy(output, target)\n            loss.backward()\n            optimizer.step()\n    \n    return client_model"
+      },
+      {
+        "title": "FedAvg Implementation in TensorFlow",
+        "language": "python",
+        "code": "import tensorflow as tf\nimport numpy as np\n\ndef federated_avg(global_weights, client_weights, client_data_sizes):\n    \"\"\"Perform federated averaging on client models\n    \n    Args:\n        global_weights: List of Numpy arrays containing global model weights\n        client_weights: List of lists of Numpy arrays containing client model weights\n        client_data_sizes: List of data sizes for each client\n        \n    Returns:\n        Updated global weights\n    \"\"\"\n    # Get the total data size\n    total_data_size = sum(client_data_sizes)\n    \n    # Initialize new global weights\n    new_weights = [np.zeros_like(w) for w in global_weights]\n    \n    # Perform weighted averaging of model parameters\n    for c_idx, c_weights in enumerate(client_weights):\n        weight = client_data_sizes[c_idx] / total_data_size\n        for i, w in enumerate(c_weights):\n            new_weights[i] += w * weight\n    \n    return new_weights\n\n# Example client update function\ndef client_update(model, dataset, epochs, batch_size):\n    \"\"\"Update client model on local data\n    \n    Args:\n        model: TensorFlow model to be updated\n        dataset: Client's dataset as (features, labels)\n        epochs: Number of local training epochs\n        batch_size: Batch size for training\n        \n    Returns:\n        Updated model weights\n    \"\"\"\n    features, labels = dataset\n    num_samples = len(features)\n    dataset = tf.data.Dataset.from_tensor_slices(\n        (features, labels)).shuffle(num_samples).batch(batch_size)\n    \n    for _ in range(epochs):\n        for x, y in dataset:\n            with tf.GradientTape() as tape:\n                pred = model(x, training=True)\n                loss = tf.keras.losses.SparseCategoricalCrossentropy()(y, pred)\n            grads = tape.gradient(loss, model.trainable_variables)\n            model.optimizer.apply_gradients(zip(grads, model.trainable_variables))\n    \n    return [w.numpy() for w in model.trainable_variables]"
+      }
+    ]
+  }

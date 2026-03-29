@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -10,25 +11,53 @@ const navItems = [
   { href: "/discovery", label: "Discovery", icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" },
   { href: "/topics", label: "Topics", icon: "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" },
   { href: "/network", label: "Network", icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" },
+  { href: "/compendium", label: "Compendium", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" },
   { href: "/reports", label: "Reports", icon: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
   { href: "/settings", label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" },
 ];
 
+// Sun icon path
+const SUN_ICON = "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z";
+// Moon icon path
+const MOON_ICON = "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z";
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const [isDark, setIsDark] = useState(true);
+
+  // Persist theme preference
+  useEffect(() => {
+    const saved = localStorage.getItem("fl-theme");
+    if (saved === "light") {
+      setIsDark(false);
+      document.documentElement.classList.add("light-theme");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    if (next) {
+      document.documentElement.classList.remove("light-theme");
+      localStorage.setItem("fl-theme", "dark");
+    } else {
+      document.documentElement.classList.add("light-theme");
+      localStorage.setItem("fl-theme", "light");
+    }
+  };
 
   return (
-    <aside className="w-64 bg-[var(--card)] border-r border-[var(--border)] flex flex-col h-screen fixed left-0 top-0">
+    <aside className="w-64 bg-[var(--card)] border-r border-[var(--border)] flex flex-col h-screen fixed left-0 top-0 transition-colors duration-300">
       {/* Logo */}
       <div className="p-6 border-b border-[var(--border)]">
         <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
           FL Research Monitor
         </h1>
-        <p className="text-xs text-[var(--muted-foreground)] mt-1">v0.1.0</p>
+        <p className="text-xs text-[var(--muted-foreground)] mt-1">v1.0.0</p>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4">
+      <nav className="flex-1 py-4 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -36,7 +65,7 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-6 py-3 text-sm transition-colors",
+                "flex items-center gap-3 px-6 py-3 text-sm transition-colors duration-200",
                 isActive
                   ? "text-[var(--primary)] bg-[var(--primary)]/10 border-r-2 border-[var(--primary)]"
                   : "text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)]"
@@ -51,9 +80,56 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Status */}
-      <div className="p-4 border-t border-[var(--border)]">
-        <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+      {/* Footer: Theme Toggle + Status */}
+      <div className="p-4 border-t border-[var(--border)] space-y-3">
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)] transition-all duration-300 group"
+          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="relative w-5 h-5">
+              {/* Sun icon */}
+              <svg
+                className={cn(
+                  "w-5 h-5 absolute inset-0 transition-all duration-500",
+                  isDark ? "opacity-0 rotate-90 scale-0" : "opacity-100 rotate-0 scale-100 text-amber-500"
+                )}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d={SUN_ICON} />
+              </svg>
+              {/* Moon icon */}
+              <svg
+                className={cn(
+                  "w-5 h-5 absolute inset-0 transition-all duration-500",
+                  isDark ? "opacity-100 rotate-0 scale-100 text-indigo-400" : "opacity-0 -rotate-90 scale-0"
+                )}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d={MOON_ICON} />
+              </svg>
+            </div>
+            <span className="text-xs text-[var(--secondary-foreground)] group-hover:text-[var(--foreground)] transition-colors">
+              {isDark ? "Dark Mode" : "Light Mode"}
+            </span>
+          </div>
+
+          {/* Toggle pill */}
+          <div className={cn(
+            "w-9 h-5 rounded-full relative transition-colors duration-300",
+            isDark ? "bg-indigo-500/30" : "bg-amber-500/30"
+          )}>
+            <div className={cn(
+              "w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all duration-300 shadow-sm",
+              isDark ? "left-[3px] bg-indigo-400" : "left-[17px] bg-amber-500"
+            )} />
+          </div>
+        </button>
+
+        {/* Status */}
+        <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] px-1">
           <div className="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse" />
           System Active
         </div>

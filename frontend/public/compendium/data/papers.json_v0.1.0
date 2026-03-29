@@ -1,0 +1,101 @@
+[
+    {
+      "id": "feddynamics",
+      "title": "FedDynamics: Dynamic Client Participation with HL7/FHIR Integration",
+      "authors": [
+        {"name": "Rossi, M.", "affiliation": "University of Milan"},
+        {"name": "Bianchi, A.", "affiliation": "Research Center of Milan"}
+      ],
+      "conference": "IEEE Federated Learning Conference",
+      "year": 2024,
+      "abstract": "This paper introduces FedDynamics, a novel framework for handling dynamic client participation in federated learning environments, with specific application to healthcare systems through HL7/FHIR integration. We address challenges of client churn, intermittent connectivity, and regulatory compliance in healthcare data exchange. Experimental results demonstrate improved convergence rates and model performance in unstable network conditions compared to traditional federated learning approaches.",
+      "tags": ["healthcare", "dynamic-participation", "fhir"],
+      "categories": ["applications"],
+      "citations": 0,
+      "url": null,
+      "pdf_link": null
+    },
+    {
+      "id": "blockfed",
+      "title": "BlockFed: Incentive Mechanisms for Federated Learning via Blockchain",
+      "authors": [
+        {"name": "Verdi, L.", "affiliation": "Blockchain Research Institute"},
+        {"name": "Neri, C.", "affiliation": "University of Naples"}
+      ],
+      "conference": "ACM Conference on Distributed Computing",
+      "year": 2024,
+      "abstract": "BlockFed proposes a blockchain-based incentive mechanism to encourage high-quality participation in federated learning systems, addressing the challenge of incentivizing participants. We implement a reputation and token-based system that rewards clients based on the quality and quantity of their contributions. Our approach uses smart contracts to ensure transparency and fairness in reward distribution, while maintaining privacy of model updates. Evaluation shows increased participant engagement and improved global model performance compared to non-incentivized approaches.",
+      "tags": ["blockchain", "incentives", "security"],
+      "categories": ["systems"],
+      "citations": 5,
+      "url": "https://example.org/blockfed-paper",
+      "pdf_link": null
+    },
+    {
+      "id": "fedsplit",
+      "title": "FedSplit: Efficient Partitioning Strategies for Federated Model Training",
+      "authors": [
+        {"name": "Johnson, K.", "affiliation": "Stanford University"},
+        {"name": "Lee, S.", "affiliation": "Seoul National University"},
+        {"name": "Wang, P.", "affiliation": "Tsinghua University"}
+      ],
+      "conference": "ICML",
+      "year": 2024,
+      "abstract": "FedSplit presents algorithms for efficient model partitioning in federated learning settings, allowing computationally constrained devices to participate in training. Our approach splits neural network models into components that can be distributed across clients with varying computational capabilities, enabling participation of resource-constrained devices. We demonstrate that this approach not only expands the pool of potential participants but also improves training efficiency and reduces communication overhead. Experiments on image classification and natural language processing tasks show competitive accuracy while reducing computation requirements by up to 75%.",
+      "tags": ["model-partitioning", "resource-efficiency", "edge-computing"],
+      "categories": ["systems"],
+      "citations": 3,
+      "url": "https://example.org/fedsplit-paper",
+      "pdf_link": null
+    },
+    {
+      "id": "privacyfl",
+      "title": "PrivacyFL: Enhanced Differential Privacy for Federated Learning",
+      "authors": [
+        {"name": "Zhang, Y.", "affiliation": "Carnegie Mellon University"},
+        {"name": "Garcia, M.", "affiliation": "EPFL"}
+      ],
+      "conference": "Privacy Enhancing Technologies Symposium",
+      "year": 2024,
+      "abstract": "PrivacyFL introduces refined differential privacy mechanisms specifically designed for federated learning scenarios, providing improved privacy-utility tradeoffs. We develop adaptive noise calibration techniques that dynamically adjust privacy parameters based on data sensitivity and model convergence state. Our framework includes client-specific privacy budgets and heterogeneous noise addition, accommodating varying privacy requirements across participants. Extensive evaluation on benchmark datasets demonstrates that PrivacyFL achieves up to 15% higher accuracy than standard differentially private federated learning approaches at equivalent privacy guarantees.",
+      "tags": ["privacy", "differential-privacy", "security"],
+      "categories": ["privacy"],
+      "citations": 8,
+      "url": "https://example.org/privacyfl-paper",
+      "pdf_link": null
+    },
+    {
+      "id": "fedvision",
+      "title": "FedVision: Federated Learning for Computer Vision Applications",
+      "authors": [
+        {"name": "Chen, T.", "affiliation": "University of California, Berkeley"},
+        {"name": "Smith, J.", "affiliation": "Microsoft Research"},
+        {"name": "Kumar, A.", "affiliation": "Google AI"}
+      ],
+      "conference": "CVPR",
+      "year": 2024,
+      "abstract": "FedVision tackles the challenges of applying federated learning to computer vision tasks, addressing issues of data heterogeneity, model convergence, and communication efficiency. We propose specialized techniques for vision tasks including adaptive aggregation for convolutional layers, feature alignment methods to handle non-IID image distributions, and gradient compression tailored for vision models. Experiments on image classification, object detection, and segmentation tasks demonstrate that FedVision achieves centralized-equivalent performance with significantly reduced communication overhead and improved convergence speed.",
+      "tags": ["computer-vision", "heterogeneity", "communication-efficiency"],
+      "categories": ["applications"],
+      "citations": 12,
+      "url": "https://example.org/fedvision-paper",
+      "pdf_link": null
+    },
+    {
+      "id": "crossfed",
+      "title": "CrossFed: Cross-Silo Federated Learning in Healthcare Consortia",
+      "authors": [
+        {"name": "Park, H.", "affiliation": "Mayo Clinic"},
+        {"name": "Brown, D.", "affiliation": "Harvard Medical School"},
+        {"name": "Patel, R.", "affiliation": "Johns Hopkins University"}
+      ],
+      "conference": "NeurIPS",
+      "year": 2023,
+      "abstract": "CrossFed establishes protocols for cross-silo federated learning among healthcare institutions, ensuring regulatory compliance while enabling collaborative learning. We address the unique challenges of federated learning in healthcare settings, including data governance, accountability, and regulatory requirements like HIPAA and GDPR. Our framework includes audit mechanisms, differential privacy guarantees, and flexible participation policies. Evaluation across five major healthcare systems shows that CrossFed enables effective collaboration while maintaining compliance, leading to improved diagnostic models for rare conditions where any single institution would have insufficient data.",
+      "tags": ["healthcare", "cross-silo", "regulatory"],
+      "categories": ["applications"],
+      "citations": 25,
+      "url": "https://example.org/crossfed-paper",
+      "pdf_link": null
+    }
+  ]

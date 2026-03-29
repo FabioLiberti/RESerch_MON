@@ -1,0 +1,122 @@
+[
+    {
+      "id": "intro-fl",
+      "title": "Introduction to Federated Learning",
+      "description": "Learn the fundamentals of federated learning and how it differs from traditional centralized machine learning approaches.",
+      "categories": ["basics"],
+      "difficulty": "beginner",
+      "tags": ["basics", "beginner"],
+      "content": {
+        "overview": "Federated Learning is a machine learning approach that trains algorithms across multiple decentralized devices or servers holding local data samples, without exchanging them. This approach stands in contrast to traditional centralized machine learning techniques where all local datasets are uploaded to one server.",
+        "technical_details": "In traditional machine learning, data is centralized on a single server or data center. In federated learning, the training process comes to the data, rather than the data going to the training process. This enables multiple parties to build a common, robust machine learning model without sharing data.",
+        "implementation": "A basic federated learning implementation involves several steps including local training on edge devices, secure aggregation of model updates, and global model distribution.",
+        "challenges": "Despite its advantages, federated learning faces several challenges including communication efficiency, statistical heterogeneity, and privacy concerns."
+      },
+      "related_topics": ["fedavg", "privacy-fl"]
+    },
+    {
+      "id": "fedavg",
+      "title": "Federated Averaging (FedAvg)",
+      "description": "Understand the canonical federated averaging algorithm, its implementation details and convergence properties.",
+      "categories": ["algorithms"],
+      "difficulty": "beginner",
+      "tags": ["algorithms", "beginner"],
+      "content": {
+        "overview": "Federated Averaging (FedAvg) is the canonical algorithm for federated learning, introduced by McMahan et al. in 2016. It allows training deep networks on distributed data.",
+        "technical_details": "The algorithm works by selecting a subset of clients, having them train locally for several epochs, and then averaging their model updates to produce a new global model.",
+        "implementation": "Implementation involves proper client selection strategies, optimization of local training processes, and efficient aggregation methods.",
+        "challenges": "FedAvg faces challenges with non-IID data, communication overhead, and convergence guarantees."
+      },
+      "related_topics": ["non-iid", "client-selection"]
+    },
+    {
+      "id": "non-iid",
+      "title": "Dealing with Non-IID Data",
+      "description": "Explore techniques for handling statistical heterogeneity in federated networks and improving model convergence.",
+      "categories": ["algorithms"],
+      "difficulty": "intermediate",
+      "tags": ["algorithms", "intermediate"],
+      "content": {
+        "overview": "Non-IID (non-independent and identically distributed) data is one of the primary challenges in federated learning, where data distributions vary significantly across clients.",
+        "technical_details": "Statistical heterogeneity can lead to divergence during training, slower convergence, and performance degradation in the global model.",
+        "implementation": "Techniques to address non-IID data include knowledge distillation, model personalization, and data augmentation strategies.",
+        "challenges": "Finding the right balance between model generalization and personalization remains an active research area."
+      },
+      "related_topics": ["fedavg", "personalization"]
+    },
+    {
+      "id": "diff-privacy",
+      "title": "Differential Privacy in Federated Learning",
+      "description": "Learn how to implement differential privacy mechanisms to provide formal privacy guarantees in federated systems.",
+      "categories": ["privacy"],
+      "difficulty": "advanced",
+      "tags": ["privacy", "advanced"],
+      "content": {
+        "overview": "Differential privacy provides mathematical guarantees about the privacy of individual data points in a dataset, even when statistical information about the dataset is released.",
+        "technical_details": "In federated learning, differential privacy is typically implemented by adding calibrated noise to model updates or gradients before aggregation.",
+        "implementation": "Common mechanisms include the Gaussian mechanism, the Laplace mechanism, and the exponential mechanism, each offering different trade-offs.",
+        "challenges": "The primary challenge is balancing privacy guarantees with model utility, as stronger privacy typically results in lower accuracy."
+      },
+      "related_topics": ["secure-agg", "privacy-fl"]
+    },
+    {
+      "id": "secure-agg",
+      "title": "Secure Aggregation Protocols",
+      "description": "Understand cryptographic techniques for secure model aggregation without revealing individual client updates.",
+      "categories": ["privacy"],
+      "difficulty": "advanced",
+      "tags": ["privacy", "advanced"],
+      "content": {
+        "overview": "Secure aggregation allows a server to compute the sum of client updates without learning individual updates, enhancing privacy in federated learning.",
+        "technical_details": "Protocols typically use techniques like secret sharing, homomorphic encryption, or secure multi-party computation.",
+        "implementation": "Implementation considerations include communication overhead, computational complexity, and fault tolerance.",
+        "challenges": "Key challenges include scaling to large numbers of participants and handling client dropouts during protocol execution."
+      },
+      "related_topics": ["diff-privacy", "privacy-fl"]
+    },
+    {
+      "id": "fl-healthcare",
+      "title": "Federated Learning for Healthcare",
+      "description": "Explore applications of federated learning in healthcare, including FHIR integration and regulatory considerations.",
+      "categories": ["applications"],
+      "difficulty": "intermediate",
+      "tags": ["applications", "intermediate", "healthcare"],
+      "content": {
+        "overview": "Healthcare is a natural application for federated learning due to the sensitive nature of medical data and regulatory restrictions on data sharing.",
+        "technical_details": "Applications include medical image analysis, electronic health record (EHR) prediction tasks, and wearable device analysis.",
+        "implementation": "Integration with healthcare standards like FHIR (Fast Healthcare Interoperability Resources) enables seamless operation within existing healthcare IT ecosystems.",
+        "challenges": "Challenges include regulatory compliance (HIPAA, GDPR), handling extremely heterogeneous data, and ensuring model performance across diverse patient populations."
+      },
+      "related_topics": ["privacy-fl", "non-iid"]
+    },
+    {
+      "id": "fl-edge",
+      "title": "Federated Learning on Edge Devices",
+      "description": "Implement federated learning on resource-constrained IoT and edge devices with communication efficiency.",
+      "categories": ["systems"],
+      "difficulty": "intermediate",
+      "tags": ["systems", "intermediate", "edge-computing"],
+      "content": {
+        "overview": "Edge devices like smartphones, IoT sensors, and wearables present unique challenges for federated learning due to resource constraints.",
+        "technical_details": "Considerations include model compression, efficient communication protocols, and energy-aware training schedules.",
+        "implementation": "Techniques such as quantization, pruning, and knowledge distillation can reduce model size and computational requirements.",
+        "challenges": "Key challenges include battery consumption, intermittent connectivity, and heterogeneous device capabilities."
+      },
+      "related_topics": ["communication-efficiency", "personalization"]
+    },
+    {
+      "id": "personalization",
+      "title": "Personalization in Federated Learning",
+      "description": "Techniques for adapting global models to local data distributions while maintaining global performance.",
+      "categories": ["algorithms"],
+      "difficulty": "advanced",
+      "tags": ["algorithms", "advanced"],
+      "content": {
+        "overview": "Personalization allows adaptation of global models to better suit local data distributions, enhancing performance for individual clients.",
+        "technical_details": "Approaches include meta-learning, transfer learning, multi-task learning, and client clustering.",
+        "implementation": "Implementation strategies range from simple fine-tuning on local data to sophisticated adaptive optimization techniques.",
+        "challenges": "The main challenge is balancing personalization with the benefits of collaborative learning across all participants."
+      },
+      "related_topics": ["non-iid", "meta-learning"]
+    }
+  ]

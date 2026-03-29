@@ -65,7 +65,7 @@ export default function PapersPage() {
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
         >
           <option value="">All Topics</option>
-          {(topics || []).map((t: any) => (
+          {(Array.isArray(topics) ? topics : []).map((t: any) => (
             <option key={t.id} value={t.name}>{t.name}</option>
           ))}
         </select>
