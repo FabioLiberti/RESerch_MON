@@ -85,16 +85,16 @@ export default function Sidebar() {
             Learning Path
           </p>
           {[
-            { label: "Introduction to FL", level: "beginner" },
-            { label: "FedAvg Algorithm", level: "beginner" },
-            { label: "Non-IID Data", level: "intermediate" },
-            { label: "FL Healthcare", level: "intermediate" },
-            { label: "Differential Privacy", level: "advanced" },
-            { label: "Personalization", level: "advanced" },
+            { label: "Introduction to FL", level: "beginner", id: "intro-fl" },
+            { label: "FedAvg Algorithm", level: "beginner", id: "fedavg" },
+            { label: "Non-IID Data", level: "intermediate", id: "non-iid" },
+            { label: "FL Healthcare", level: "intermediate", id: "fl-healthcare" },
+            { label: "Differential Privacy", level: "advanced", id: "diff-privacy" },
+            { label: "Personalization", level: "advanced", id: "personalization" },
           ].map((topic) => (
             <Link
               key={topic.label}
-              href="/compendium"
+              href={`/compendium?topic=${topic.id}`}
               className="flex items-center gap-2.5 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
             >
               <span className={cn(
