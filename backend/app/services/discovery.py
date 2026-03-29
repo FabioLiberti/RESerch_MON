@@ -1,0 +1,245 @@
+"""Multi-source paper discovery orchestrator."""
+
+import logging
+from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.clients.arxiv import ArXivClient
+from app.clients.biorxiv import BioRxivClient
+from app.clients.ieee import IEEEXploreClient
+from app.clients.pubmed import PubMedClient
+from app.clients.semantic_scholar import SemanticScholarClient
+from app.clients.base import RawPaperResult
+from app.models.analysis import FetchLog
+from app.models.paper import Author, Paper, PaperAuthor, PaperSource
+from app.models.topic import PaperTopic, Topic
+from app.services.deduplication import deduplicate_results, find_existing_paper, normalize_doi
+
+logger = logging.getLogger(__name__)
+
+
+class DiscoveryService:
+    """Orchestrates paper discovery across all configured sources."""
+
+    def __init__(self):
+        self.clients = {
+            "pubmed": PubMedClient(),
+            "semantic_scholar": SemanticScholarClient(),
+            "arxiv": ArXivClient(),
+            "biorxiv": BioRxivClient(),
+            "ieee": IEEEXploreClient(),
+        }
+
+    async def close(self):
+        for client in self.clients.values():
+            await client.close()
+
+    async def discover_papers(
+        self,
+        db: AsyncSession,
+        topic: Topic,
+        sources: list[str] | None = None,
+        max_per_source: int = 50,
+    ) -> dict:
+        """Discover papers for a topic across all sources.
+
+        Returns: {total_found, new_papers, sources_queried, errors}
+        """
+        if sources is None:
+            sources = list(self.clients.keys())
+
+        all_results: list[RawPaperResult] = []
+        errors: list[str] = []
+
+        for source_name in sources:
+            if source_name not in self.clients:
+                continue
+
+            client = self.clients[source_name]
+            query = topic.source_queries.get(source_name, "")
+            if not query:
+                # Fallback to keywords
+                query = " ".join(topic.keywords[:3]) if topic.keywords else topic.name
+
+            # Log the fetch
+            fetch_log = FetchLog(
+                source_name=source_name,
+                query_topic=topic.name,
+                query_text=query,
+            )
+            db.add(fetch_log)
+            await db.flush()
+
+            try:
+                logger.info(f"Searching {source_name} for topic '{topic.name}': {query[:80]}")
+
+                if source_name == "biorxiv":
+                    results = await client.search(query, max_results=max_per_source)
+                    # Also search medRxiv for healthcare topics
+                    if "healthcare" in topic.name.lower() or "medical" in " ".join(topic.keywords).lower():
+                        medrxiv_results = await client.search(
+                            query, max_results=max_per_source, server="medrxiv"
+                        )
+                        results.extend(medrxiv_results)
+                else:
+                    results = await client.search(query, max_results=max_per_source)
+
+                fetch_log.papers_found = len(results)
+                fetch_log.status = "success"
+                fetch_log.completed_at = datetime.utcnow()
+                all_results.extend(results)
+
+            except Exception as e:
+                error_msg = f"{source_name}: {str(e)}"
+                logger.error(f"Error searching {source_name}: {e}")
+                errors.append(error_msg)
+                fetch_log.status = "failed"
+                fetch_log.errors = str(e)
+                fetch_log.completed_at = datetime.utcnow()
+
+        # Deduplicate across sources
+        unique_results = deduplicate_results(all_results)
+
+        # Persist new papers
+        new_count = 0
+        for raw_paper in unique_results:
+            existing = await find_existing_paper(db, raw_paper)
+            if existing:
+                # Add source if not already tracked
+                await self._add_source_if_new(db, existing, raw_paper)
+                # Update topic assignment
+                await self._assign_topic(db, existing.id, topic.id)
+            else:
+                paper = await self._create_paper(db, raw_paper)
+                await self._assign_topic(db, paper.id, topic.id)
+                new_count += 1
+
+        await db.flush()
+
+        # Update fetch logs with new paper count
+        for source_name in sources:
+            pass  # Already updated per-source
+
+        result = {
+            "topic": topic.name,
+            "total_found": len(all_results),
+            "unique_found": len(unique_results),
+            "new_papers": new_count,
+            "sources_queried": sources,
+            "errors": errors,
+        }
+
+        logger.info(
+            f"Discovery complete for '{topic.name}': "
+            f"{result['total_found']} found, {result['unique_found']} unique, "
+            f"{result['new_papers']} new"
+        )
+        return result
+
+    async def _create_paper(self, db: AsyncSession, raw: RawPaperResult) -> Paper:
+        """Create a new Paper record from a raw result."""
+        paper = Paper(
+            doi=normalize_doi(raw.doi),
+            title=raw.title,
+            abstract=raw.abstract,
+            publication_date=raw.publication_date,
+            journal=raw.journal,
+            volume=raw.volume,
+            pages=raw.pages,
+            paper_type=raw.paper_type,
+            open_access=raw.open_access,
+            pdf_url=raw.pdf_url,
+            citation_count=raw.citation_count,
+            validated=False,
+        )
+        paper.external_ids = raw.external_ids
+        db.add(paper)
+        await db.flush()
+
+        # Add source
+        source = PaperSource(
+            paper_id=paper.id,
+            source_name=raw.source,
+            source_id=raw.source_id,
+        )
+        source.raw_metadata = raw.raw_data
+        db.add(source)
+
+        # Add authors
+        for i, author_data in enumerate(raw.authors):
+            author = await self._find_or_create_author(db, author_data)
+            pa = PaperAuthor(
+                paper_id=paper.id,
+                author_id=author.id,
+                position=i,
+            )
+            db.add(pa)
+
+        return paper
+
+    async def _find_or_create_author(self, db: AsyncSession, data: dict) -> Author:
+        """Find existing author or create new one."""
+        name = data.get("name", "Unknown")
+
+        # Try exact name match
+        result = await db.execute(select(Author).where(Author.name == name))
+        author = result.scalar_one_or_none()
+
+        if not author:
+            author = Author(
+                name=name,
+                affiliation=data.get("affiliation"),
+                orcid=data.get("orcid"),
+                s2_author_id=data.get("s2_author_id"),
+            )
+            db.add(author)
+            await db.flush()
+
+        return author
+
+    async def _add_source_if_new(
+        self, db: AsyncSession, paper: Paper, raw: RawPaperResult
+    ):
+        """Add a source record if this source hasn't been tracked yet."""
+        result = await db.execute(
+            select(PaperSource).where(
+                PaperSource.paper_id == paper.id,
+                PaperSource.source_name == raw.source,
+            )
+        )
+        if not result.scalar_one_or_none():
+            source = PaperSource(
+                paper_id=paper.id,
+                source_name=raw.source,
+                source_id=raw.source_id,
+            )
+            source.raw_metadata = raw.raw_data
+            db.add(source)
+
+    async def _assign_topic(self, db: AsyncSession, paper_id: int, topic_id: int):
+        """Assign a topic to a paper if not already assigned."""
+        result = await db.execute(
+            select(PaperTopic).where(
+                PaperTopic.paper_id == paper_id,
+                PaperTopic.topic_id == topic_id,
+            )
+        )
+        if not result.scalar_one_or_none():
+            pt = PaperTopic(paper_id=paper_id, topic_id=topic_id, confidence=1.0)
+            db.add(pt)
+
+    async def discover_all_topics(
+        self, db: AsyncSession, max_per_source: int = 50
+    ) -> list[dict]:
+        """Run discovery for all configured topics."""
+        result = await db.execute(select(Topic))
+        topics = result.scalars().all()
+
+        results = []
+        for topic in topics:
+            topic_result = await self.discover_papers(db, topic, max_per_source=max_per_source)
+            results.append(topic_result)
+
+        return results

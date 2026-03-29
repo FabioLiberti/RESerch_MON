@@ -1,0 +1,40 @@
+name: Daily Paper Discovery
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # Daily at 06:00 UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run paper discovery
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./data/db/research_monitor.db
+          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
+          IEEE_API_KEY: ${{ secrets.IEEE_API_KEY }}
+        run: |
+          mkdir -p data/db data/registry
+          python scripts/fetch_papers.py --max-per-source 50
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-results-${{ github.run_number }}
+          path: |
+            backend/data/db/research_monitor.db
+            backend/data/registry/
+          retention-days: 30
