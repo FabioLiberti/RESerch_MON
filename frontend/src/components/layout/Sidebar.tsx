@@ -3,11 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import useSWR from "swr";
 import { cn } from "@/lib/utils";
-import type { KeywordCount } from "@/lib/types";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -25,70 +21,60 @@ const SUN_ICON = "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.3
 // Moon icon path
 const MOON_ICON = "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z";
 
-// Learning path topics with keywords that match DB paper keywords
+// Learning path topics with their compendium categories
 const LEARNING_TOPICS = [
-  { label: "Introduction to FL", level: "beginner", id: "intro-fl", matchKeywords: ["federated learning"] },
-  { label: "FedAvg Algorithm", level: "beginner", id: "fedavg", matchKeywords: ["fedavg", "federated averaging", "model aggregation"] },
-  { label: "Non-IID Data", level: "intermediate", id: "non-iid", matchKeywords: ["non-iid", "non-iid", "data heterogeneity", "statistical heterogeneity", "label skew"] },
-  { label: "FL Healthcare", level: "intermediate", id: "fl-healthcare", matchKeywords: ["healthcare", "clinical", "hospital", "medical imaging", "electronic health records", "ehr"] },
-  { label: "FL Edge Devices", level: "intermediate", id: "fl-edge", matchKeywords: ["edge computing", "edge devices", "iot", "resource-constrained"] },
-  { label: "Differential Privacy", level: "advanced", id: "diff-privacy", matchKeywords: ["differential privacy", "privacy budget", "epsilon", "privacy-preserving"] },
-  { label: "Secure Aggregation", level: "advanced", id: "secure-agg", matchKeywords: ["secure aggregation", "homomorphic encryption", "secure multi-party computation"] },
-  { label: "Personalization", level: "advanced", id: "personalization", matchKeywords: ["personalization", "personalized", "fine-tuning"] },
+  { label: "Introduction to FL", level: "beginner", id: "intro-fl", categories: ["Basics"] },
+  { label: "FedAvg Algorithm", level: "beginner", id: "fedavg", categories: ["Algorithms"] },
+  { label: "Non-IID Data", level: "intermediate", id: "non-iid", categories: ["Algorithms"] },
+  { label: "FL Healthcare", level: "intermediate", id: "fl-healthcare", categories: ["Applications"] },
+  { label: "FL Edge Devices", level: "intermediate", id: "fl-edge", categories: ["Systems"] },
+  { label: "Differential Privacy", level: "advanced", id: "diff-privacy", categories: ["Privacy"] },
+  { label: "Secure Aggregation", level: "advanced", id: "secure-agg", categories: ["Privacy"] },
+  { label: "Personalization", level: "advanced", id: "personalization", categories: ["Algorithms", "Privacy"] },
 ];
 
+const CATEGORY_COLORS: Record<string, string> = {
+  Basics: "bg-blue-500/15 text-blue-400",
+  Algorithms: "bg-purple-500/15 text-purple-400",
+  Privacy: "bg-red-500/15 text-red-400",
+  Applications: "bg-amber-500/15 text-amber-400",
+  Systems: "bg-cyan-500/15 text-cyan-400",
+};
+
 function LearningPathSection() {
-  const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", fetcher);
-
-  // Build keyword count map
-  const kwMap = new Map<string, number>();
-  if (Array.isArray(allKeywords)) {
-    for (const k of allKeywords) {
-      kwMap.set(k.keyword.toLowerCase(), k.count);
-    }
-  }
-
-  // Count papers per learning topic by summing matched keyword counts
-  // Use max of matching keywords (not sum, to avoid double-counting)
-  function getTopicCount(matchKeywords: string[]): number {
-    let max = 0;
-    for (const kw of matchKeywords) {
-      const count = kwMap.get(kw.toLowerCase()) || 0;
-      if (count > max) max = count;
-    }
-    return max;
-  }
-
-  const totalPapers = LEARNING_TOPICS.reduce((sum, t) => sum + getTopicCount(t.matchKeywords), 0);
-
   return (
     <div className="mt-4 pt-4 border-t border-[var(--border)]">
       <p className="px-6 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
         Learning Path
       </p>
-      {LEARNING_TOPICS.map((topic) => {
-        const count = getTopicCount(topic.matchKeywords);
-        return (
-          <Link
-            key={topic.id}
-            href={`/compendium?topic=${topic.id}`}
-            className="flex items-center gap-2.5 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors group"
-          >
-            <span className={cn(
-              "w-1.5 h-1.5 rounded-full shrink-0",
-              topic.level === "beginner" && "bg-emerald-400",
-              topic.level === "intermediate" && "bg-amber-400",
-              topic.level === "advanced" && "bg-red-400",
-            )} />
-            <span className="flex-1 truncate">{topic.label}</span>
-            {count > 0 && (
-              <span className="text-[10px] text-[var(--muted-foreground)] bg-[var(--muted)] px-1.5 py-0.5 rounded-full min-w-[20px] text-center group-hover:bg-[var(--border)]">
-                {count}
+      {LEARNING_TOPICS.map((topic) => (
+        <Link
+          key={topic.id}
+          href={`/compendium?topic=${topic.id}`}
+          className="flex items-center gap-2 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors group"
+        >
+          <span className={cn(
+            "w-1.5 h-1.5 rounded-full shrink-0",
+            topic.level === "beginner" && "bg-emerald-400",
+            topic.level === "intermediate" && "bg-amber-400",
+            topic.level === "advanced" && "bg-red-400",
+          )} />
+          <span className="flex-1 truncate">{topic.label}</span>
+          <span className="flex gap-0.5 shrink-0">
+            {topic.categories.map((cat) => (
+              <span
+                key={cat}
+                className={cn(
+                  "text-[8px] px-1 py-0.5 rounded leading-none",
+                  CATEGORY_COLORS[cat] || "bg-[var(--muted)] text-[var(--muted-foreground)]",
+                )}
+              >
+                {cat}
               </span>
-            )}
-          </Link>
-        );
-      })}
+            ))}
+          </span>
+        </Link>
+      ))}
     </div>
   );
 }
