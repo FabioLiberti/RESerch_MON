@@ -16,6 +16,9 @@ from app.models.analysis import FetchLog
 from app.models.paper import Author, Paper, PaperAuthor, PaperSource
 from app.models.topic import PaperTopic, Topic
 from app.services.deduplication import deduplicate_results, find_existing_paper, normalize_doi
+from app.services.pdf_manager import PDFManager
+from app.services.validator import PaperValidator
+from app.services.topic_classifier import TopicClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +26,12 @@ logger = logging.getLogger(__name__)
 class DiscoveryService:
     """Orchestrates paper discovery across all configured sources."""
 
-    def __init__(self):
+    def __init__(self, download_pdfs: bool = True, validate: bool = True):
+        self.download_pdfs = download_pdfs
+        self.validate = validate
+        self.pdf_manager = PDFManager()
+        self.paper_validator = PaperValidator()
+        self.topic_classifier = TopicClassifier()
         self.clients = {
             "pubmed": PubMedClient(),
             "semantic_scholar": SemanticScholarClient(),
@@ -35,6 +43,8 @@ class DiscoveryService:
     async def close(self):
         for client in self.clients.values():
             await client.close()
+        await self.pdf_manager.close()
+        await self.paper_validator.close()
 
     async def discover_papers(
         self,
@@ -102,19 +112,48 @@ class DiscoveryService:
         # Deduplicate across sources
         unique_results = deduplicate_results(all_results)
 
-        # Persist new papers
+        # Persist new papers with validation, PDF download, topic classification
         new_count = 0
         for raw_paper in unique_results:
             existing = await find_existing_paper(db, raw_paper)
             if existing:
-                # Add source if not already tracked
                 await self._add_source_if_new(db, existing, raw_paper)
-                # Update topic assignment
-                await self._assign_topic(db, existing.id, topic.id)
+                await self.topic_classifier.classify_paper(
+                    db, existing.id, existing.title, existing.abstract
+                )
             else:
                 paper = await self._create_paper(db, raw_paper)
-                await self._assign_topic(db, paper.id, topic.id)
                 new_count += 1
+
+                # Validate paper existence
+                if self.validate:
+                    try:
+                        validated = await self.paper_validator.validate_paper(
+                            paper.external_ids
+                        )
+                        paper.validated = validated
+                    except Exception as e:
+                        logger.warning(f"Validation error: {e}")
+
+                # Download PDF
+                if self.download_pdfs and raw_paper.pdf_url:
+                    try:
+                        year = raw_paper.publication_date[:4] if raw_paper.publication_date else None
+                        pdf_path = await self.pdf_manager.download_pdf(
+                            raw_paper.pdf_url,
+                            raw_paper.title,
+                            raw_paper.source,
+                            year=year,
+                        )
+                        if pdf_path:
+                            paper.pdf_local_path = str(pdf_path)
+                    except Exception as e:
+                        logger.warning(f"PDF download error: {e}")
+
+                # Classify into topics
+                await self.topic_classifier.classify_paper(
+                    db, paper.id, paper.title, paper.abstract
+                )
 
         await db.flush()
 

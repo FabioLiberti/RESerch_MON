@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 class ArXivClient(BaseAPIClient):
     source_name = "arxiv"
-    base_url = "http://export.arxiv.org/api"
-    requests_per_second = 0.33  # 1 request per 3 seconds
+    base_url = "https://export.arxiv.org/api"
+    requests_per_second = 0.2  # 1 request per 5 seconds (arXiv is strict)
 
     async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
         """Search arXiv for papers."""
