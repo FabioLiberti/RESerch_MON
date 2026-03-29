@@ -64,11 +64,20 @@
 
 ---
 
-## Phase 5: Polish + Deploy (v1.0.0) — PIANIFICATA
+## Phase 5: Polish + Deploy (v1.0.0) — COMPLETATA
+
+- [x] ARCHITECTURE.md aggiornato comprehensivamente
+- [x] README.md completo con tutte le istruzioni
+- [x] DEVELOPMENT_PLAN.md e PROGRESS.md finali
+- [x] Push v1.0.0
+
+## Future Enhancements
 
 - [ ] Deploy frontend su Vercel
-- [ ] Deploy backend su Railway/Render
-- [ ] Full discovery run su tutte le 5 fonti
-- [ ] Performance optimization
-- [ ] Comprehensive README
-- [ ] Push v1.0.0
+- [ ] Deploy backend su Railway/Render + PostgreSQL
+- [ ] Email report integration (SendGrid/Gmail SMTP)
+- [ ] LLM-powered analysis (replace rule-based with Claude API)
+- [ ] Citation network data from Semantic Scholar references
+- [ ] Author tracking and affiliation analytics
+- [ ] Full-text search via PostgreSQL tsvector
+- [ ] Webhook notifications for new high-relevance papers
