@@ -110,6 +110,9 @@ class SemanticScholarClient(BaseAPIClient):
         elif "Review" in pub_types:
             paper_type = "review"
 
+        # Keywords from fieldsOfStudy
+        keywords = data.get("fieldsOfStudy") or []
+
         return RawPaperResult(
             source="semantic_scholar",
             source_id=s2_id,
@@ -123,6 +126,7 @@ class SemanticScholarClient(BaseAPIClient):
             open_access=data.get("isOpenAccess", False),
             pdf_url=pdf_url,
             citation_count=data.get("citationCount", 0),
+            keywords=keywords,
             external_ids={
                 "s2_id": s2_id,
                 "pmid": external_ids.get("PubMed"),

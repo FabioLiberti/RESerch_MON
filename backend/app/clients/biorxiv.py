@@ -97,6 +97,12 @@ class BioRxivClient(BaseAPIClient):
 
         pub_date = item.get("date", "")
 
+        # Keywords from category field
+        keywords = []
+        category = item.get("category", "")
+        if category:
+            keywords.append(category)
+
         return RawPaperResult(
             source=server,
             source_id=doi,
@@ -108,6 +114,7 @@ class BioRxivClient(BaseAPIClient):
             journal=f"{server} (preprint)",
             paper_type="preprint",
             open_access=True,
+            keywords=keywords,
             pdf_url=f"https://www.{server}.org/content/{biorxiv_doi}v{item.get('version', '1')}.full.pdf"
             if biorxiv_doi
             else None,

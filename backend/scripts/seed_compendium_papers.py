@@ -94,6 +94,11 @@ async def main():
             if url and "doi.org/" in url:
                 paper.doi = url.split("doi.org/")[-1]
 
+            # Keywords from tags + category (real paper metadata)
+            tags = paper_data.get("tags", [])
+            categories = paper_data.get("category", [])
+            paper.keywords = tags + categories
+
             db.add(paper)
             await db.flush()
 

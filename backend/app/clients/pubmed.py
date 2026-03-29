@@ -168,6 +168,19 @@ class PubMedClient(BaseAPIClient):
         volume_el = article.find(".//Journal/JournalIssue/Volume") if article else None
         pages_el = article.find(".//Pagination/MedlinePgn") if article else None
 
+        # Keywords: MeSH Terms + Author Keywords
+        keywords = []
+        # MeSH headings
+        if medline:
+            for mesh in medline.findall(".//MeshHeadingList/MeshHeading/DescriptorName"):
+                if mesh.text:
+                    keywords.append(mesh.text)
+        # Author keywords
+        if medline:
+            for kw_list in medline.findall(".//KeywordList/Keyword"):
+                if kw_list.text:
+                    keywords.append(kw_list.text)
+
         # PDF URL from PMC
         pdf_url = None
         if pmc_id:
@@ -187,6 +200,7 @@ class PubMedClient(BaseAPIClient):
             paper_type="journal_article",
             open_access=pmc_id is not None,
             pdf_url=pdf_url,
+            keywords=keywords,
             external_ids={"pmid": pmid, "pmcid": pmc_id},
             raw_data={"pmid": pmid},
         )

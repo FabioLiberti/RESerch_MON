@@ -194,6 +194,8 @@ class DiscoveryService:
             validated=False,
         )
         paper.external_ids = raw.external_ids
+        if raw.keywords:
+            paper.keywords = raw.keywords
         db.add(paper)
         await db.flush()
 

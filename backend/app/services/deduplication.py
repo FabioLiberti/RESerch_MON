@@ -130,4 +130,12 @@ def _merge_papers(existing: RawPaperResult, new: RawPaperResult) -> RawPaperResu
     if not existing.pdf_url and new.pdf_url:
         existing.pdf_url = new.pdf_url
 
+    # Merge keywords (union, preserve order)
+    if new.keywords:
+        existing_set = set(existing.keywords)
+        for kw in new.keywords:
+            if kw not in existing_set:
+                existing.keywords.append(kw)
+                existing_set.add(kw)
+
     return existing
