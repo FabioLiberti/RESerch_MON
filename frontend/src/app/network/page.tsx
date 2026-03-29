@@ -1,24 +1,77 @@
 "use client";
 
+import { usePapers } from "@/hooks/usePapers";
+import CitationNetwork from "@/components/charts/CitationNetwork";
+import { SOURCE_COLORS, SOURCE_LABELS } from "@/lib/utils";
+
 export default function NetworkPage() {
+  const { data: papers, isLoading } = usePapers({
+    per_page: "100",
+    sort_by: "citation_count",
+    sort_order: "desc",
+  });
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Citation Network</h1>
         <p className="text-sm text-[var(--muted-foreground)] mt-1">
-          Visualize citation relationships between discovered papers
+          Paper relationships based on shared topics. Node size = citation count. Drag to rearrange.
         </p>
       </div>
 
-      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6 h-[600px] flex items-center justify-center">
-        <div className="text-center text-[var(--muted-foreground)]">
-          <svg className="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-          </svg>
-          <p className="text-sm">Citation network visualization will be available in v0.3.0</p>
-          <p className="text-xs mt-1">Requires Semantic Scholar citation data</p>
-        </div>
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-4">
+        {Object.entries(SOURCE_LABELS).map(([key, label]) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: SOURCE_COLORS[key] }}
+            />
+            <span className="text-xs text-[var(--muted-foreground)]">{label}</span>
+          </div>
+        ))}
       </div>
+
+      {/* Graph */}
+      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden" style={{ height: "600px" }}>
+        {isLoading ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-sm text-[var(--muted-foreground)]">Loading papers...</div>
+          </div>
+        ) : !papers?.items?.length ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center text-[var(--muted-foreground)]">
+              <p className="text-sm">No papers discovered yet</p>
+              <p className="text-xs mt-1">Run a discovery to populate the network</p>
+            </div>
+          </div>
+        ) : (
+          <CitationNetwork papers={papers.items} />
+        )}
+      </div>
+
+      {/* Stats */}
+      {papers?.items && papers.items.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 text-center">
+            <p className="text-2xl font-bold">{papers.items.length}</p>
+            <p className="text-xs text-[var(--muted-foreground)]">Nodes</p>
+          </div>
+          <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 text-center">
+            <p className="text-2xl font-bold">
+              {new Set(papers.items.flatMap((p: any) => p.sources)).size}
+            </p>
+            <p className="text-xs text-[var(--muted-foreground)]">Sources</p>
+          </div>
+          <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 text-center">
+            <p className="text-2xl font-bold">
+              {papers.items.reduce((sum: number, p: any) => sum + p.citation_count, 0)}
+            </p>
+            <p className="text-xs text-[var(--muted-foreground)]">Total Citations</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

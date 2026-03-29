@@ -14,10 +14,21 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      </head>
       <body>
         <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 ml-64 p-8">{children}</main>
+          <div className="sidebar-desktop">
+            <Sidebar />
+          </div>
+          <main className="main-content flex-1 ml-64 p-6 md:p-8">
+            <div className="animate-fade-in">
+              {children}
+            </div>
+          </main>
         </div>
       </body>
     </html>

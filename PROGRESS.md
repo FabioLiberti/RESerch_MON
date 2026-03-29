@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** Phase 2 — COMPLETATA
-**Current Version:** v0.2.0 (ready to push)
-**Next Phase:** Phase 3 — Dashboard Frontend
+**Current Phase:** Phase 3 — COMPLETATA
+**Current Version:** v0.3.0 (ready to push)
+**Next Phase:** Phase 4 — Automation + Analysis
 
 ---
 
@@ -11,68 +11,80 @@
 ### 2026-03-29 — Session 1
 
 #### Phase 1 (v0.1.0) — COMPLETATA
-- Full project scaffold: backend (FastAPI) + frontend (Next.js) + GitHub Actions
-- 5 API clients: PubMed, Semantic Scholar, arXiv, bioRxiv/medRxiv, IEEE
-- DiscoveryService + DeduplicationService
-- REST API with papers, analytics, sources, topics endpoints
-- Dashboard with StatsCards, TimelineChart, SourcePieChart, TopicTreemap
-- Pushed to GitHub as v0.1.0
+- Full project scaffold pushed to GitHub
 
 #### Phase 2 (v0.2.0) — COMPLETATA
-- Conda environment `fl-research-monitor` (Python 3.11) creato
-- **PDFManager** (`backend/app/services/pdf_manager.py`):
-  - Download PDF con validazione magic bytes
-  - Storage organizzato: `data/pdfs/{year}/{source}/{title}.pdf`
-  - Skip se PDF gia scaricato
-  - Stats e listing dei PDF scaricati
-- **PaperValidator** (`backend/app/services/validator.py`):
-  - Validazione DOI via HEAD request a doi.org (302 = valido)
-  - Validazione arXiv via abs page check
-  - Validazione PMID via NCBI esummary
-  - Validazione multi-identifier (DOI → arXiv → PMID)
-- **TopicClassifier** (`backend/app/services/topic_classifier.py`):
-  - Classificazione keyword-weighted (title: 0.4, abstract: 0.2 per keyword)
-  - Confidence score 0.0-1.0
-  - Bonus per match multipli
-- **ExportService** (`backend/app/services/export_service.py`):
-  - Export JSON con metadata e tutti i paper
-  - Export XLSX multi-sheet: AllPapers, ByTopic, BySource, Statistics
-  - Styled headers, auto-column width
-- **DiscoveryService aggiornato**:
-  - Integra PDF download automatico dopo discovery
-  - Integra validazione automatica post-fetch
-  - Integra topic classification automatica
-- **API exports**: `/api/v1/exports/json` e `/api/v1/exports/xlsx`
-- **CLI scripts**: `validate_papers.py`, `generate_registry.py`
-- **Fix**: arXiv base URL da HTTP a HTTPS
-- **Test**: Pipeline completo testato con successo
-  - PubMed: 9 paper reali fetchati e validati (9/9 validated)
-  - Export JSON (6.2 KB) + XLSX (9.2 KB) generati
-  - Deduplicazione cross-topic funzionante
+- PDFManager, PaperValidator, TopicClassifier, ExportService
+- Pipeline testato: 9 paper reali, 9/9 validati
 
-#### Files Created/Modified (Phase 2)
-- NEW: `backend/app/services/pdf_manager.py`
-- NEW: `backend/app/services/validator.py`
-- NEW: `backend/app/services/topic_classifier.py`
-- NEW: `backend/app/services/export_service.py`
-- NEW: `backend/app/api/exports.py`
-- NEW: `backend/scripts/validate_papers.py`
-- NEW: `backend/scripts/generate_registry.py`
-- NEW: `DEVELOPMENT_PLAN.md`
-- NEW: `PROGRESS.md`
-- MOD: `backend/app/services/discovery.py` (PDF + validation + classification)
-- MOD: `backend/app/api/router.py` (exports router)
-- MOD: `backend/app/clients/arxiv.py` (HTTPS fix)
-- MOD: `backend/app/models/analysis.py` (missing import fix)
+#### Phase 3 (v0.3.0) — COMPLETATA
+- **Discovery API** (`backend/app/api/discovery.py`):
+  - POST `/api/v1/discovery/trigger` — trigger discovery in background
+  - GET `/api/v1/discovery/status` — check if running
+  - Supports topic/source filtering via query params
+- **Dashboard Enhanced**:
+  - HeatmapCalendar component (GitHub-style activity heatmap)
+  - Export buttons (JSON/XLSX) nella dashboard header
+  - All charts collegati a dati reali via SWR
+- **Discovery Page Enhanced**:
+  - Source health cards con paper count, last fetch, status
+  - "Run Discovery" button con background execution
+  - Per-source "Fetch" button
+  - Running status banner con spinner
+  - Click source card → fetch history table
+  - Real-time status polling (3s interval)
+- **Topics Page Enhanced**:
+  - Topic cards grid con gradient colors
+  - Paper count + percentage bar per topic
+  - Click topic → filtered papers list
+  - Source queries detail view
+  - Keywords preview
+- **Network Page**:
+  - D3.js force-directed graph (co-topic network)
+  - Node size = citation count, color = source
+  - Drag to rearrange, tooltips on hover
+  - Labels for high-citation papers
+  - Network stats (nodes, sources, citations)
+  - Source legend
+- **Settings Page Enhanced**:
+  - Full topic CRUD: create, edit, delete
+  - Topic form: name, description, keywords, per-source queries
+  - API keys info section
+  - System info section
+- **Dark/Light Mode**:
+  - Light theme CSS variables
+  - Theme toggle via `.light-theme` class
+- **Responsive Design**:
+  - Sidebar hides on mobile (< 768px)
+  - Content takes full width on mobile
+  - Responsive grids throughout
+- **CSS Improvements**:
+  - Inter font from Google Fonts
+  - Fade-in animation for page transitions
+  - Line-clamp utilities
+  - Font smoothing
+
+#### Files Created/Modified (Phase 3)
+- NEW: `backend/app/api/discovery.py`
+- NEW: `frontend/src/components/charts/HeatmapCalendar.tsx`
+- NEW: `frontend/src/components/charts/CitationNetwork.tsx`
+- NEW: `frontend/src/components/layout/Header.tsx`
+- MOD: `backend/app/api/router.py` (discovery router)
+- MOD: `frontend/src/app/page.tsx` (heatmap, exports)
+- MOD: `frontend/src/app/discovery/page.tsx` (fetch trigger, logs)
+- MOD: `frontend/src/app/topics/page.tsx` (cards, papers, queries)
+- MOD: `frontend/src/app/network/page.tsx` (D3 graph)
+- MOD: `frontend/src/app/settings/page.tsx` (topic CRUD)
+- MOD: `frontend/src/app/layout.tsx` (responsive, fonts)
+- MOD: `frontend/src/app/globals.css` (light theme, animations)
+- MOD: `frontend/src/lib/api.ts` (discovery, sources APIs)
 
 ---
 
-## Next Steps (Phase 3 — Dashboard Frontend)
+## Next Steps (Phase 4 — Automation + Analysis)
 
-1. Dashboard home con dati reali connessi al backend
-2. Papers page con TanStack Table avanzata
-3. Paper detail con PDF viewer
-4. Discovery page con calendar heatmap
-5. Topics page con sunburst visualization
-6. Dark/Light mode toggle
-7. Responsive design
+1. AnalysisService (synthetic paper analysis)
+2. ReportGenerator (daily HTML/PDF reports)
+3. ZoteroClient + ZoteroSyncService
+4. APScheduler integration (daily fetch job)
+5. GitHub Actions improvements

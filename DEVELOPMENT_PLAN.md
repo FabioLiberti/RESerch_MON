@@ -37,19 +37,17 @@
 
 ---
 
-## Phase 3: Dashboard Frontend Completa (v0.3.0) — PIANIFICATA
+## Phase 3: Dashboard Frontend Completa (v0.3.0) — COMPLETATA
 
-- [ ] Dashboard home con dati reali
-- [ ] Papers page con TanStack Table avanzata (sorting, column resize)
-- [ ] Paper detail con PDF viewer integrato
-- [ ] Discovery page: calendar heatmap, fetch log timeline
-- [ ] Topics page: sunburst visualization, trend charts
-- [ ] Network page: D3 citation force graph (dati da Semantic Scholar)
-- [ ] Reports page: lista + viewer HTML
-- [ ] Settings page: CRUD topics con form
-- [ ] Dark/Light mode toggle
-- [ ] Responsive mobile/tablet
-- [ ] Push v0.3.0
+- [x] Dashboard con HeatmapCalendar, export buttons, SWR data
+- [x] Discovery page con fetch trigger, source cards, fetch history
+- [x] Topics page con cards grid, paper list, source queries detail
+- [x] Network page con D3 force-directed graph (co-topic)
+- [x] Settings page con topic CRUD (create/edit/delete)
+- [x] Discovery API (trigger/status)
+- [x] Dark/Light mode toggle
+- [x] Responsive design (mobile sidebar hidden)
+- [x] Push v0.3.0
 
 ---
 

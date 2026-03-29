@@ -30,7 +30,8 @@ export const api = {
 
   // Sources
   getSources: () => fetchAPI<any>("/sources"),
-  getSourceLogs: (name: string) => fetchAPI<any>(`/sources/${name}/logs`),
+  getSourceLogs: (name: string, limit = 20) =>
+    fetchAPI<any>(`/sources/${name}/logs?limit=${limit}`),
 
   // Topics
   getTopics: () => fetchAPI<any>("/topics"),
@@ -40,6 +41,13 @@ export const api = {
     fetchAPI<any>(`/topics/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteTopic: (id: number) =>
     fetchAPI<any>(`/topics/${id}`, { method: "DELETE" }),
+
+  // Discovery
+  triggerDiscovery: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return fetchAPI<any>(`/discovery/trigger${qs ? `?${qs}` : ""}`, { method: "POST" });
+  },
+  getDiscoveryStatus: () => fetchAPI<any>("/discovery/status"),
 
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,
