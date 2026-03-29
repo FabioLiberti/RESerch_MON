@@ -153,9 +153,11 @@ export default function PapersPage() {
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
         >
           <option value="">All Topics</option>
-          {(Array.isArray(topics) ? topics : []).map((t: any) => (
-            <option key={t.id} value={t.name}>{t.name}</option>
-          ))}
+          {(Array.isArray(topics) ? topics : [])
+            .sort((a: any, b: any) => a.name.localeCompare(b.name))
+            .map((t: any) => (
+              <option key={t.id} value={t.name}>{t.name}</option>
+            ))}
         </select>
         {activeTab !== "compendium" && (
           <select
@@ -166,9 +168,11 @@ export default function PapersPage() {
             <option value="">
               {activeTab === "api" ? "All API Sources" : "All Sources"}
             </option>
-            {(activeTab === "api" ? API_SOURCES : Object.keys(SOURCE_LABELS)).map((key) => (
-              <option key={key} value={key}>{SOURCE_LABELS[key] || key}</option>
-            ))}
+            {(activeTab === "api" ? API_SOURCES : Object.keys(SOURCE_LABELS))
+              .sort((a, b) => (SOURCE_LABELS[a] || a).localeCompare(SOURCE_LABELS[b] || b))
+              .map((key) => (
+                <option key={key} value={key}>{SOURCE_LABELS[key] || key}</option>
+              ))}
           </select>
         )}
         <select
@@ -179,6 +183,7 @@ export default function PapersPage() {
           <option value="">All Keywords</option>
           {(Array.isArray(allKeywords) ? allKeywords : [])
             .filter((k: KeywordCount) => k.count >= 3)
+            .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
             .map((k: KeywordCount) => (
               <option key={k.keyword} value={k.keyword}>
                 {k.keyword} ({k.count})
