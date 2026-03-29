@@ -42,6 +42,7 @@ class PaperSummary(BaseModel):
     citation_count: int
     sources: list[str]
     topics: list[str]
+    keywords: list[str]
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -66,6 +67,7 @@ class PaperDetail(BaseModel):
     zotero_key: str | None = None
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
+    keywords: list[str]
     source_details: list[PaperSourceSchema]
     created_at: datetime
     updated_at: datetime

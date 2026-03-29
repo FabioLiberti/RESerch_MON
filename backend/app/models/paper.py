@@ -29,6 +29,8 @@ class Paper(Base):
     citation_count = Column(Integer, default=0)
     # JSON-encoded dict: {pmid, pmcid, arxiv_id, s2_id, ieee_id}
     external_ids_json = Column(Text, default="{}")
+    # JSON-encoded list of keywords extracted from abstract/tags
+    keywords_json = Column(Text, default="[]")
     zotero_key = Column(String(100), nullable=True)
     validated = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -39,6 +41,14 @@ class Paper(Base):
     sources = relationship("PaperSource", back_populates="paper", cascade="all, delete-orphan")
     topics = relationship("PaperTopic", back_populates="paper", cascade="all, delete-orphan")
     analysis = relationship("SyntheticAnalysis", back_populates="paper", uselist=False)
+
+    @property
+    def keywords(self) -> list[str]:
+        return json.loads(self.keywords_json) if self.keywords_json else []
+
+    @keywords.setter
+    def keywords(self, value: list[str]):
+        self.keywords_json = json.dumps(value)
 
     @property
     def external_ids(self) -> dict:

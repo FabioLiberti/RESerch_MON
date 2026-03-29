@@ -37,6 +37,7 @@ def _paper_to_summary(paper: Paper) -> PaperSummary:
         citation_count=paper.citation_count,
         sources=[s.source_name for s in paper.sources],
         topics=[pt.topic.name for pt in paper.topics if pt.topic],
+        keywords=paper.keywords,
         created_at=paper.created_at,
     )
 
@@ -77,6 +78,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
             )
             for pt in paper.topics
         ],
+        keywords=paper.keywords,
         source_details=[
             PaperSourceSchema(
                 source_name=s.source_name,
@@ -102,6 +104,7 @@ async def list_papers(
     date_to: str | None = None,
     has_pdf: bool | None = None,
     search: str | None = None,
+    keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -124,6 +127,10 @@ async def list_papers(
     if search:
         like_term = f"%{search}%"
         query = query.where(Paper.title.ilike(like_term) | Paper.abstract.ilike(like_term))
+    if keyword:
+        # Search in JSON array stored as text
+        kw_term = f'%"{keyword}"%'
+        query = query.where(Paper.keywords_json.ilike(kw_term))
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -148,6 +155,32 @@ async def list_papers(
         per_page=per_page,
         pages=math.ceil(total / per_page) if total > 0 else 0,
     )
+
+
+@router.get("/keywords/all")
+async def get_all_keywords(db: AsyncSession = Depends(get_db)):
+    """Get all unique keywords with paper counts, sorted by frequency."""
+    import json
+    from collections import Counter
+
+    result = await db.execute(
+        select(Paper.keywords_json).where(Paper.keywords_json != "[]")
+    )
+    rows = result.scalars().all()
+
+    counter: Counter = Counter()
+    for kw_json in rows:
+        try:
+            kws = json.loads(kw_json) if kw_json else []
+            for kw in kws:
+                counter[kw] += 1
+        except json.JSONDecodeError:
+            continue
+
+    return [
+        {"keyword": kw, "count": count}
+        for kw, count in counter.most_common()
+    ]
 
 
 @router.get("/{paper_id}", response_model=PaperDetail)

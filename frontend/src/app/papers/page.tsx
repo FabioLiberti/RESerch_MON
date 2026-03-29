@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { usePapers } from "@/hooks/usePapers";
 import { useTopics } from "@/hooks/useAnalytics";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
+import type { KeywordCount } from "@/lib/types";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 type SourceTab = "all" | "api" | "compendium";
 
@@ -22,7 +26,10 @@ export default function PapersPage() {
   const [search, setSearch] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [keywordFilter, setKeywordFilter] = useState("");
   const [activeTab, setActiveTab] = useState<SourceTab>("all");
+
+  const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", fetcher);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -32,6 +39,7 @@ export default function PapersPage() {
   };
   if (search) params.search = search;
   if (topicFilter) params.topic = topicFilter;
+  if (keywordFilter) params.keyword = keywordFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -52,6 +60,7 @@ export default function PapersPage() {
   const switchTab = (tab: SourceTab) => {
     setActiveTab(tab);
     setSourceFilter("");
+    setKeywordFilter("");
     setPage(1);
   };
 
@@ -162,7 +171,47 @@ export default function PapersPage() {
             ))}
           </select>
         )}
+        <select
+          value={keywordFilter}
+          onChange={(e) => { setKeywordFilter(e.target.value); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-52"
+        >
+          <option value="">All Keywords</option>
+          {(Array.isArray(allKeywords) ? allKeywords : [])
+            .filter((k: KeywordCount) => k.count >= 3)
+            .map((k: KeywordCount) => (
+              <option key={k.keyword} value={k.keyword}>
+                {k.keyword} ({k.count})
+              </option>
+            ))}
+        </select>
+        {(search || topicFilter || sourceFilter || keywordFilter) && (
+          <button
+            onClick={() => {
+              setSearch(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setPage(1);
+            }}
+            className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
+
+      {/* Active keyword badge */}
+      {keywordFilter && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--muted-foreground)]">Filtered by keyword:</span>
+          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
+            {keywordFilter}
+            <button
+              onClick={() => { setKeywordFilter(""); setPage(1); }}
+              className="ml-1 hover:text-[var(--foreground)]"
+            >
+              &times;
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden">
@@ -207,6 +256,33 @@ export default function PapersPage() {
                       <Link href={`/papers/${paper.id}`} className="text-sm hover:text-[var(--primary)]">
                         <span className="line-clamp-2">{paper.title}</span>
                       </Link>
+                      {paper.keywords && paper.keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {paper.keywords.slice(0, 4).map((kw) => (
+                            <button
+                              key={kw}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setKeywordFilter(kw);
+                                setPage(1);
+                              }}
+                              className={cn(
+                                "text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-colors",
+                                keywordFilter === kw
+                                  ? "bg-[var(--primary)]/20 text-[var(--primary)]"
+                                  : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]"
+                              )}
+                            >
+                              {kw}
+                            </button>
+                          ))}
+                          {paper.keywords.length > 4 && (
+                            <span className="text-[9px] text-[var(--muted-foreground)]">
+                              +{paper.keywords.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--muted-foreground)]">
                       {formatDate(paper.publication_date)}

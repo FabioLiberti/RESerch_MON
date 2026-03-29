@@ -10,7 +10,13 @@ export interface Paper {
   citation_count: number;
   sources: string[];
   topics: string[];
+  keywords: string[];
   created_at: string;
+}
+
+export interface KeywordCount {
+  keyword: string;
+  count: number;
 }
 
 export interface PaperDetail extends Paper {
