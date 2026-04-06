@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
+import { AuthProvider } from "@/lib/auth";
+import AppShell from "@/components/layout/AppShell";
 
 export const metadata: Metadata = {
   title: "FL Research Monitor",
@@ -20,16 +21,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body>
-        <div className="flex min-h-screen">
-          <div className="sidebar-desktop">
-            <Sidebar />
-          </div>
-          <main className="main-content flex-1 ml-64 p-6 md:p-8">
-            <div className="animate-fade-in">
-              {children}
-            </div>
-          </main>
-        </div>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );

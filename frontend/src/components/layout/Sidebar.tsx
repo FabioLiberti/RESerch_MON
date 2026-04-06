@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -81,6 +82,7 @@ function LearningPathSection() {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const [isDark, setIsDark] = useState(true);
 
   // Persist theme preference
@@ -141,8 +143,32 @@ export default function Sidebar() {
         <LearningPathSection />
       </nav>
 
-      {/* Footer: Theme Toggle + Status */}
+      {/* Footer: User + Theme Toggle + Status */}
       <div className="p-4 border-t border-[var(--border)] space-y-3">
+        {/* User Info */}
+        {user && (
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-full bg-[var(--primary)]/20 flex items-center justify-center text-xs font-medium text-[var(--primary)] shrink-0">
+                {user.username[0].toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium truncate">{user.username}</p>
+                <p className="text-[10px] text-[var(--muted-foreground)]">{user.role}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="text-xs text-[var(--muted-foreground)] hover:text-red-400 transition-colors p-1"
+              title="Sign out"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}

@@ -2,19 +2,17 @@
 
 import { useState, useCallback } from "react";
 import useSWR, { mutate } from "swr";
-import { api } from "@/lib/api";
+import { api, authFetcher } from "@/lib/api";
 import { SOURCE_LABELS, SOURCE_COLORS, formatDate } from "@/lib/utils";
 import type { SourceInfo, FetchLogEntry } from "@/lib/types";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
 export default function DiscoveryPage() {
-  const { data: sources, isLoading } = useSWR<SourceInfo[]>("/api/v1/sources", fetcher);
-  const { data: status } = useSWR("/api/v1/discovery/status", fetcher, { refreshInterval: 3000 });
+  const { data: sources, isLoading } = useSWR<SourceInfo[]>("/api/v1/sources", authFetcher);
+  const { data: status } = useSWR("/api/v1/discovery/status", authFetcher, { refreshInterval: 3000 });
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const { data: logs } = useSWR<FetchLogEntry[]>(
     selectedSource ? `/api/v1/sources/${selectedSource}/logs?limit=20` : null,
-    fetcher
+    authFetcher
   );
   const [triggering, setTriggering] = useState(false);
 

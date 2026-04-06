@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session
 from app.models.topic import Topic
+from app.models.user import User
 from app.services.discovery import DiscoveryService
+from app.api.auth import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ async def _run_discovery(topic_name: str | None, source: str | None, max_per_sou
 @router.post("/trigger")
 async def trigger_discovery(
     background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
     topic: str | None = Query(None, description="Topic name to search"),
     source: str | None = Query(None, description="Specific source to query"),
     max_per_source: int = Query(20, ge=1, le=200),

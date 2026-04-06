@@ -1,7 +1,8 @@
 """API router aggregating all sub-routers."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.auth import router as auth_router, get_current_user, require_admin
 from app.api.papers import router as papers_router
 from app.api.analytics import router as analytics_router
 from app.api.sources import router as sources_router
@@ -9,13 +10,21 @@ from app.api.topics import router as topics_router
 from app.api.exports import router as exports_router
 from app.api.discovery import router as discovery_router
 from app.api.reports import router as reports_router
+from app.api.paper_analysis import router as paper_analysis_router
 
 api_router = APIRouter(prefix="/api/v1")
 
-api_router.include_router(papers_router, prefix="/papers", tags=["papers"])
-api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
-api_router.include_router(sources_router, prefix="/sources", tags=["sources"])
-api_router.include_router(topics_router, prefix="/topics", tags=["topics"])
-api_router.include_router(exports_router, prefix="/exports", tags=["exports"])
-api_router.include_router(discovery_router, prefix="/discovery", tags=["discovery"])
-api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
+# Public routes (no auth required)
+api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
+
+# Protected routes (any authenticated user)
+api_router.include_router(papers_router, prefix="/papers", tags=["papers"], dependencies=[Depends(get_current_user)])
+api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"], dependencies=[Depends(get_current_user)])
+api_router.include_router(sources_router, prefix="/sources", tags=["sources"], dependencies=[Depends(get_current_user)])
+api_router.include_router(exports_router, prefix="/exports", tags=["exports"], dependencies=[Depends(get_current_user)])
+api_router.include_router(reports_router, prefix="/reports", tags=["reports"], dependencies=[Depends(get_current_user)])
+
+# Admin-only routes
+api_router.include_router(topics_router, prefix="/topics", tags=["topics"], dependencies=[Depends(get_current_user)])
+api_router.include_router(discovery_router, prefix="/discovery", tags=["discovery"], dependencies=[Depends(get_current_user)])
+api_router.include_router(paper_analysis_router, prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])

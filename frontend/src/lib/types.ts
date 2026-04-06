@@ -107,3 +107,15 @@ export interface SourceInfo {
   last_fetch: string | null;
   last_status: string;
 }
+
+export interface AnalysisQueueItem {
+  id: number;
+  paper_id: number;
+  paper_title: string | null;
+  status: "pending" | "running" | "done" | "failed";
+  error_message: string | null;
+  html_path: string | null;
+  pdf_path: string | null;
+  created_at: string;
+  completed_at: string | null;
+}

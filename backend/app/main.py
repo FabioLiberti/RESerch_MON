@@ -102,6 +102,12 @@ async def lifespan(app: FastAPI):
     # Seed defaults
     await seed_default_topics()
 
+    # Seed admin user
+    from app.services.auth import seed_admin_user
+    async with async_session() as session:
+        await seed_admin_user(session)
+        await session.commit()
+
     # Start scheduler (only in production)
     if settings.app_env != "development":
         from app.tasks.scheduler import setup_scheduler

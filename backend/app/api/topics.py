@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.topic import Topic
+from app.models.user import User
+from app.api.auth import require_admin
 
 router = APIRouter()
 
@@ -49,7 +51,7 @@ async def list_topics(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=TopicResponse)
-async def create_topic(data: TopicCreate, db: AsyncSession = Depends(get_db)):
+async def create_topic(data: TopicCreate, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Create a new topic."""
     topic = Topic(name=data.name, description=data.description, parent_id=data.parent_id)
     topic.keywords = data.keywords
@@ -67,7 +69,7 @@ async def create_topic(data: TopicCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{topic_id}", response_model=TopicResponse)
-async def update_topic(topic_id: int, data: TopicCreate, db: AsyncSession = Depends(get_db)):
+async def update_topic(topic_id: int, data: TopicCreate, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Update an existing topic."""
     result = await db.execute(select(Topic).where(Topic.id == topic_id))
     topic = result.scalar_one_or_none()
@@ -92,7 +94,7 @@ async def update_topic(topic_id: int, data: TopicCreate, db: AsyncSession = Depe
 
 
 @router.delete("/{topic_id}")
-async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_topic(topic_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Delete a topic."""
     result = await db.execute(select(Topic).where(Topic.id == topic_id))
     topic = result.scalar_one_or_none()

@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     zotero_api_key: str = ""
     zotero_user_id: str = ""
 
+    # Authentication
+    jwt_secret_key: str = "CHANGE-ME-IN-PRODUCTION"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440  # 24 hours
+    jwt_refresh_token_expire_days: int = 7
+    admin_username: str = "admin"
+    admin_password: str = "admin"
+    admin_email: str = "admin@localhost"
+    api_service_key: str = ""  # For GitHub Actions unattended access
+
     # Storage paths
     pdf_storage_path: str = "./data/pdfs"
     registry_path: str = "./data/registry"

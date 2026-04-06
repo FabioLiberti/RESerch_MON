@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
-import { api } from "@/lib/api";
+import { api, authFetcher } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { Topic } from "@/lib/types";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface TopicFormData {
   name: string;
@@ -22,7 +21,8 @@ const EMPTY_FORM: TopicFormData = {
 };
 
 export default function SettingsPage() {
-  const { data: topics } = useSWR<Topic[]>("/api/v1/topics", fetcher);
+  const { data: topics } = useSWR<Topic[]>("/api/v1/topics", authFetcher);
+  const { user, isAdmin } = useAuth();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<TopicFormData>(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
@@ -207,6 +207,12 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* User Management (Admin Only) */}
+      {isAdmin && <UserManagement />}
+
+      {/* Change Password */}
+      <ChangePasswordSection />
+
       {/* API Keys Info */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
         <h3 className="font-medium mb-4">API Keys</h3>
@@ -252,6 +258,224 @@ export default function SettingsPage() {
             <dd className="font-mono text-xs">fl-research-monitor</dd>
           </div>
         </dl>
+      </div>
+    </div>
+  );
+}
+
+
+// --- User Management (admin only) ---
+
+interface UserData {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  last_login: string | null;
+}
+
+function UserManagement() {
+  const { data: users, mutate: mutateUsers } = useSWR<UserData[]>("/api/v1/auth/users", authFetcher);
+  const [showNewUser, setShowNewUser] = useState(false);
+  const [newUser, setNewUser] = useState({ username: "", email: "", password: "", role: "viewer" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const createUser = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await api.createUser(newUser);
+      await mutateUsers();
+      setShowNewUser(false);
+      setNewUser({ username: "", email: "", password: "", role: "viewer" });
+    } catch (e: any) {
+      setError(e.message || "Failed to create user");
+    }
+    setSaving(false);
+  };
+
+  const toggleActive = async (u: UserData) => {
+    await api.updateUser(u.id, { is_active: !u.is_active });
+    await mutateUsers();
+  };
+
+  const changeRole = async (u: UserData, role: string) => {
+    await api.updateUser(u.id, { role });
+    await mutateUsers();
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-medium">User Management</h3>
+        <button
+          onClick={() => setShowNewUser(!showNewUser)}
+          className="px-3 py-1.5 text-sm rounded-lg bg-[var(--primary)] text-white hover:opacity-90"
+        >
+          + Add User
+        </button>
+      </div>
+
+      {/* New User Form */}
+      {showNewUser && (
+        <div className="mb-4 p-4 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-3">
+          {error && (
+            <div className="px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+              {error}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              value={newUser.username}
+              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              placeholder="Username"
+            />
+            <input
+              value={newUser.email}
+              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              placeholder="Email"
+            />
+            <input
+              type="password"
+              value={newUser.password}
+              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              placeholder="Password (min 6 chars)"
+            />
+            <select
+              value={newUser.role}
+              onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+            >
+              <option value="viewer">Viewer</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={createUser}
+              disabled={saving || !newUser.username || !newUser.email || newUser.password.length < 6}
+              className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "Creating..." : "Create User"}
+            </button>
+            <button
+              onClick={() => setShowNewUser(false)}
+              className="px-4 py-2 rounded-lg bg-[var(--muted)] text-sm hover:bg-[var(--border)]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Users List */}
+      <div className="space-y-2">
+        {(users || []).map((u) => (
+          <div key={u.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--secondary)]">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">{u.username}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  u.role === "admin" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"
+                }`}>
+                  {u.role}
+                </span>
+                {!u.is_active && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">
+                    inactive
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)]">{u.email}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={u.role}
+                onChange={(e) => changeRole(u, e.target.value)}
+                className="text-xs px-2 py-1 rounded bg-[var(--muted)] border border-[var(--border)]"
+              >
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button
+                onClick={() => toggleActive(u)}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  u.is_active ? "hover:bg-red-500/20 text-red-400" : "hover:bg-green-500/20 text-green-400"
+                }`}
+              >
+                {u.is_active ? "Disable" : "Enable"}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+// --- Change Password ---
+
+function ChangePasswordSection() {
+  const [current, setCurrent] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.changePassword({ current_password: current, new_password: newPwd });
+      setMessage({ type: "success", text: "Password updated successfully" });
+      setCurrent("");
+      setNewPwd("");
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Failed to change password" });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
+      <h3 className="font-medium mb-4">Change Password</h3>
+      {message && (
+        <div className={`mb-3 px-3 py-2 rounded text-sm ${
+          message.type === "success"
+            ? "bg-green-500/10 border border-green-500/20 text-green-400"
+            : "bg-red-500/10 border border-red-500/20 text-red-400"
+        }`}>
+          {message.text}
+        </div>
+      )}
+      <div className="space-y-3 max-w-sm">
+        <input
+          type="password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+          placeholder="Current password"
+        />
+        <input
+          type="password"
+          value={newPwd}
+          onChange={(e) => setNewPwd(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+          placeholder="New password (min 6 chars)"
+        />
+        <button
+          onClick={handleChange}
+          disabled={saving || !current || newPwd.length < 6}
+          className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? "Updating..." : "Update Password"}
+        </button>
       </div>
     </div>
   );

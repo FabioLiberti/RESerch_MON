@@ -1,6 +1,6 @@
 # FL-RESEARCH-MONITOR — Development Plan
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-06
 
 ---
 
@@ -77,6 +77,47 @@
 - [ ] Deploy backend su Railway/Render + PostgreSQL
 - [ ] Email report integration (SendGrid/Gmail SMTP)
 - [ ] LLM-powered analysis (replace rule-based with Claude API)
+---
+
+## Phase 6: Authentication (v1.4.0) — COMPLETATA
+
+- [x] User model con ruoli (admin/viewer) e SQLite table
+- [x] JWT access token (24h) + refresh token (7 giorni) via python-jose
+- [x] bcrypt password hashing via passlib
+- [x] Auto-seed admin user da variabili .env al primo avvio
+- [x] Auth API: login, refresh, me, change password, user CRUD (admin)
+- [x] Route protection: tutti gli endpoint richiedono JWT
+- [x] Permessi per ruolo: discovery trigger e topic CRUD solo admin
+- [x] API_SERVICE_KEY per accesso GitHub Actions automatizzato
+- [x] Frontend: pagina login, AuthProvider context, AuthGuard
+- [x] AppShell: login senza sidebar, pagine protette con sidebar
+- [x] API client: auto-inject Authorization header, auto-refresh su 401
+- [x] Sidebar: avatar utente, ruolo, logout
+- [x] Settings: pannello gestione utenti (admin), cambio password (tutti)
+- [x] Aggiornamento .env.example con variabili auth
+
+---
+
+## Phase 7: LLM Paper Analysis (v1.5.0) — COMPLETATA
+
+- [x] LLM Analysis Service con Ollama locale (Gemma4:e4b)
+- [x] Prompt template 9 sezioni, analisi in italiano
+- [x] Paper Report Generator con template HTML dark-theme
+- [x] Keyword categorization (FL Core, Privacy, Healthcare, Systems, Methods)
+- [x] Sezione Keyword Research per ogni keyword del paper
+- [x] Conversione Markdown→HTML dell'output LLM
+- [x] Generazione PDF via weasyprint
+- [x] Analysis Queue (tabella DB) con worker background
+- [x] Worker processa 1 paper alla volta, progress tracking
+- [x] API: trigger, status, queue, reports, HTML, PDF download
+- [x] Frontend: checkbox selezione paper + barra "Genera Analisi"
+- [x] Frontend: tab Daily/Analysis nella pagina Reports
+- [x] Viewer inline + download PDF
+
+---
+
+## Future Enhancements
+
 - [ ] Citation network data from Semantic Scholar references
 - [ ] Author tracking and affiliation analytics
 - [ ] Full-text search via PostgreSQL tsvector

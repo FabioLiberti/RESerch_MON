@@ -76,3 +76,19 @@ class DailyReport(Base):
     @property
     def papers_by_topic(self) -> dict:
         return json.loads(self.papers_by_topic_json) if self.papers_by_topic_json else {}
+
+
+class AnalysisQueue(Base):
+    __tablename__ = "analysis_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), default="pending")  # pending, running, done, failed
+    error_message = Column(Text, nullable=True)
+    html_path = Column(Text, nullable=True)
+    pdf_path = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    paper = relationship("Paper")

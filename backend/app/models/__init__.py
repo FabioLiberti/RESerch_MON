@@ -2,7 +2,8 @@
 
 from app.models.paper import Author, Paper, PaperAuthor, PaperSource
 from app.models.topic import PaperTopic, Topic
-from app.models.analysis import DailyReport, FetchLog, SyntheticAnalysis
+from app.models.analysis import AnalysisQueue, DailyReport, FetchLog, SyntheticAnalysis
+from app.models.user import User
 
 __all__ = [
     "Paper",
@@ -14,4 +15,6 @@ __all__ = [
     "SyntheticAnalysis",
     "FetchLog",
     "DailyReport",
+    "AnalysisQueue",
+    "User",
 ]

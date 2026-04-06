@@ -6,9 +6,9 @@ import useSWR from "swr";
 import { usePapers } from "@/hooks/usePapers";
 import { useTopics } from "@/hooks/useAnalytics";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { api, authFetcher } from "@/lib/api";
 import type { KeywordCount } from "@/lib/types";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 type SourceTab = "all" | "api" | "compendium";
 
@@ -28,8 +28,46 @@ export default function PapersPage() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [keywordFilter, setKeywordFilter] = useState("");
   const [activeTab, setActiveTab] = useState<SourceTab>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
 
-  const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", fetcher);
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (!data?.items) return;
+    const allOnPage = data.items.map((p) => p.id);
+    const allSelected = allOnPage.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      allOnPage.forEach((id) => allSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
+  const triggerAnalysis = async () => {
+    if (selectedIds.size === 0) return;
+    setAnalyzing(true);
+    setAnalysisMsg(null);
+    try {
+      const res = await api.triggerAnalysis(Array.from(selectedIds));
+      setAnalysisMsg(`${res.added} paper in coda per analisi${res.skipped ? ` (${res.skipped} già analizzati)` : ""}`);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      setAnalysisMsg(e.message || "Errore avvio analisi");
+    }
+    setAnalyzing(false);
+  };
+
+  const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", authFetcher);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -202,6 +240,48 @@ export default function PapersPage() {
         )}
       </div>
 
+      {/* Analysis message */}
+      {analysisMsg && (
+        <div className="px-4 py-3 rounded-lg bg-[var(--primary)]/10 border border-[var(--primary)]/20 text-sm text-[var(--primary)] flex items-center justify-between">
+          <span>{analysisMsg}</span>
+          <button onClick={() => setAnalysisMsg(null)} className="text-xs opacity-60 hover:opacity-100">&times;</button>
+        </div>
+      )}
+
+      {/* Selection bar */}
+      {selectedIds.size > 0 && isAdmin && (
+        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-[var(--primary)]/10 border border-[var(--primary)]/20">
+          <span className="text-sm font-medium">
+            {selectedIds.size} paper selezionat{selectedIds.size === 1 ? "o" : "i"}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 text-xs rounded-lg bg-[var(--secondary)] hover:bg-[var(--border)] transition-colors"
+            >
+              Deselect All
+            </button>
+            <button
+              onClick={triggerAnalysis}
+              disabled={analyzing}
+              className="px-4 py-1.5 text-xs rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+            >
+              {analyzing ? (
+                <>
+                  <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Invio...
+                </>
+              ) : (
+                `Genera Analisi (${selectedIds.size})`
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Active keyword badge */}
       {keywordFilter && (
         <div className="flex items-center gap-2">
@@ -223,6 +303,16 @@ export default function PapersPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--border)]">
+              {isAdmin && (
+                <th className="px-3 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={!!data?.items?.length && data.items.every((p) => selectedIds.has(p.id))}
+                    onChange={toggleSelectAll}
+                    className="rounded border-[var(--border)] accent-[var(--primary)]"
+                  />
+                </th>
+              )}
               <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3">Title</th>
               <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-28">Date</th>
               <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-32">Sources</th>
@@ -235,14 +325,14 @@ export default function PapersPage() {
             {isLoading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b border-[var(--border)]">
-                  <td colSpan={6} className="px-4 py-4">
+                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-4">
                     <div className="h-4 bg-[var(--muted)] rounded animate-pulse" />
                   </td>
                 </tr>
               ))
             ) : !data?.items?.length ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-[var(--muted-foreground)]">
+                <td colSpan={isAdmin ? 7 : 6} className="px-4 py-12 text-center text-[var(--muted-foreground)]">
                   No papers found
                 </td>
               </tr>
@@ -254,9 +344,20 @@ export default function PapersPage() {
                     key={paper.id}
                     className={cn(
                       "border-b border-[var(--border)] hover:bg-[var(--secondary)] transition-colors",
-                      isCompendium && "border-l-2 border-l-purple-500/40"
+                      isCompendium && "border-l-2 border-l-purple-500/40",
+                      selectedIds.has(paper.id) && "bg-[var(--primary)]/5"
                     )}
                   >
+                    {isAdmin && (
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(paper.id)}
+                          onChange={() => toggleSelect(paper.id)}
+                          className="rounded border-[var(--border)] accent-[var(--primary)]"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <Link href={`/papers/${paper.id}`} className="text-sm hover:text-[var(--primary)]">
                         <span className="line-clamp-2">{paper.title}</span>

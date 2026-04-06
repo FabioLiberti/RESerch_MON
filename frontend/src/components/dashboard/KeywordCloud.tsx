@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import useSWR from "swr";
+import { authFetcher } from "@/lib/api";
 import type { KeywordCount } from "@/lib/types";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Color intensity based on frequency rank
 function getKeywordStyle(count: number, maxCount: number): { bg: string; text: string; size: string } {
@@ -18,7 +17,7 @@ function getKeywordStyle(count: number, maxCount: number): { bg: string; text: s
 export default function KeywordCloud() {
   const { data: keywords, isLoading } = useSWR<KeywordCount[]>(
     "/api/v1/papers/keywords/all",
-    fetcher
+    authFetcher
   );
 
   if (isLoading) {

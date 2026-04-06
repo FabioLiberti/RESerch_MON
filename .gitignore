@@ -39,6 +39,9 @@ data/reports/
 .DS_Store
 Thumbs.db
 
+# Exchange folder
+_SCAMBIO/
+
 # Testing
 .pytest_cache/
 .coverage
