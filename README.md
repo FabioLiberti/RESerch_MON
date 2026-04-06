@@ -2,6 +2,8 @@
 
 Automated scientific paper discovery and analysis system for **Federated Learning** research.
 
+Discovers papers from multiple academic databases, validates them, downloads PDFs, classifies by topic, generates AI-powered analysis reports (in Italian), and provides an interactive web dashboard for exploration.
+
 ---
 
 ![System Architecture Diagram](img/Diagram.png)
@@ -14,7 +16,23 @@ Automated scientific paper discovery and analysis system for **Federated Learnin
 
 ---
 
-Discovers papers from multiple academic databases, validates them, downloads PDFs, classifies by topic, generates AI-powered analysis reports in Italian, and provides an interactive web dashboard for exploration.
+## Table of Contents
+
+- [Research Topics](#research-topics)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Environment Variables](#environment-variables)
+- [Dashboard Pages](#dashboard-pages)
+- [API Endpoints](#api-endpoints)
+- [LLM Paper Analysis](#llm-paper-analysis)
+- [Source Status](#source-status)
+- [CLI Scripts](#cli-scripts)
+- [Version History](#version-history)
+- [Project Structure](#project-structure)
+- [License](#license)
+
+---
 
 ## Research Topics
 
