@@ -2,6 +2,18 @@
 
 Automated scientific paper discovery and analysis system for **Federated Learning** research.
 
+---
+
+![System Architecture Diagram](img/Diagram.png)
+*System architecture and data pipeline: from configurable research topics and 5 academic sources through cross-source deduplication, rule-based and LLM-powered analysis (Gemma4:e4b via Ollama), to an interactive Next.js dashboard with multi-layer network visualization, Zotero sync, and JWT-secured REST API.*
+
+---
+
+![Feature Infographic](img/Infographic.png)
+*Complete feature overview: automated workflow covering discovery, analysis, and exploration across Federated Learning, FL in Healthcare, and European Health Data Space (EHDS) research topics. Includes Smart Search with multiple modes, keyword categorization, HTML/PDF report generation in Italian, and a responsive dark/light dashboard.*
+
+---
+
 Discovers papers from multiple academic databases, validates them, downloads PDFs, classifies by topic, generates AI-powered analysis reports in Italian, and provides an interactive web dashboard for exploration.
 
 ## Research Topics
