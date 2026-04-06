@@ -1,8 +1,14 @@
 # FL-RESEARCH-MONITOR
 
-Automated scientific paper discovery and analysis system for **Federated Learning** research.
+Automated scientific paper discovery and analysis system for **Federated Learning** research, with a focus on healthcare applications and the **European Health Data Space (EHDS)**.
 
-Discovers papers from multiple academic databases, validates them, downloads PDFs, classifies by topic, generates AI-powered analysis reports (in Italian), and provides an interactive web dashboard for exploration.
+FL-Research-Monitor continuously queries five major academic databases — **PubMed**, **arXiv**, **bioRxiv/medRxiv**, **Semantic Scholar**, and **IEEE Xplore** — to discover new publications matching configurable research topics. Discovered papers are automatically deduplicated across sources, validated via DOI/arXiv/PMID resolution, classified into research topics with confidence scoring, and enriched with keywords extracted from each source's metadata (MeSH terms, Index Terms, Fields of Study).
+
+The system features a **Smart Search** engine for ad-hoc exploration by keywords, title, author, or DOI, with auto-generated source-specific queries. Papers of interest can be saved to the local database or promoted to persistent research topics for ongoing monitoring.
+
+Individual paper analysis reports are generated in **Italian** using a local LLM (**Gemma4:e4b** via Ollama), producing structured 9-section reports covering methodology, key findings, FL techniques, relevance assessment, and healthcare applicability — exported as both HTML and PDF.
+
+An interactive **Next.js dashboard** provides real-time exploration through stats cards, activity heatmaps, timeline charts, keyword clouds, and a **multi-layer network graph** (co-keywords, co-authors, citations) built with D3.js. The system includes **JWT authentication** with role-based access control, **Zotero integration** for library sync, and an embedded **FedCompendium XL** educational module with curated learning paths.
 
 ---
 
