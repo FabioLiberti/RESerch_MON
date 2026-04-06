@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 S2_FIELDS = (
     "paperId,externalIds,title,abstract,year,venue,publicationDate,"
     "authors,citationCount,isOpenAccess,openAccessPdf,fieldsOfStudy,"
-    "journal,publicationTypes"
+    "s2FieldsOfStudy,journal,publicationTypes"
 )
 
 
@@ -110,8 +110,25 @@ class SemanticScholarClient(BaseAPIClient):
         elif "Review" in pub_types:
             paper_type = "review"
 
-        # Keywords from fieldsOfStudy
-        keywords = data.get("fieldsOfStudy") or []
+        # Keywords from fieldsOfStudy + s2FieldsOfStudy (more specific)
+        keywords = []
+        # Broad fields (e.g., "Computer Science", "Medicine")
+        fields = data.get("fieldsOfStudy") or []
+        keywords.extend(fields)
+        # S2-specific fields (e.g., "Federated Learning", "Privacy")
+        s2_fields = data.get("s2FieldsOfStudy") or []
+        for f in s2_fields:
+            cat = f.get("category", "")
+            if cat and cat not in keywords:
+                keywords.append(cat)
+        # Deduplicate
+        seen = set()
+        unique_keywords = []
+        for kw in keywords:
+            if kw.lower() not in seen:
+                seen.add(kw.lower())
+                unique_keywords.append(kw)
+        keywords = unique_keywords
 
         return RawPaperResult(
             source="semantic_scholar",

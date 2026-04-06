@@ -6,6 +6,9 @@ import AppShell from "@/components/layout/AppShell";
 export const metadata: Metadata = {
   title: "FL Research Monitor",
   description: "Automated scientific paper discovery for Federated Learning research",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

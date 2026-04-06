@@ -42,20 +42,13 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
           throw new Error(`API Error: ${retryRes.status} ${retryRes.statusText}`);
         }
         return retryRes.json();
-      } else {
-        // Refresh failed — clear auth
-        localStorage.removeItem("fl-token");
-        localStorage.removeItem("fl-refresh-token");
-        localStorage.removeItem("fl-user");
-        window.location.href = "/login";
-        throw new Error("Session expired");
       }
     }
 
-    // No refresh token — redirect to login
+    // Refresh failed or no refresh token — clear auth, let AuthGuard handle redirect
     localStorage.removeItem("fl-token");
+    localStorage.removeItem("fl-refresh-token");
     localStorage.removeItem("fl-user");
-    window.location.href = "/login";
     throw new Error("Not authenticated");
   }
 
@@ -65,11 +58,14 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/** SWR-compatible fetcher that includes auth headers */
+/** SWR-compatible fetcher that includes auth headers.
+ *  Returns null silently if no token — prevents 401 spam before login. */
 export function authFetcher(url: string) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
+  if (!token) return Promise.reject(new Error("No token"));
+
   return fetch(url, { headers: getAuthHeaders() }).then((r) => {
     if (r.status === 401) {
-      window.location.href = "/login";
       throw new Error("Not authenticated");
     }
     if (!r.ok) throw new Error(`API Error: ${r.status}`);
@@ -137,6 +133,36 @@ export const api = {
   getAnalysisStatus: () => fetchAPI<any>("/analysis/status"),
   getAnalysisQueue: () => fetchAPI<any>("/analysis/queue"),
   getAnalysisReports: () => fetchAPI<any>("/analysis/reports"),
+
+  // Smart Search
+  smartSearch: (data: { keywords: string[]; sources: string[]; max_per_source: number; mode?: string }) =>
+    fetch("/api/v1/smart-search/search", {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(120000), // 2 min timeout for inline execution
+    }).then((r) => {
+      if (!r.ok) throw new Error(`API Error: ${r.status}`);
+      return r.json();
+    }),
+  smartSearchStatus: (jobId: number) =>
+    fetchAPI<any>(`/smart-search/status/${jobId}`),
+  smartSearchRecent: () =>
+    fetchAPI<any>("/smart-search/recent"),
+  smartSearchResume: (jobId: number) =>
+    fetchAPI<any>(`/smart-search/resume/${jobId}`, { method: "POST" }),
+  smartSearchDelete: (jobId: number) =>
+    fetchAPI<any>(`/smart-search/${jobId}`, { method: "DELETE" }),
+  smartSave: (jobId: number, paperIndices: number[]) =>
+    fetchAPI<any>("/smart-search/save", {
+      method: "POST",
+      body: JSON.stringify({ job_id: jobId, paper_indices: paperIndices }),
+    }),
+  smartSaveAsTopic: (data: { name: string; keywords: string[]; description?: string }) =>
+    fetchAPI<any>("/smart-search/save-as-topic", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,

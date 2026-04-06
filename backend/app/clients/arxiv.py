@@ -9,6 +9,34 @@ from app.clients.base import BaseAPIClient, RawPaperResult
 
 logger = logging.getLogger(__name__)
 
+# Map common arXiv category codes to readable names
+ARXIV_CATEGORY_NAMES = {
+    "cs.LG": "Machine Learning",
+    "cs.AI": "Artificial Intelligence",
+    "cs.CR": "Cryptography and Security",
+    "cs.DC": "Distributed Computing",
+    "cs.CV": "Computer Vision",
+    "cs.CL": "Computation and Language",
+    "cs.NE": "Neural and Evolutionary Computing",
+    "cs.IT": "Information Theory",
+    "cs.NI": "Networking",
+    "cs.DS": "Data Structures and Algorithms",
+    "cs.SE": "Software Engineering",
+    "cs.CY": "Computers and Society",
+    "cs.IR": "Information Retrieval",
+    "cs.DB": "Databases",
+    "cs.MA": "Multiagent Systems",
+    "cs.SI": "Social and Information Networks",
+    "stat.ML": "Machine Learning (Statistics)",
+    "stat.ME": "Methodology",
+    "stat.AP": "Applications",
+    "math.OC": "Optimization and Control",
+    "eess.SP": "Signal Processing",
+    "eess.IV": "Image and Video Processing",
+    "q-bio.QM": "Quantitative Methods (Biology)",
+    "q-bio.GN": "Genomics",
+}
+
 
 class ArXivClient(BaseAPIClient):
     source_name = "arxiv"
@@ -84,8 +112,15 @@ class ArXivClient(BaseAPIClient):
         if not pdf_url and arxiv_id:
             pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
 
-        # Categories
-        categories = [tag.get("term", "") for tag in entry.get("tags", [])]
+        # Categories — translate codes to readable names
+        raw_categories = [tag.get("term", "") for tag in entry.get("tags", [])]
+        categories = []
+        for cat in raw_categories:
+            readable = ARXIV_CATEGORY_NAMES.get(cat)
+            if readable and readable not in categories:
+                categories.append(readable)
+            elif cat and cat not in categories:
+                categories.append(cat)
 
         # Journal ref
         journal = entry.get("arxiv_journal_ref", None)

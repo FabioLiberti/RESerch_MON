@@ -105,6 +105,8 @@ async def list_papers(
     has_pdf: bool | None = None,
     search: str | None = None,
     keyword: str | None = None,
+    author: str | None = None,
+    doi: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -131,6 +133,12 @@ async def list_papers(
         # Search in JSON array stored as text
         kw_term = f'%"{keyword}"%'
         query = query.where(Paper.keywords_json.ilike(kw_term))
+    if author:
+        query = query.join(PaperAuthor, PaperAuthor.paper_id == Paper.id).join(
+            Author, Author.id == PaperAuthor.author_id
+        ).where(Author.name.ilike(f"%{author}%"))
+    if doi:
+        query = query.where(Paper.doi.ilike(f"%{doi}%"))
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())

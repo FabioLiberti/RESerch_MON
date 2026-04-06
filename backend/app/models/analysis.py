@@ -78,6 +78,56 @@ class DailyReport(Base):
         return json.loads(self.papers_by_topic_json) if self.papers_by_topic_json else {}
 
 
+class SmartSearchJob(Base):
+    __tablename__ = "smart_search_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    keywords_json = Column(Text, nullable=False)
+    sources_json = Column(Text, nullable=False)
+    max_per_source = Column(Integer, default=10)
+    search_mode = Column(String(20), default="keywords")  # keywords, title, author, doi
+    status = Column(String(20), default="pending")  # pending, running, done, failed
+    results_json = Column(Text, nullable=True)  # JSON array of search results
+    queries_used_json = Column(Text, nullable=True)
+    total_found = Column(Integer, default=0)
+    already_in_db = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    @property
+    def keywords(self) -> list[str]:
+        return json.loads(self.keywords_json) if self.keywords_json else []
+
+    @keywords.setter
+    def keywords(self, value: list[str]):
+        self.keywords_json = json.dumps(value)
+
+    @property
+    def sources(self) -> list[str]:
+        return json.loads(self.sources_json) if self.sources_json else []
+
+    @sources.setter
+    def sources(self, value: list[str]):
+        self.sources_json = json.dumps(value)
+
+    @property
+    def results(self) -> list[dict]:
+        return json.loads(self.results_json) if self.results_json else []
+
+    @results.setter
+    def results(self, value: list[dict]):
+        self.results_json = json.dumps(value)
+
+    @property
+    def queries_used(self) -> dict:
+        return json.loads(self.queries_used_json) if self.queries_used_json else {}
+
+    @queries_used.setter
+    def queries_used(self, value: dict):
+        self.queries_used_json = json.dumps(value)
+
+
 class AnalysisQueue(Base):
     __tablename__ = "analysis_queue"
 

@@ -108,6 +108,20 @@ async def lifespan(app: FastAPI):
         await seed_admin_user(session)
         await session.commit()
 
+    # Reset stuck smart search jobs (running → failed, so they show in UI for retry)
+    try:
+        from sqlalchemy import update as sql_update
+        from app.models.analysis import SmartSearchJob
+        async with async_session() as session:
+            await session.execute(
+                sql_update(SmartSearchJob)
+                .where(SmartSearchJob.status.in_(["running", "pending"]))
+                .values(status="failed", error_message="Interrupted by server restart")
+            )
+            await session.commit()
+    except Exception:
+        pass
+
     # Start scheduler (only in production)
     if settings.app_env != "development":
         from app.tasks.scheduler import setup_scheduler

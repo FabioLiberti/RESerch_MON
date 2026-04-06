@@ -24,6 +24,8 @@ const API_SOURCES = ["pubmed", "semantic_scholar", "arxiv", "biorxiv", "medrxiv"
 export default function PapersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [authorFilter, setAuthorFilter] = useState("");
+  const [doiFilter, setDoiFilter] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [keywordFilter, setKeywordFilter] = useState("");
@@ -76,6 +78,8 @@ export default function PapersPage() {
     sort_order: "desc",
   };
   if (search) params.search = search;
+  if (authorFilter) params.author = authorFilter;
+  if (doiFilter) params.doi = doiFilter;
   if (topicFilter) params.topic = topicFilter;
   if (keywordFilter) params.keyword = keywordFilter;
 
@@ -180,10 +184,24 @@ export default function PapersPage() {
       <div className="flex flex-wrap gap-3">
         <input
           type="text"
-          placeholder="Search papers..."
+          placeholder="Search title/abstract..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-64"
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-48"
+        />
+        <input
+          type="text"
+          placeholder="Author..."
+          value={authorFilter}
+          onChange={(e) => { setAuthorFilter(e.target.value); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-36"
+        />
+        <input
+          type="text"
+          placeholder="DOI..."
+          value={doiFilter}
+          onChange={(e) => { setDoiFilter(e.target.value); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-40"
         />
         <select
           value={topicFilter}
@@ -228,10 +246,10 @@ export default function PapersPage() {
               </option>
             ))}
         </select>
-        {(search || topicFilter || sourceFilter || keywordFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >

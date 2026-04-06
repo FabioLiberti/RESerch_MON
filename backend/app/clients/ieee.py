@@ -82,6 +82,30 @@ class IEEEXploreClient(BaseAPIClient):
         if article_number:
             pdf_url = f"https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber={article_number}"
 
+        # Keywords from index_terms
+        keywords = []
+        index_terms = article.get("index_terms", {})
+        # IEEE Author Keywords
+        author_terms = index_terms.get("author_terms", {}).get("terms", [])
+        keywords.extend(author_terms)
+        # IEEE Terms (controlled vocabulary)
+        ieee_terms = index_terms.get("ieee_terms", {}).get("terms", [])
+        keywords.extend(ieee_terms)
+        # INSPEC Controlled Terms
+        inspec_terms = index_terms.get("controlled_terms", {}).get("terms", [])
+        keywords.extend(inspec_terms)
+        # INSPEC Non-Controlled Terms
+        inspec_nc = index_terms.get("non_controlled_terms", {}).get("terms", [])
+        keywords.extend(inspec_nc)
+        # Deduplicate preserving order
+        seen = set()
+        unique_keywords = []
+        for kw in keywords:
+            kw_lower = kw.lower()
+            if kw_lower not in seen:
+                seen.add(kw_lower)
+                unique_keywords.append(kw)
+
         return RawPaperResult(
             source="ieee",
             source_id=article_number,
@@ -97,6 +121,7 @@ class IEEEXploreClient(BaseAPIClient):
             open_access=article.get("access_type", "") == "OPEN_ACCESS",
             pdf_url=pdf_url,
             citation_count=article.get("citing_paper_count", 0),
+            keywords=unique_keywords,
             external_ids={"ieee_id": article_number, "doi": doi},
             raw_data=article,
         )

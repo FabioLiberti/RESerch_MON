@@ -11,6 +11,8 @@ from app.api.exports import router as exports_router
 from app.api.discovery import router as discovery_router
 from app.api.reports import router as reports_router
 from app.api.paper_analysis import router as paper_analysis_router
+from app.api.smart_search import router as smart_search_router
+from app.api.network import router as network_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -28,3 +30,5 @@ api_router.include_router(reports_router, prefix="/reports", tags=["reports"], d
 api_router.include_router(topics_router, prefix="/topics", tags=["topics"], dependencies=[Depends(get_current_user)])
 api_router.include_router(discovery_router, prefix="/discovery", tags=["discovery"], dependencies=[Depends(get_current_user)])
 api_router.include_router(paper_analysis_router, prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
+api_router.include_router(smart_search_router, prefix="/smart-search", tags=["smart-search"], dependencies=[Depends(get_current_user)])
+api_router.include_router(network_router, prefix="/network", tags=["network"], dependencies=[Depends(get_current_user)])
