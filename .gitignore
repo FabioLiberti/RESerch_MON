@@ -42,6 +42,13 @@ Thumbs.db
 # Exchange folder
 _SCAMBIO/
 
+# Claude Code
+.claude/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
 # Testing
 .pytest_cache/
 .coverage
