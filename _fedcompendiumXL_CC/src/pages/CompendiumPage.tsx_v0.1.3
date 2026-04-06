@@ -1,0 +1,333 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Container,
+  Heading,
+  Text,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Grid,
+  GridItem,
+  Card,
+  CardBody,
+  CardFooter,
+  Flex,
+  HStack,
+  Button,
+  IconButton,
+  Tag,
+  Badge,
+  useColorModeValue,
+  Divider
+} from '@chakra-ui/react';
+import { SearchIcon, DownloadIcon, ExternalLinkIcon } from '@chakra-ui/icons';
+import { FiFilter, FiBookmark, FiMapPin } from 'react-icons/fi';
+
+// In a real implementation, you would import your data from a JSON file or API
+// import topics from '../data/topics.json';
+// Mock data for the example
+const topics = [
+  {
+    id: 'intro-fl',
+    title: 'Introduction to Federated Learning',
+    description: 'Learn the fundamentals of federated learning and how it differs from traditional centralized machine learning approaches.',
+    category: 'basics',
+    difficulty: 'beginner',
+    tags: ['introduction', 'overview']
+  },
+  {
+    id: 'fedavg',
+    title: 'Federated Averaging (FedAvg)',
+    description: 'Understand the canonical federated averaging algorithm, its implementation details and convergence properties.',
+    category: 'algorithms',
+    difficulty: 'beginner',
+    tags: ['algorithm', 'model-aggregation']
+  },
+  {
+    id: 'non-iid',
+    title: 'Dealing with Non-IID Data',
+    description: 'Explore techniques for handling statistical heterogeneity in federated networks and improving model convergence.',
+    category: 'algorithms',
+    difficulty: 'intermediate',
+    tags: ['heterogeneity', 'convergence']
+  },
+  {
+    id: 'diff-privacy',
+    title: 'Differential Privacy in Federated Learning',
+    description: 'Learn how to implement differential privacy mechanisms to provide formal privacy guarantees in federated systems.',
+    category: 'privacy',
+    difficulty: 'advanced',
+    tags: ['privacy', 'security']
+  },
+  {
+    id: 'secure-agg',
+    title: 'Secure Aggregation Protocols',
+    description: 'Understand cryptographic techniques for secure model aggregation without revealing individual client updates.',
+    category: 'privacy',
+    difficulty: 'advanced',
+    tags: ['privacy', 'security', 'cryptography']
+  },
+  {
+    id: 'fl-healthcare',
+    title: 'Federated Learning for Healthcare',
+    description: 'Explore applications of federated learning in healthcare, including FHIR integration and regulatory considerations.',
+    category: 'applications',
+    difficulty: 'intermediate',
+    tags: ['healthcare', 'applications']
+  },
+  {
+    id: 'fl-edge',
+    title: 'Federated Learning on Edge Devices',
+    description: 'Implement federated learning on resource-constrained IoT and edge devices with communication efficiency.',
+    category: 'systems',
+    difficulty: 'intermediate',
+    tags: ['edge', 'IoT', 'optimization']
+  },
+  {
+    id: 'personalization',
+    title: 'Personalization in Federated Learning',
+    description: 'Techniques for adapting global models to local data distributions while maintaining global performance.',
+    category: 'algorithms',
+    difficulty: 'advanced',
+    tags: ['personalization', 'adaptation']
+  }
+];
+
+interface CompendiumPageProps {
+  onViewLearningPath?: () => void;
+}
+
+const CompendiumPage: React.FC<CompendiumPageProps> = ({ onViewLearningPath }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [tabIndex, setTabIndex] = useState(0);
+  const [filteredTopics, setFilteredTopics] = useState(topics);
+  
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  
+  // Filter topics based on search term and active tab
+  useEffect(() => {
+    let filtered = [...topics];
+    
+    // Apply search filter if there's a search term
+    if (searchTerm) {
+      filtered = filtered.filter(topic => 
+        topic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        topic.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        topic.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+    
+    // Apply category filter if not on "All Topics" tab
+    if (tabIndex > 0) {
+      const categories = ['basics', 'algorithms', 'privacy', 'applications', 'systems'];
+      filtered = filtered.filter(topic => topic.category === categories[tabIndex - 1]);
+    }
+    
+    setFilteredTopics(filtered);
+  }, [searchTerm, tabIndex]);
+  
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+  
+  const handleTabChange = (index: number) => {
+    setTabIndex(index);
+  };
+
+  const handleTopicClick = (topicId: string) => {
+    window.history.pushState(null, "", `/topic/${topicId}`);
+    window.location.reload(); // In a real app, you'd use React Router instead
+  };
+  
+  // Function to get badge color based on difficulty
+  const getDifficultyColor = (difficulty: string) => {
+    switch(difficulty) {
+      case 'beginner':
+        return 'green';
+      case 'intermediate':
+        return 'orange';
+      case 'advanced':
+        return 'red';
+      default:
+        return 'gray';
+    }
+  };
+  
+  // Function to get badge color based on category
+  const getCategoryColor = (category: string) => {
+    switch(category) {
+      case 'basics':
+        return 'blue';
+      case 'algorithms':
+        return 'purple';
+      case 'privacy':
+        return 'red';
+      case 'applications':
+        return 'orange';
+      case 'systems':
+        return 'cyan';
+      default:
+        return 'gray';
+    }
+  };
+  
+  return (
+    <Container maxW="container.xl" py={5}>
+      <Flex justifyContent="space-between" alignItems="center" mb={6}>
+        <Box>
+          <Heading as="h1" size="xl">Federated Learning Compendium</Heading>
+          <Text mt={2}>A comprehensive guide to federated learning concepts, algorithms, and implementations</Text>
+        </Box>
+        <HStack spacing={3}>
+          <Button 
+            leftIcon={<DownloadIcon />} 
+            variant="outline"
+          >
+            Download PDF
+          </Button>
+          <Button 
+            leftIcon={<Box as={FiMapPin as React.ElementType} />} 
+            colorScheme="blue"
+            onClick={onViewLearningPath}
+          >
+            Learning Path
+          </Button>
+        </HStack>
+      </Flex>
+      
+      <Card mb={6} variant="outline" bg={cardBg}>
+        <CardBody>
+          <Flex justifyContent="space-between" alignItems="center">
+            <InputGroup maxW="600px">
+              <InputLeftElement pointerEvents="none">
+                <SearchIcon color="gray.400" />
+              </InputLeftElement>
+              <Input 
+                placeholder="Search for topics, algorithms, or concepts" 
+                value={searchTerm}
+                onChange={handleSearchChange}
+              />
+            </InputGroup>
+            <IconButton
+              aria-label="Filter topics"
+              icon={<Box as={FiFilter as React.ElementType} />}
+              variant="ghost"
+            />
+          </Flex>
+        </CardBody>
+      </Card>
+      
+      <Tabs variant="line" colorScheme="blue" onChange={handleTabChange} mb={6}>
+        <TabList overflowX="auto" overflowY="hidden" pb={1}>
+          <Tab>All Topics</Tab>
+          <Tab>Basics</Tab>
+          <Tab>Algorithms</Tab>
+          <Tab>Privacy</Tab>
+          <Tab>Applications</Tab>
+          <Tab>Systems</Tab>
+        </TabList>
+        
+        <TabPanels>
+          {/* We'll render the same grid for each tab, with different filtered data */}
+          {[0, 1, 2, 3, 4, 5].map(tabIdx => (
+            <TabPanel key={tabIdx} p={0} pt={4}>
+              <Grid 
+                templateColumns={["1fr", "1fr", "repeat(2, 1fr)", "repeat(2, 1fr)"]} 
+                gap={4}
+              >
+                {filteredTopics.map((topic, idx) => (
+                  <GridItem key={idx}>
+                    <Card 
+                      variant="outline" 
+                      h="100%" 
+                      borderColor={borderColor}
+                      _hover={{ borderColor: 'blue.400', shadow: 'md' }}
+                      transition="all 0.2s"
+                    >
+                      <CardBody>
+                        <Flex direction="column" h="100%">
+                          <Flex justify="space-between" align="center" mb={2}>
+                            <Heading size="md" fontWeight="bold">
+                              {topic.title}
+                            </Heading>
+                            <HStack>
+                              <Badge colorScheme={getCategoryColor(topic.category)}>
+                                {topic.category}
+                              </Badge>
+                              <Badge colorScheme={getDifficultyColor(topic.difficulty)}>
+                                {topic.difficulty}
+                              </Badge>
+                            </HStack>
+                          </Flex>
+                          
+                          <Text fontSize="md" mb={4} flex="1">
+                            {topic.description}
+                          </Text>
+                          
+                          <Box mt="auto">
+                            <HStack spacing={2} wrap="wrap">
+                              {topic.tags.map((tag, tagIdx) => (
+                                <Tag key={tagIdx} size="sm" variant="subtle" mb={1}>
+                                  {tag}
+                                </Tag>
+                              ))}
+                            </HStack>
+                          </Box>
+                        </Flex>
+                      </CardBody>
+                      
+                      <Divider />
+                      
+                      <CardFooter pt={2} pb={2}>
+                        <Flex justify="space-between" w="100%">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            colorScheme="blue"
+                            rightIcon={<ExternalLinkIcon />}
+                            onClick={() => handleTopicClick(topic.id)}
+                          >
+                            Explore Topic
+                          </Button>
+                          <IconButton
+                            aria-label="Bookmark this topic"
+                            icon={<Box as={FiBookmark as React.ElementType} />}
+                            size="sm"
+                            variant="ghost"
+                          />
+                        </Flex>
+                      </CardFooter>
+                    </Card>
+                  </GridItem>
+                ))}
+              </Grid>
+              
+              {filteredTopics.length === 0 && (
+                <Box textAlign="center" p={8}>
+                  <Text fontSize="lg">No topics found matching your search criteria.</Text>
+                  <Button 
+                    mt={4} 
+                    colorScheme="blue" 
+                    variant="outline"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    Clear search
+                  </Button>
+                </Box>
+              )}
+            </TabPanel>
+          ))}
+        </TabPanels>
+      </Tabs>
+    </Container>
+  );
+};
+
+export default CompendiumPage;

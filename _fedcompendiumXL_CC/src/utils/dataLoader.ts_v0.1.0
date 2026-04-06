@@ -1,0 +1,69 @@
+import axios from 'axios';
+
+// Define interfaces for the JSON data structures
+export interface Topic {
+  id: string;
+  title: string;
+  description: string;
+  category: 'basics' | 'algorithms' | 'applications' | 'privacy' | 'systems';
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+}
+
+export interface Algorithm {
+  id: string;
+  name: string;
+  paper: string;
+  authors: string;
+  year: number;
+  description: string;
+  advantages: string[];
+  limitations: string[];
+  use_cases: string[];
+}
+
+export interface Paper {
+  id: string;
+  title: string;
+  authors: Author[];
+  conference: string;
+  year: number;
+  abstract: string;
+  tags: string[];
+  url?: string;
+}
+
+export interface Author {
+  name: string;
+  affiliation?: string;
+}
+
+// Data loader functions
+export const loadTopics = async (): Promise<Topic[]> => {
+  try {
+    const response = await axios.get<Topic[]>('/data/topics.json');
+    return response.data;
+  } catch (error) {
+    console.error('Error loading topics:', error);
+    return [];
+  }
+};
+
+export const loadAlgorithms = async (): Promise<Algorithm[]> => {
+  try {
+    const response = await axios.get<Algorithm[]>('/data/algorithms.json');
+    return response.data;
+  } catch (error) {
+    console.error('Error loading algorithms:', error);
+    return [];
+  }
+};
+
+export const loadPapers = async (): Promise<Paper[]> => {
+  try {
+    const response = await axios.get<Paper[]>('/data/papers.json');
+    return response.data;
+  } catch (error) {
+    console.error('Error loading papers:', error);
+    return [];
+  }
+};

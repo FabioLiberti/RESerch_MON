@@ -1,0 +1,789 @@
+import React, { useState } from 'react';
+import {
+  Box,
+  Grid,
+  Flex,
+  Heading,
+  Text,
+  Button,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  useColorModeValue,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
+  SimpleGrid,
+  Icon,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
+  Badge,
+  Image,
+  Divider,
+  Link,
+  List,
+  ListItem,
+  ListIcon,
+} from '@chakra-ui/react';
+import { 
+  FiSearch, 
+  FiBook, 
+  FiCode, 
+  FiLayers, 
+  FiCpu, 
+  FiCheckCircle, 
+  FiArrowRight, 
+  FiExternalLink,
+  FiDownload,
+  FiInfo,
+  FiAlertCircle
+} from 'react-icons/fi';
+
+interface Topic {
+  id: string;
+  title: string;
+  description: string;
+  category: 'basics' | 'algorithms' | 'applications' | 'privacy' | 'systems';
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  icon: any;
+}
+
+const sampleTopics: Topic[] = [
+  {
+    id: 'intro',
+    title: 'Introduction to Federated Learning',
+    description: 'Learn the fundamentals of federated learning and how it differs from traditional centralized machine learning approaches.',
+    category: 'basics',
+    difficulty: 'beginner',
+    icon: FiBook
+  },
+  {
+    id: 'fedavg',
+    title: 'Federated Averaging (FedAvg)',
+    description: 'Understand the canonical federated averaging algorithm, its implementation details and convergence properties.',
+    category: 'algorithms',
+    difficulty: 'beginner',
+    icon: FiLayers
+  },
+  {
+    id: 'non-iid',
+    title: 'Dealing with Non-IID Data',
+    description: 'Explore techniques for handling statistical heterogeneity in federated networks and improving model convergence.',
+    category: 'algorithms',
+    difficulty: 'intermediate',
+    icon: FiCode
+  },
+  {
+    id: 'differential-privacy',
+    title: 'Differential Privacy in Federated Learning',
+    description: 'Learn how to implement differential privacy mechanisms to provide formal privacy guarantees in federated systems.',
+    category: 'privacy',
+    difficulty: 'advanced',
+    icon: FiInfo
+  },
+  {
+    id: 'secure-aggregation',
+    title: 'Secure Aggregation Protocols',
+    description: 'Understand cryptographic techniques for secure model aggregation without revealing individual client updates.',
+    category: 'privacy',
+    difficulty: 'advanced',
+    icon: FiInfo
+  },
+  {
+    id: 'healthcare',
+    title: 'Federated Learning for Healthcare',
+    description: 'Explore applications of federated learning in healthcare, including FHIR integration and regulatory considerations.',
+    category: 'applications',
+    difficulty: 'intermediate',
+    icon: FiCode
+  },
+  {
+    id: 'edge-devices',
+    title: 'Federated Learning on Edge Devices',
+    description: 'Implement federated learning on resource-constrained IoT and edge devices with communication efficiency.',
+    category: 'systems',
+    difficulty: 'intermediate',
+    icon: FiCpu
+  },
+  {
+    id: 'personalization',
+    title: 'Personalization in Federated Learning',
+    description: 'Techniques for adapting global models to local data distributions while maintaining global performance.',
+    category: 'algorithms',
+    difficulty: 'advanced',
+    icon: FiLayers
+  }
+];
+
+interface Algorithm {
+  id: string;
+  name: string;
+  paper: string;
+  authors: string;
+  year: number;
+  description: string;
+  advantages: string[];
+  limitations: string[];
+  use_cases: string[];
+}
+
+const fedAlgorithms: Algorithm[] = [
+  {
+    id: 'fedavg',
+    name: 'FedAvg (Federated Averaging)',
+    paper: 'Communication-Efficient Learning of Deep Networks from Decentralized Data',
+    authors: 'McMahan et al.',
+    year: 2017,
+    description: 'The canonical federated learning algorithm that performs local SGD updates on client devices and averages model parameters on the server.',
+    advantages: [
+      'Simple to implement and understand',
+      'Communication efficient compared to centralized training',
+      'Works well with IID data distributions'
+    ],
+    limitations: [
+      'Convergence issues with highly non-IID data',
+      'No formal privacy guarantees',
+      'Requires client synchronization'
+    ],
+    use_cases: [
+      'Mobile keyboard prediction',
+      'Voice assistants',
+      'Simple classification tasks'
+    ]
+  },
+  {
+    id: 'fedprox',
+    name: 'FedProx (Federated Proximal)',
+    paper: 'Federated Optimization in Heterogeneous Networks',
+    authors: 'Li et al.',
+    year: 2020,
+    description: 'Extends FedAvg with a proximal term that penalizes large deviations from the global model to improve stability with heterogeneous data.',
+    advantages: [
+      'Better convergence with non-IID data',
+      'More stable training',
+      'Accommodates partial client updates'
+    ],
+    limitations: [
+      'Additional computational overhead',
+      'Requires tuning of proximal parameter',
+      'Still sensitive to extreme heterogeneity'
+    ],
+    use_cases: [
+      'Healthcare applications with institution-specific data',
+      'Mobile applications with varying user behaviors',
+      'Cross-silo enterprise federations'
+    ]
+  },
+  {
+    id: 'scaffold',
+    name: 'SCAFFOLD',
+    paper: 'SCAFFOLD: Stochastic Controlled Averaging for Federated Learning',
+    authors: 'Karimireddy et al.',
+    year: 2020,
+    description: 'Uses control variates to correct for client drift during local training, addressing the "client drift" problem in heterogeneous settings.',
+    advantages: [
+      'Faster convergence compared to FedAvg and FedProx',
+      'Effective for highly non-IID data',
+      'Theoretically principled approach'
+    ],
+    limitations: [
+      'Increased memory requirements',
+      'Additional communication overhead',
+      'More complex implementation'
+    ],
+    use_cases: [
+      'Medical imaging with institutional variations',
+      'NLP tasks with diverse linguistic patterns',
+      'Federated recommendation systems'
+    ]
+  }
+];
+
+const CompendiumPage: React.FC = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
+  
+  // Color mode values
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const subtleText = useColorModeValue('gray.600', 'gray.400');
+  const accentBg = useColorModeValue('blue.50', 'blue.900');
+  
+  // Filter topics based on search and filters
+  const filteredTopics = sampleTopics.filter(topic => {
+    const matchesSearch = 
+      topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      topic.description.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesCategory = selectedCategory ? topic.category === selectedCategory : true;
+    const matchesDifficulty = selectedDifficulty ? topic.difficulty === selectedDifficulty : true;
+    
+    return matchesSearch && matchesCategory && matchesDifficulty;
+  });
+  
+  // Filtered algorithms based on search
+  const filteredAlgorithms = fedAlgorithms.filter(algo => 
+    algo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    algo.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  return (
+    <Box minH="100vh" p={{ base: 4, md: 8 }}>
+      <Heading as="h1" size="xl" mb={2} color={textColor}>
+        Federated Learning Compendium
+      </Heading>
+      <Text mb={6} color={subtleText}>
+        A comprehensive guide to federated learning concepts, algorithms, and implementations
+      </Text>
+      
+      {/* Search Bar */}
+      <Flex 
+        direction={{ base: 'column', md: 'row' }}
+        mb={6}
+        gap={4}
+        align={{ base: 'stretch', md: 'center' }}
+      >
+        <InputGroup maxW={{ base: '100%', md: '500px' }}>
+          <InputLeftElement pointerEvents="none">
+            <Icon as={FiSearch as unknown as React.ElementType} color="gray.300" />
+          </InputLeftElement>
+          <Input
+            placeholder="Search for topics, algorithms, or concepts"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </InputGroup>
+        
+        <Flex ml={{ base: 0, md: 'auto' }} gap={2}>
+          <Button 
+            leftIcon={<Icon as={FiDownload as unknown as React.ElementType} />}
+            colorScheme="blue"
+            variant="outline"
+          >
+            Download PDF
+          </Button>
+          <Button 
+            leftIcon={<Icon as={FiBook as unknown as React.ElementType} />}
+            colorScheme="blue"
+          >
+            Learning Path
+          </Button>
+        </Flex>
+      </Flex>
+      
+      {/* Main Content Tabs */}
+      <Tabs variant="soft-rounded" colorScheme="blue">
+        <TabList mb={6} overflowX="auto" css={{ scrollbarWidth: 'none' }}>
+          <Tab>Topics</Tab>
+          <Tab>Algorithms</Tab>
+          <Tab>Tutorials</Tab>
+          <Tab>Resources</Tab>
+        </TabList>
+        
+        <TabPanels>
+          {/* Topics Panel */}
+          <TabPanel p={0}>
+            <Grid templateColumns={{ base: '1fr', lg: '250px 1fr' }} gap={6}>
+              {/* Filter Sidebar */}
+              <Box>
+                <Heading size="md" mb={4}>Filters</Heading>
+                
+                <Box mb={6}>
+                  <Heading size="sm" mb={2}>Categories</Heading>
+                  <List spacing={2}>
+                    {['basics', 'algorithms', 'applications', 'privacy', 'systems'].map(category => (
+                      <ListItem key={category}>
+                        <Button 
+                          variant={selectedCategory === category ? 'solid' : 'ghost'}
+                          colorScheme={selectedCategory === category ? 'blue' : 'gray'}
+                          size="sm"
+                          justifyContent="flex-start"
+                          width="100%"
+                          onClick={() => setSelectedCategory(
+                            selectedCategory === category ? null : category
+                          )}
+                          leftIcon={
+                            category === 'basics' ? <Icon as={FiBook as unknown as React.ElementType} /> :
+                            category === 'algorithms' ? <Icon as={FiLayers as unknown as React.ElementType} /> :
+                            category === 'applications' ? <Icon as={FiCode as unknown as React.ElementType} /> :
+                            category === 'privacy' ? <Icon as={FiInfo as unknown as React.ElementType} /> :
+                            <Icon as={FiCpu as unknown as React.ElementType} />
+                          }
+                        >
+                          {category.charAt(0).toUpperCase() + category.slice(1)}
+                        </Button>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+                
+                <Box mb={6}>
+                  <Heading size="sm" mb={2}>Difficulty</Heading>
+                  <List spacing={2}>
+                    {['beginner', 'intermediate', 'advanced'].map(level => (
+                      <ListItem key={level}>
+                        <Button 
+                          variant={selectedDifficulty === level ? 'solid' : 'ghost'}
+                          colorScheme={selectedDifficulty === level ? 'blue' : 'gray'}
+                          size="sm"
+                          justifyContent="flex-start"
+                          width="100%"
+                          onClick={() => setSelectedDifficulty(
+                            selectedDifficulty === level ? null : level
+                          )}
+                        >
+                          {level.charAt(0).toUpperCase() + level.slice(1)}
+                        </Button>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Box>
+              
+              {/* Topics Grid */}
+              <Box>
+                <Flex justify="space-between" align="center" mb={4}>
+                  <Heading size="md">
+                    {filteredTopics.length} {filteredTopics.length === 1 ? 'Topic' : 'Topics'}
+                  </Heading>
+                  
+                  <Button 
+                    variant="ghost" 
+                    colorScheme="blue"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCategory(null);
+                      setSelectedDifficulty(null);
+                      setSearchQuery('');
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </Flex>
+                
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+                  {filteredTopics.map(topic => (
+                    <Box
+                      key={topic.id}
+                      p={5}
+                      borderRadius="lg"
+                      bg={bgColor}
+                      borderWidth="1px"
+                      borderColor={borderColor}
+                      boxShadow="sm"
+                      transition="all 0.2s"
+                      _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+                    >
+                      <Flex mb={3}>
+                        <Box
+                          p={2}
+                          bg={accentBg}
+                          borderRadius="md"
+                          color="blue.500"
+                          mr={3}
+                        >
+                          <Icon as={topic.icon as unknown as React.ElementType} boxSize={5} />
+                        </Box>
+                        <Box>
+                          <Heading as="h3" size="md" mb={1}>
+                            {topic.title}
+                          </Heading>
+                          <Flex gap={2} mb={2}>
+                            <Badge colorScheme={
+                              topic.category === 'basics' ? 'blue' :
+                              topic.category === 'algorithms' ? 'purple' :
+                              topic.category === 'applications' ? 'green' :
+                              topic.category === 'privacy' ? 'red' :
+                              'orange'
+                            }>
+                              {topic.category}
+                            </Badge>
+                            <Badge colorScheme={
+                              topic.difficulty === 'beginner' ? 'green' :
+                              topic.difficulty === 'intermediate' ? 'yellow' :
+                              'red'
+                            }>
+                              {topic.difficulty}
+                            </Badge>
+                          </Flex>
+                        </Box>
+                      </Flex>
+                      
+                      <Text fontSize="sm" color={subtleText} mb={4}>
+                        {topic.description}
+                      </Text>
+                      
+                      <Button
+                        rightIcon={<Icon as={FiArrowRight as unknown as React.ElementType} />}
+                        colorScheme="blue"
+                        variant="ghost"
+                        size="sm"
+                      >
+                        Explore Topic
+                      </Button>
+                    </Box>
+                  ))}
+                </SimpleGrid>
+                
+                {filteredTopics.length === 0 && (
+                  <Box
+                    p={8}
+                    textAlign="center"
+                    borderRadius="lg"
+                    bg={bgColor}
+                    borderWidth="1px"
+                    borderColor={borderColor}
+                  >
+                    <Icon as={FiAlertCircle as unknown as React.ElementType} boxSize={10} color="blue.500" mb={4} />
+                    <Heading size="md" mb={2}>No Topics Found</Heading>
+                    <Text color={subtleText}>
+                      Try adjusting your search or filters to find what you're looking for.
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+          </TabPanel>
+          
+          {/* Algorithms Panel */}
+          <TabPanel p={0}>
+            <Accordion allowMultiple>
+              {filteredAlgorithms.map(algo => (
+                <AccordionItem
+                  key={algo.id}
+                  mb={4}
+                  border="1px"
+                  borderColor={borderColor}
+                  borderRadius="lg"
+                  overflow="hidden"
+                >
+                  <h2>
+                    <AccordionButton py={3} px={4}>
+                      <Box flex="1" textAlign="left">
+                        <Flex align="center">
+                          <Icon as={FiLayers as unknown as React.ElementType} mr={3} color="blue.500" />
+                          <Heading size="md">{algo.name}</Heading>
+                        </Flex>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                  </h2>
+                  <AccordionPanel pb={4} bg={accentBg} borderTop="1px" borderColor={borderColor}>
+                    <Grid templateColumns={{ base: '1fr', md: '2fr 1fr' }} gap={6}>
+                      <Box>
+                        <Text mb={4}>{algo.description}</Text>
+                        
+                        <Box mb={4}>
+                          <Heading size="sm" mb={2}>Advantages</Heading>
+                          <List spacing={1}>
+                            {algo.advantages.map((adv, i) => (
+                              <ListItem key={i} display="flex" alignItems="center">
+                                <ListIcon as={FiCheckCircle as unknown as React.ElementType} color="green.500" />
+                                {adv}
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                        
+                        <Box mb={4}>
+                          <Heading size="sm" mb={2}>Limitations</Heading>
+                          <List spacing={1}>
+                            {algo.limitations.map((lim, i) => (
+                              <ListItem key={i} display="flex" alignItems="center">
+                                <ListIcon as={FiAlertCircle as unknown as React.ElementType} color="orange.500" />
+                                {lim}
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                        
+                        <Box>
+                          <Heading size="sm" mb={2}>Common Use Cases</Heading>
+                          <List spacing={1}>
+                            {algo.use_cases.map((use, i) => (
+                              <ListItem key={i} display="flex" alignItems="center">
+                                <ListIcon as={FiCpu as unknown as React.ElementType} color="purple.500" />
+                                {use}
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      </Box>
+                      
+                      <Box>
+                        <Box p={4} bg={bgColor} borderRadius="md" mb={4}>
+                          <Heading size="sm" mb={3}>Original Publication</Heading>
+                          <Text fontWeight="medium" mb={1}>{algo.paper}</Text>
+                          <Text fontSize="sm" mb={2}>{algo.authors}, {algo.year}</Text>
+                          <Link color="blue.500" fontSize="sm" display="flex" alignItems="center">
+                            View Paper <Icon as={FiExternalLink as unknown as React.ElementType} ml={1} />
+                          </Link>
+                        </Box>
+                        
+                        <Button colorScheme="blue" leftIcon={<Icon as={FiCode as unknown as React.ElementType} />} w="full" mb={2}>
+                          Implementation Guide
+                        </Button>
+                        
+                        <Button variant="outline" leftIcon={<Icon as={FiDownload as unknown as React.ElementType} />} w="full">
+                          Sample Code
+                        </Button>
+                      </Box>
+                    </Grid>
+                  </AccordionPanel>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </TabPanel>
+
+          {/* Tutorials Panel */}
+          <TabPanel p={0}>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+              {/* Tutorial Cards */}
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+                transition="all 0.2s"
+                _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+                height="100%"
+                display="flex"
+                flexDirection="column"
+              >
+                <Image 
+                  src="/api/placeholder/400/200" 
+                  alt="Federated Learning Implementation Tutorial"
+                  borderRadius="md"
+                  mb={4}
+                />
+                <Heading size="md" mb={2} color={textColor}>
+                  Building Your First Federated Learning System
+                </Heading>
+                <Text fontSize="sm" mb={3} color={subtleText}>
+                  A step-by-step tutorial for implementing federated learning with TensorFlow Federated
+                </Text>
+                <Flex gap={2} mb={4}>
+                  <Badge colorScheme="blue">TensorFlow</Badge>
+                  <Badge colorScheme="green">Beginner</Badge>
+                </Flex>
+                <Flex alignItems="center" mt="auto">
+                  <Icon as={FiCpu as unknown as React.ElementType} mr={2} />
+                  <Text fontWeight="medium">60 minutes</Text>
+                  <Button ml="auto" rightIcon={<Icon as={FiArrowRight as unknown as React.ElementType} />} colorScheme="blue" size="sm">
+                    Start
+                  </Button>
+                </Flex>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+                transition="all 0.2s"
+                _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+                height="100%"
+                display="flex"
+                flexDirection="column"
+              >
+                <Image 
+                  src="/api/placeholder/400/200" 
+                  alt="Privacy in Federated Learning"
+                  borderRadius="md"
+                  mb={4}
+                />
+                <Heading size="md" mb={2} color={textColor}>
+                  Adding Differential Privacy to Federated Models
+                </Heading>
+                <Text fontSize="sm" mb={3} color={subtleText}>
+                  Learn how to implement differential privacy mechanisms to protect client data
+                </Text>
+                <Flex gap={2} mb={4}>
+                  <Badge colorScheme="red">Privacy</Badge>
+                  <Badge colorScheme="yellow">Intermediate</Badge>
+                </Flex>
+                <Flex alignItems="center" mt="auto">
+                  <Icon as={FiCpu as unknown as React.ElementType} mr={2} />
+                  <Text fontWeight="medium">90 minutes</Text>
+                  <Button ml="auto" rightIcon={<Icon as={FiArrowRight as unknown as React.ElementType} />} colorScheme="blue" size="sm">
+                    Start
+                  </Button>
+                </Flex>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+                transition="all 0.2s"
+                _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+                height="100%"
+                display="flex"
+                flexDirection="column"
+              >
+                <Image 
+                  src="/api/placeholder/400/200" 
+                  alt="Non-IID Data Challenges"
+                  borderRadius="md"
+                  mb={4}
+                />
+                <Heading size="md" mb={2} color={textColor}>
+                  Handling Non-IID Data in Federated Learning
+                </Heading>
+                <Text fontSize="sm" mb={3} color={subtleText}>
+                  Explore techniques for improving convergence with heterogeneous client data
+                </Text>
+                <Flex gap={2} mb={4}>
+                  <Badge colorScheme="purple">Algorithms</Badge>
+                  <Badge colorScheme="red">Advanced</Badge>
+                </Flex>
+                <Flex alignItems="center" mt="auto">
+                  <Icon as={FiCpu as unknown as React.ElementType} mr={2} />
+                  <Text fontWeight="medium">120 minutes</Text>
+                  <Button ml="auto" rightIcon={<Icon as={FiArrowRight as unknown as React.ElementType} />} colorScheme="blue" size="sm">
+                    Start
+                  </Button>
+                </Flex>
+              </Box>
+            </SimpleGrid>
+          </TabPanel>
+          
+          {/* Resources Panel */}
+          <TabPanel p={0}>
+            <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={6}>
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Research Papers
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Access curated collections of seminal papers in federated learning research
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as unknown as React.ElementType} />} colorScheme="blue">
+                  Browse Papers
+                </Button>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Open-Source Libraries
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Explore popular frameworks and libraries for federated learning implementation
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as unknown as React.ElementType} />} colorScheme="blue">
+                  View Libraries
+                </Button>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Datasets
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Find benchmark datasets specifically designed for federated learning research
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as unknown as React.ElementType} />} colorScheme="blue">
+                  Access Datasets
+                </Button>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Video Lectures
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Watch recorded lectures and presentations from leading federated learning researchers
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as unknown as React.ElementType} />} colorScheme="blue">
+                  Watch Videos
+                </Button>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Discussion Forum
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Join the community forum to discuss implementation challenges and research directions
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as unknown as React.ElementType} />} colorScheme="blue">
+                  Join Forum
+                </Button>
+              </Box>
+              
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Industry Use Cases
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Explore real-world applications of federated learning across various industries
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as unknown as React.ElementType} />} colorScheme="blue">
+                  View Use Cases
+                </Button>
+              </Box>
+            </Grid>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
+    </Box>
+  );
+};
+
+export default CompendiumPage;

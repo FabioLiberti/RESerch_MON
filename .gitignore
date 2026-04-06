@@ -24,8 +24,8 @@ out/
 .env.*.local
 
 # Data (runtime, not committed)
-data/pdfs/
-data/db/
+data/
+backend/data/
 data/reports/
 
 # IDE
@@ -44,6 +44,10 @@ _SCAMBIO/
 
 # Claude Code
 .claude/
+
+# Compendium build (already in frontend/public/compendium/)
+_fedcompendiumXL_CC/build/
+_fedcompendiumXL_CC/node_modules/
 
 # TypeScript build cache
 tsconfig.tsbuildinfo

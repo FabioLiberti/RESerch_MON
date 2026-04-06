@@ -1,0 +1,329 @@
+import React, { useState } from 'react';
+import {
+  Box,
+  Grid,
+  Flex,
+  Text,
+  Heading,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Select,
+  Button,
+  Tag,
+  TagLabel,
+  useColorModeValue,
+  SimpleGrid,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuDivider,
+  IconButton,
+  Icon,
+} from '@chakra-ui/react';
+import { 
+  FiSearch, 
+  FiFilter, 
+  FiDownload, 
+  FiBookmark, 
+  FiShare2, 
+  FiMoreVertical,
+  FiCalendar,
+  FiUsers,
+  FiHeart,
+  FiArrowRight
+} from 'react-icons/fi';
+
+// Define the Paper interface
+interface Paper {
+  id: string;
+  title: string;
+  authors: string;
+  conference: string;
+  abstract?: string;
+  publicationDate: string;
+  tags?: string[];
+  imageUrl?: string;
+}
+
+// Sample data
+const samplePapers: Paper[] = [
+  {
+    id: 'paper1',
+    title: 'FedDynamics: Dynamic Client Participation with HL7/FHIR Integration',
+    authors: 'Rossi, M., Bianchi, A.',
+    conference: 'IEEE Federated Learning Conference 2024',
+    abstract: 'This paper introduces FedDynamics, a novel framework for handling dynamic client participation in federated learning environments, with specific application to healthcare data formatted according to HL7/FHIR standards.',
+    publicationDate: '2024-01-15',
+    tags: ['healthcare', 'dynamic-participation', 'fhir'],
+    imageUrl: '/images/papers/feddynamics-thumbnail.jpg'
+  },
+  {
+    id: 'paper2',
+    title: 'BlockFed: Incentive Mechanisms for Federated Learning via Blockchain',
+    authors: 'Verdi, L., Neri, C.',
+    conference: 'ACM Conference on Distributed Computing 2024',
+    abstract: 'BlockFed proposes a blockchain-based incentive mechanism to encourage high-quality participation in federated learning systems, addressing the challenges of client reliability and contribution measurement.',
+    publicationDate: '2024-02-20',
+    tags: ['blockchain', 'incentives', 'security'],
+    imageUrl: '/images/papers/blockfed-thumbnail.jpg'
+  },
+  {
+    id: 'paper3',
+    title: 'FedSplit: Efficient Partitioning Strategies for Federated Model Training',
+    authors: 'Johnson, K., Lee, S., Wang, P.',
+    conference: 'ICML 2024',
+    abstract: 'FedSplit presents algorithms for efficient model partitioning in federated learning settings, allowing computationally constrained devices to participate in training large models.',
+    publicationDate: '2024-03-05',
+    tags: ['model-partitioning', 'resource-efficiency', 'edge-computing'],
+    imageUrl: '/images/papers/fedsplit-thumbnail.jpg'
+  },
+  {
+    id: 'paper4',
+    title: 'PrivacyFL: Enhanced Differential Privacy for Federated Learning',
+    authors: 'Zhang, Y., Garcia, M.',
+    conference: 'Privacy Enhancing Technologies Symposium 2024',
+    abstract: 'PrivacyFL introduces refined differential privacy mechanisms specifically designed for federated learning scenarios, providing improved privacy-utility tradeoffs compared to standard approaches.',
+    publicationDate: '2024-01-30',
+    tags: ['privacy', 'differential-privacy', 'security'],
+    imageUrl: '/images/papers/privacyfl-thumbnail.jpg'
+  },
+  {
+    id: 'paper5',
+    title: 'FedVision: Federated Learning for Computer Vision Applications',
+    authors: 'Chen, T., Smith, J., Kumar, A.',
+    conference: 'CVPR 2024',
+    abstract: 'FedVision tackles the challenges of applying federated learning to computer vision tasks, addressing issues of data heterogeneity, model convergence, and communication efficiency.',
+    publicationDate: '2024-02-10',
+    tags: ['computer-vision', 'heterogeneity', 'communication-efficiency'],
+    imageUrl: '/images/papers/fedvision-thumbnail.jpg'
+  },
+  {
+    id: 'paper6',
+    title: 'CrossFed: Cross-Silo Federated Learning in Healthcare Consortia',
+    authors: 'Park, H., Brown, D., Patel, R.',
+    conference: 'NeurIPS 2023',
+    abstract: 'CrossFed establishes protocols for cross-silo federated learning among healthcare institutions, ensuring regulatory compliance while enabling collaborative model development on sensitive patient data.',
+    publicationDate: '2023-12-12',
+    tags: ['healthcare', 'cross-silo', 'regulatory'],
+    imageUrl: '/images/papers/crossfed-thumbnail.jpg'
+  }
+];
+
+// Available filter categories
+const filterCategories = [
+  { value: 'all', label: 'All Categories' },
+  { value: 'healthcare', label: 'Healthcare' },
+  { value: 'privacy', label: 'Privacy & Security' },
+  { value: 'efficiency', label: 'System Efficiency' },
+  { value: 'computer-vision', label: 'Computer Vision' },
+  { value: 'nlp', label: 'Natural Language Processing' }
+];
+
+interface ResearchPapersGridProps {
+  onPaperSelect?: (paperId: string) => void;
+}
+
+export const ResearchPapersGrid: React.FC<ResearchPapersGridProps> = ({
+  onPaperSelect
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [papers] = useState<Paper[]>(samplePapers);
+  
+  // Color mode values
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const subtleText = useColorModeValue('gray.600', 'gray.400');
+  
+  // Filter papers based on search query and category
+  const filteredPapers = papers.filter(paper => {
+    const matchesSearch = 
+      paper.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      paper.authors.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      paper.abstract?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      paper.tags?.some((tag: string) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesCategory = 
+      categoryFilter === 'all' || 
+      paper.tags?.some((tag: string) => {
+        if (categoryFilter === 'privacy') return ['privacy', 'security', 'differential-privacy'].includes(tag);
+        if (categoryFilter === 'efficiency') return ['resource-efficiency', 'communication-efficiency', 'model-partitioning'].includes(tag);
+        return tag.includes(categoryFilter);
+      });
+    
+    return matchesSearch && matchesCategory;
+  });
+  
+  const handlePaperClick = (paperId: string) => {
+    if (onPaperSelect) {
+      onPaperSelect(paperId);
+    } else {
+      console.log(`Paper clicked: ${paperId}`);
+      // Implement default behavior here
+    }
+  };
+  
+  return (
+    <Box>
+      <Heading as="h2" size="xl" mb={4} color={textColor}>
+        Research Papers
+      </Heading>
+      <Text mb={6} color={subtleText}>
+        Explore the latest research in federated learning from top academic conferences
+      </Text>
+      
+      {/* Search and Filter Controls */}
+      <Flex 
+        direction={{ base: 'column', md: 'row' }} 
+        mb={6} 
+        gap={4}
+        align={{ base: 'stretch', md: 'center' }}
+      >
+        <InputGroup maxW={{ base: '100%', md: '400px' }}>
+          <InputLeftElement pointerEvents="none">
+            <Icon as={FiSearch as React.ElementType} color="gray.300" />
+          </InputLeftElement>
+          <Input 
+            placeholder="Search papers by title, author, or keywords" 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </InputGroup>
+        
+        <Flex gap={4} flex="1" justify="flex-start">
+          <Select 
+            maxW="200px"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            icon={<Icon as={FiFilter as React.ElementType} />}
+          >
+            {filterCategories.map(category => (
+              <option key={category.value} value={category.value}>
+                {category.label}
+              </option>
+            ))}
+          </Select>
+          
+          <Button 
+            leftIcon={<Icon as={FiDownload as React.ElementType} />}
+            ml={{ base: 0, md: 'auto' }}
+            colorScheme="blue"
+            size="md"
+          >
+            Export
+          </Button>
+        </Flex>
+      </Flex>
+      
+      {/* Results Count */}
+      <Text mb={4} color={subtleText}>
+        Showing {filteredPapers.length} of {papers.length} papers
+      </Text>
+      
+      {/* Papers Grid */}
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6} mb={8}>
+        {filteredPapers.map(paper => (
+          <Box
+            key={paper.id}
+            p={5}
+            borderRadius="lg"
+            bg={bgColor}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            transition="all 0.2s"
+            _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+            height="100%"
+            display="flex"
+            flexDirection="column"
+          >
+            {/* Paper Title */}
+            <Heading as="h3" size="md" mb={2} color={textColor}>
+              {paper.title}
+            </Heading>
+            
+            {/* Authors and Conference */}
+            <Flex align="center" mb={2}>
+              <Icon as={FiUsers as React.ElementType} boxSize="14px" mr="6px" />
+              <Text fontSize="sm" color={subtleText} fontWeight="medium">
+                {paper.authors}
+              </Text>
+            </Flex>
+            
+            <Flex align="center" mb={3}>
+              <Icon as={FiCalendar as React.ElementType} boxSize="14px" mr="6px" />
+              <Text fontSize="sm" color={subtleText}>
+                {paper.conference}
+              </Text>
+            </Flex>
+            
+            {/* Abstract */}
+            <Text fontSize="sm" color={textColor} mb={4} noOfLines={3}>
+              {paper.abstract}
+            </Text>
+            
+            {/* Tags */}
+            <Flex wrap="wrap" gap={2} mb={4}>
+              {paper.tags?.map((tag: string) => (
+                <Tag key={tag} size="sm" borderRadius="full" colorScheme="blue" variant="subtle">
+                  <TagLabel>{tag}</TagLabel>
+                </Tag>
+              ))}
+            </Flex>
+            
+            {/* Action Buttons */}
+            <Flex mt="auto" justify="space-between">
+              <Button
+                rightIcon={<Icon as={FiArrowRight as React.ElementType} />}
+                colorScheme="blue"
+                variant="ghost"
+                size="sm"
+                onClick={() => handlePaperClick(paper.id)}
+              >
+                View Details
+              </Button>
+              
+              <Flex>
+                <IconButton
+                  aria-label="Bookmark paper"
+                  icon={<Icon as={FiBookmark as React.ElementType} />}
+                  variant="ghost"
+                  size="sm"
+                  mr={1}
+                />
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    aria-label="Options"
+                    icon={<Icon as={FiMoreVertical as React.ElementType} />}
+                    variant="ghost"
+                    size="sm"
+                  />
+                  <MenuList>
+                    <MenuItem icon={<Icon as={FiDownload as React.ElementType} />}>Download PDF</MenuItem>
+                    <MenuItem icon={<Icon as={FiShare2 as React.ElementType} />}>Share</MenuItem>
+                    <MenuItem icon={<Icon as={FiHeart as React.ElementType} />}>Save to Collection</MenuItem>
+                    <MenuDivider />
+                    <MenuItem>Cite this Paper</MenuItem>
+                  </MenuList>
+                </Menu>
+              </Flex>
+            </Flex>
+          </Box>
+        ))}
+      </SimpleGrid>
+      
+      {/* Load More Button */}
+      <Flex justify="center" mb={8}>
+        <Button variant="outline" colorScheme="blue">
+          Load More Papers
+        </Button>
+      </Flex>
+    </Box>
+  );
+};
+
+export default ResearchPapersGrid;

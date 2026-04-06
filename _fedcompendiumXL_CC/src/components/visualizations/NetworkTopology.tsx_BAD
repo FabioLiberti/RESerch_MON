@@ -1,0 +1,386 @@
+import React, { useRef, useEffect, useState } from 'react';
+import { Box, useColorModeValue } from '@chakra-ui/react';
+import * as d3 from 'd3';
+import { motion } from 'framer-motion';
+
+interface NetworkTopologyProps {
+  numClients: number;
+  distribution: 'iid' | 'non_iid_label' | 'non_iid_quantity';
+  isActive: boolean;
+  width?: number;
+  height?: number;
+  onNodeClick?: (nodeId: string) => void;
+}
+
+interface Node extends d3.SimulationNodeDatum {
+  id: string;
+  type?: 'server' | 'client';
+  group: number;
+  radius: number;
+  active?: boolean;
+  x?: number;
+  y?: number;
+}
+
+interface Link extends d3.SimulationLinkDatum<Node> {
+  source: string | Node;
+  target: string | Node;
+  value: number;
+  active?: boolean;
+  strength?: number;
+}
+
+export const NetworkTopology: React.FC<NetworkTopologyProps> = ({ 
+  numClients = 10, 
+  distribution = 'iid',
+  isActive = false,
+  width = 600,
+  height = 300,
+  onNodeClick
+}) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [links, setLinks] = useState<Link[]>([]);
+  const [simulationStep, setSimulationStep] = useState<number>(0);
+  
+  // Color modes for light/dark theme
+  const nodeColorServer = useColorModeValue('#3182CE', '#63B3ED');
+  const nodeColorClientPrimary = useColorModeValue('#38A169', '#68D391');
+  const nodeColorClientSecondary = useColorModeValue('#DD6B20', '#F6AD55');
+  const nodeColorClientInactive = useColorModeValue('#A0AEC0', '#4A5568');
+  const linkColorActive = useColorModeValue('rgba(66, 153, 225, 0.6)', 'rgba(99, 179, 237, 0.6)');
+  const linkColorInactive = useColorModeValue('rgba(160, 174, 192, 0.3)', 'rgba(74, 85, 104, 0.3)');
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const nodeStrokeColor = useColorModeValue('#ffffff', '#1A202C');
+  const textColor = useColorModeValue('gray.700', 'gray.300');
+
+  // Aggiornamento della simulazione per animare i collegamenti attivi
+  useEffect(() => {
+    if (!isActive) return;
+    
+    const timer = setInterval(() => {
+      setSimulationStep(prev => (prev + 1) % 4);
+      
+      // Aggiorna lo stato dei link e dei nodi
+      setLinks(prev => prev.map(link => ({
+        ...link,
+        active: Math.random() > 0.3
+      })));
+      
+      setNodes(prev => prev.map(node => {
+        if (node.type === 'server') return node;
+        return {
+          ...node,
+          active: Math.random() > 0.2
+        };
+      }));
+    }, 2000);
+    
+    return () => clearInterval(timer);
+  }, [isActive]);
+  
+  // Funzione per ottenere il colore del nodo in base al tipo e stato
+  const getNodeColor = (node: Node): string => {
+    if (node.type === 'server') return nodeColorServer;
+    if (!node.active) return nodeColorClientInactive;
+    
+    if (node.group === 1) return nodeColorClientPrimary;
+    if (node.group === 2) return nodeColorClientSecondary;
+    
+    // Fallback per altri gruppi
+    const hueOffset = node.group * 30;
+    return `hsl(${120 + hueOffset}, 70%, 50%)`;
+  };
+
+  // Generazione dei dati della topologia
+  useEffect(() => {
+    generateNetworkData();
+  }, [numClients, distribution]);
+  
+  const generateNetworkData = () => {
+    // Creazione del server centrale
+    const newNodes: Node[] = [{ 
+      id: 'server', 
+      type: 'server', 
+      group: 0, 
+      radius: 22,
+      active: true
+    }];
+    
+    const newLinks: Link[] = [];
+    
+    // Creazione dei client
+    for (let i = 0; i < numClients; i++) {
+      let group = 1;
+      
+      // Assegnazione gruppi in base alla distribuzione
+      if (distribution === 'non_iid_label') {
+        // Divisione in 3 gruppi per non_iid_label
+        group = 1 + (i % 3);
+      } else if (distribution === 'non_iid_quantity') {
+        // Divisione in 2 gruppi per non_iid_quantity (grande/piccolo)
+        group = i < numClients / 3 ? 1 : 2;
+      }
+      
+      // Dimensioni diverse per simulare quantità dati
+      let radius = 8;
+      if (distribution === 'non_iid_quantity') {
+        // Client con più o meno dati
+        radius = i < numClients / 3 ? 12 : 7;
+      }
+      
+      const active = Math.random() > 0.2; // Alcuni client potrebbero essere inattivi
+      
+      newNodes.push({ 
+        id: `client-${i}`, 
+        type: 'client',
+        group, 
+        radius,
+        active
+      });
+      
+      // Collegamento al server
+      newLinks.push({ 
+        source: `client-${i}`, 
+        target: 'server',
+        value: distribution === 'non_iid_quantity' ? (i < numClients / 3 ? 3 : 1.5) : 2,
+        strength: distribution === 'non_iid_quantity' ? (i < numClients / 3 ? 0.8 : 0.4) : 0.6,
+        active: Math.random() > 0.3
+      });
+    }
+    
+    // Aggiunta di alcuni collegamenti tra client per simulare reti P2P
+    // solo se ci sono abbastanza client
+    if (numClients > 5) {
+      for (let i = 0; i < numClients / 3; i++) {
+        const source = Math.floor(Math.random() * numClients);
+        let target = Math.floor(Math.random() * numClients);
+        
+        // Evita auto-collegamenti
+        while (target === source) {
+          target = Math.floor(Math.random() * numClients);
+        }
+        
+        newLinks.push({
+          source: `client-${source}`,
+          target: `client-${target}`,
+          value: 1,
+          strength: 0.3,
+          active: Math.random() > 0.5
+        });
+      }
+    }
+    
+    setNodes(newNodes);
+    setLinks(newLinks);
+  };
+
+  // Rendering della visualizzazione con D3
+  useEffect(() => {
+    if (!svgRef.current || nodes.length === 0) return;
+    
+    // Pulisce il grafico
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+    
+    const container = svg.append("g");
+    
+    // Zoom e pan
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 2])
+      .on("zoom", (event) => {
+        container.attr("transform", event.transform.toString());
+      });
+    
+    svg.call(zoom);
+    
+    // Creazione dei link
+    const link = container.append("g")
+      .selectAll("line")
+      .data(links)
+      .enter()
+      .append("line")
+      .attr("stroke", d => d.active ? linkColorActive : linkColorInactive)
+      .attr("stroke-width", d => d.value || 1.5)
+      .attr("stroke-dasharray", d => {
+        const source = typeof d.source === 'string' ? d.source : d.source.id;
+        const target = typeof d.target === 'string' ? d.target : d.target.id;
+        return (source === 'server' || target === 'server') ? "0" : "5,5";
+      });
+    
+    // Creazione dei nodi
+    const node = container.append("g")
+      .selectAll("circle")
+      .data(nodes)
+      .enter()
+      .append("circle")
+      .attr("r", d => d.radius)
+      .attr("fill", getNodeColor)
+      .attr("stroke", nodeStrokeColor)
+      .attr("stroke-width", 1.5)
+      .style("cursor", onNodeClick ? "pointer" : "grab")
+      .on("click", (event, d) => {
+        if (onNodeClick) onNodeClick(d.id);
+      })
+      .call(d3.drag<SVGCircleElement, Node>()
+        .on('start', (event, d) => {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        })
+        .on('drag', (event, d) => {
+          d.fx = event.x;
+          d.fy = event.y;
+        })
+        .on('end', (event, d) => {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        })
+      );
+    
+    // Animazione delle comunicazioni se attivo
+    if (isActive) {
+      container.selectAll(".message-particle").remove();
+      
+      links.filter(l => l.active).forEach((d, i) => {
+        const direction = simulationStep % 2 === 0;
+        const source = typeof d.source === 'string' 
+          ? nodes.find(n => n.id === d.source) 
+          : d.source as Node;
+        const target = typeof d.target === 'string' 
+          ? nodes.find(n => n.id === d.target) 
+          : d.target as Node;
+        
+        if (source && target && source.x !== undefined && source.y !== undefined &&
+            target.x !== undefined && target.y !== undefined) {
+          const startNode = direction ? source : target;
+          const endNode = direction ? target : source;
+          
+          container.append("circle")
+            .attr("class", "message-particle")
+            .attr("r", 2.5)
+            .attr("fill", nodeColorServer)
+            .attr("cx", startNode.x)
+            .attr("cy", startNode.y)
+            .transition()
+            .duration(1500)
+            .attr("cx", endNode.x)
+            .attr("cy", endNode.y)
+            .remove();
+        }
+      });
+    }
+    
+    // Labels
+    container.append("g")
+      .selectAll("text")
+      .data(nodes)
+      .enter()
+      .append("text")
+      .text(d => d.type === 'server' ? "Server" : "")
+      .attr("font-size", d => d.type === 'server' ? "12px" : "10px")
+      .attr("text-anchor", "middle")
+      .attr("fill", textColor)
+      .attr("dy", ".35em");
+    
+    // Forza di simulazione
+    const simulation = d3.forceSimulation<Node>(nodes)
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("charge", d3.forceManyBody().strength(-150))
+      .force("link", d3.forceLink<Node, Link>()
+        .id(d => d.id)
+        .links(links)
+        .distance(d => {
+          const source = typeof d.source === 'string' ? d.source : d.source.id;
+          const target = typeof d.target === 'string' ? d.target : d.target.id;
+          return (source === 'server' || target === 'server') ? 100 : 70;
+        })
+      )
+      .force("collide", d3.forceCollide().radius(d => d.radius + 5));
+    
+    // Aggiornamento delle posizioni
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => {
+          const source = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
+          return source?.x || 0;
+        })
+        .attr("y1", d => {
+          const source = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
+          return source?.y || 0;
+        })
+        .attr("x2", d => {
+          const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          return target?.x || 0;
+        })
+        .attr("y2", d => {
+          const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+          return target?.y || 0;
+        });
+      
+      node
+        .attr("cx", d => {
+          d.x = Math.max(d.radius, Math.min(width - d.radius, d.x || 0));
+          return d.x;
+        })
+        .attr("cy", d => {
+          d.y = Math.max(d.radius, Math.min(height - d.radius, d.y || 0));
+          return d.y;
+        });
+      
+      // Aggiorna le posizioni delle etichette
+      container.selectAll("text")
+        .attr("x", d => (d as Node).x || 0)
+        .attr("y", d => (d as Node).y || 0);
+    });
+    
+    return () => {
+      simulation.stop();
+    };
+  }, [nodes, links, simulationStep, width, height, nodeColorServer, nodeColorClientPrimary, 
+      nodeColorClientSecondary, nodeColorClientInactive, linkColorActive, linkColorInactive, 
+      isActive, nodeStrokeColor, textColor, onNodeClick, getNodeColor];
+  
+  return (
+    <Box 
+      position="relative" 
+      width="100%" 
+      height="100%" 
+      bg={bgColor}
+      borderRadius="md"
+      overflow="hidden"
+    >
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <svg 
+          ref={svgRef} 
+          width="100%" 
+          height="100%"
+          style={{
+            overflow: 'visible',
+            display: 'block'
+          }}
+        >
+          <style>
+            {`
+            @keyframes pulse {
+              0% { opacity: 0.6; transform: scale(1); }
+              50% { opacity: 1; transform: scale(1.05); }
+              100% { opacity: 0.6; transform: scale(1); }
+            }
+            @keyframes dash {
+              to { stroke-dashoffset: 500; }
+            }
+            `}
+          </style>
+        </svg>
+      </motion.div>
+    </Box>
+  );
+};
+
+export default NetworkTopology;

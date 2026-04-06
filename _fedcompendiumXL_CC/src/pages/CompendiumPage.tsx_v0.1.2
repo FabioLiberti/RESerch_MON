@@ -1,0 +1,757 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Grid,
+  Flex,
+  Heading,
+  Text,
+  Button,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  useColorModeValue,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
+  SimpleGrid,
+  Icon,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
+  Badge,
+  Image,
+  Link,
+  List,
+  ListItem,
+  ListIcon,
+  Spinner,
+  Center,
+} from '@chakra-ui/react';
+import {
+  FiSearch,
+  FiBook,
+  FiCode,
+  FiLayers,
+  FiCpu,
+  FiCheckCircle,
+  FiArrowRight,
+  FiExternalLink,
+  FiDownload,
+  FiInfo,
+  FiAlertCircle,
+} from 'react-icons/fi';
+import { IconType } from 'react-icons';
+import {
+  loadTopics,
+  loadAlgorithms,
+  Topic,
+  Algorithm,
+} from '../utils/dataLoader';
+
+// Definiamo i type per le categorie e le difficoltà (unione di literal types)
+type Category = 'basics' | 'algorithms' | 'applications' | 'privacy' | 'systems';
+type Difficulty = 'beginner' | 'intermediate' | 'advanced';
+
+// Lista di categorie e difficoltà (comode per il mapping del UI)
+const ALL_CATEGORIES: Category[] = [
+  'basics',
+  'algorithms',
+  'applications',
+  'privacy',
+  'systems',
+];
+
+const ALL_DIFFICULTIES: Difficulty[] = [
+  'beginner',
+  'intermediate',
+  'advanced',
+];
+
+// Mappa la categoria a un'icona specifica
+const getCategoryIcon = (cat: Category): IconType => {
+  switch (cat) {
+    case 'basics':
+      return FiBook;
+    case 'algorithms':
+      return FiLayers;
+    case 'applications':
+      return FiCode;
+    case 'privacy':
+      return FiInfo;
+    case 'systems':
+      return FiCpu;
+    default:
+      return FiBook;
+  }
+};
+
+// Mappa la categoria a un colore di Badge
+const getCategoryColorScheme = (cat: Category): string => {
+  switch (cat) {
+    case 'basics':
+      return 'purple';
+    case 'algorithms':
+      return 'purple';
+    case 'applications':
+      return 'purple';
+    case 'privacy':
+      return 'purple';
+    case 'systems':
+      return 'purple';
+    default:
+      return 'purple';
+  }
+};
+
+const CompendiumPage: React.FC = () => {
+  // Permettiamo null come selezione "nessuna categoria"
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  // Stessa cosa per la difficulty
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(
+    null
+  );
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [algorithms, setAlgorithms] = useState<Algorithm[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Colori in base al color mode
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const subtleText = useColorModeValue('gray.600', 'gray.400');
+  const accentBg = useColorModeValue('blue.50', 'blue.900');
+
+  // Carica i dati
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const topicsData = await loadTopics();
+        const algorithmsData = await loadAlgorithms();
+
+        setTopics(topicsData);
+        setAlgorithms(algorithmsData);
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load data. Please try again later.');
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Filtro i topic in base a searchQuery, categoria e difficoltà
+  const filteredTopics = topics.filter((topic) => {
+    // Verifica se titolo/descrizione contengono la stringa cercata
+    const matchesSearch =
+      topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      topic.description.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Se selectedCategory non è null, controlla se topic.category include la categoria
+    const matchesCategory = selectedCategory
+      ? topic.category.includes(selectedCategory)
+      : true;
+
+    // Se selectedDifficulty non è null, controlla se coincide con topic.difficulty
+    const matchesDifficulty = selectedDifficulty
+      ? topic.difficulty === selectedDifficulty
+      : true;
+
+    return matchesSearch && matchesCategory && matchesDifficulty;
+  });
+
+  // Filtro gli algorithms in base a searchQuery
+  const filteredAlgorithms = algorithms.filter((algo) => {
+    return (
+      algo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      algo.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  // Funzione per resettare tutti i filtri
+  const clearFilters = () => {
+    setSelectedCategory(null);
+    setSelectedDifficulty(null);
+    setSearchQuery('');
+  };
+
+  // Se stiamo caricando dati, mostra lo spinner
+  if (loading) {
+    return (
+      <Center height="60vh">
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+      </Center>
+    );
+  }
+
+  // Se c'è stato un errore di caricamento
+  if (error) {
+    return (
+      <Center height="60vh" flexDirection="column">
+        <Icon as={FiAlertCircle as React.ElementType} color="red.500" boxSize={10} mb={4} />
+        <Heading size="md" mb={2}>
+          Error Loading Data
+        </Heading>
+        <Text>{error}</Text>
+        <Button mt={4} colorScheme="blue" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </Center>
+    );
+  }
+
+  return (
+    <Box minH="100vh" p={{ base: 4, md: 8 }}>
+      <Heading as="h1" size="xl" mb={2} color={textColor}>
+        Federated Learning Compendium
+      </Heading>
+      <Text mb={6} color={subtleText}>
+        A comprehensive guide to federated learning concepts, algorithms, and
+        implementations
+      </Text>
+
+      {/* Search Bar */}
+      <Flex
+        direction={{ base: 'column', md: 'row' }}
+        mb={6}
+        gap={4}
+        align={{ base: 'stretch', md: 'center' }}
+      >
+        <InputGroup maxW={{ base: '100%', md: '500px' }}>
+          <InputLeftElement pointerEvents="none">
+            <Icon as={FiSearch as React.ElementType} color="gray.300" />
+          </InputLeftElement>
+          <Input
+            placeholder="Search for topics, algorithms, or concepts"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </InputGroup>
+
+        <Flex ml={{ base: 0, md: 'auto' }} gap={2}>
+          <Button
+            leftIcon={<Icon as={FiDownload as React.ElementType} />}
+            colorScheme="blue"
+            variant="outline"
+          >
+            Download PDF
+          </Button>
+          <Button leftIcon={<Icon as={FiBook as React.ElementType} />} colorScheme="blue">
+            Learning Path
+          </Button>
+        </Flex>
+      </Flex>
+
+      {/* Tabs Principali */}
+      <Tabs variant="soft-rounded" colorScheme="blue">
+        <TabList mb={6} overflowX="auto" css={{ scrollbarWidth: 'none' }}>
+          <Tab>Topics</Tab>
+          <Tab>Algorithms</Tab>
+          <Tab>Tutorials</Tab>
+          <Tab>Resources</Tab>
+        </TabList>
+
+        <TabPanels>
+          {/* Topics Panel */}
+          <TabPanel p={0}>
+            <Grid templateColumns={{ base: '1fr', lg: '250px 1fr' }} gap={6}>
+              {/* Filter Sidebar */}
+              <Box>
+                <Heading size="md" mb={4}>
+                  Filters
+                </Heading>
+
+                <Box mb={6}>
+                  <Heading size="sm" mb={2}>
+                    Categories
+                  </Heading>
+                  <List spacing={2}>
+                    {ALL_CATEGORIES.map((category) => (
+                      <ListItem key={category}>
+                        <Button
+                          variant={selectedCategory === category ? 'solid' : 'ghost'}
+                          colorScheme={selectedCategory === category ? 'blue' : 'gray'}
+                          size="sm"
+                          justifyContent="flex-start"
+                          width="100%"
+                          onClick={() =>
+                            setSelectedCategory(
+                              selectedCategory === category ? null : category
+                            )
+                          }
+                          leftIcon={<Icon as={getCategoryIcon(category) as React.ElementType} />}
+                        >
+                          {category.charAt(0).toUpperCase() + category.slice(1)}
+                        </Button>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+
+                <Box mb={6}>
+                  <Heading size="sm" mb={2}>
+                    Difficulty
+                  </Heading>
+                  <List spacing={2}>
+                    {ALL_DIFFICULTIES.map((level) => (
+                      <ListItem key={level}>
+                        <Button
+                          variant={selectedDifficulty === level ? 'solid' : 'ghost'}
+                          colorScheme={selectedDifficulty === level ? 'blue' : 'gray'}
+                          size="sm"
+                          justifyContent="flex-start"
+                          width="100%"
+                          onClick={() =>
+                            setSelectedDifficulty(
+                              selectedDifficulty === level ? null : level
+                            )
+                          }
+                        >
+                          {level.charAt(0).toUpperCase() + level.slice(1)}
+                        </Button>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              </Box>
+
+              {/* Topics Grid */}
+              <Box>
+                <Flex justify="space-between" align="center" mb={4}>
+                  <Heading size="md">
+                    {filteredTopics.length}{' '}
+                    {filteredTopics.length === 1 ? 'Topic' : 'Topics'}
+                  </Heading>
+                  <Button variant="ghost" colorScheme="blue" size="sm" onClick={clearFilters}>
+                    Clear Filters
+                  </Button>
+                </Flex>
+
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+                  {filteredTopics.map((topic) => {
+                    // Prendiamo la prima categoria come principale, se esiste
+                    const firstCat = topic.category[0] || 'basics';
+                    return (
+                      <Box
+                        key={topic.id}
+                        p={5}
+                        borderRadius="lg"
+                        bg={bgColor}
+                        borderWidth="1px"
+                        borderColor={borderColor}
+                        boxShadow="sm"
+                        transition="all 0.2s"
+                        _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+                      >
+                        <Flex mb={3}>
+                          <Box
+                            p={2}
+                            bg={accentBg}
+                            borderRadius="md"
+                            color="blue.500"
+                            mr={3}
+                          >
+                            <Icon as={getCategoryIcon(firstCat) as React.ElementType} boxSize={5} />
+                          </Box>
+                          <Box>
+                            <Heading as="h3" size="md" mb={1}>
+                              {topic.title}
+                            </Heading>
+                            <Flex gap={2} mb={2} wrap="wrap">
+                              {/* Badge per ogni categoria */}
+                              {topic.category.map((cat) => (
+                                <Badge key={cat} colorScheme={getCategoryColorScheme(cat)}>
+                                  {cat}
+                                </Badge>
+                              ))}
+                              {/* Badge difficoltà */}
+                              <Badge
+                                colorScheme={
+                                  topic.difficulty === 'beginner'
+                                    ? 'green'
+                                    : topic.difficulty === 'intermediate'
+                                    ? 'yellow'
+                                    : 'red'
+                                }
+                              >
+                                {topic.difficulty}
+                              </Badge>
+                            </Flex>
+                          </Box>
+                        </Flex>
+
+                        <Text fontSize="sm" color={subtleText} mb={4}>
+                          {topic.description}
+                        </Text>
+
+                        <Button
+                          as="a"
+                          href={`/topic/${topic.id}`}
+                          rightIcon={<Icon as={FiArrowRight as React.ElementType} />}
+                          colorScheme="blue"
+                          variant="ghost"
+                          size="sm"
+                        >
+                          Explore Topic
+                        </Button>
+                      </Box>
+                    );
+                  })}
+                </SimpleGrid>
+
+                {filteredTopics.length === 0 && (
+                  <Box
+                    p={8}
+                    textAlign="center"
+                    borderRadius="lg"
+                    bg={bgColor}
+                    borderWidth="1px"
+                    borderColor={borderColor}
+                  >
+                    <Icon
+                      as={FiAlertCircle as React.ElementType}
+                      boxSize={10}
+                      color="blue.500"
+                      mb={4}
+                    />
+                    <Heading size="md" mb={2}>
+                      No Topics Found
+                    </Heading>
+                    <Text color={subtleText}>
+                      Try adjusting your search or filters to find what you're looking for.
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+          </TabPanel>
+
+          {/* Algorithms Panel */}
+          <TabPanel p={0}>
+            {filteredAlgorithms.length > 0 ? (
+              <Accordion allowMultiple>
+                {filteredAlgorithms.map((algo) => (
+                  <AccordionItem
+                    key={algo.id}
+                    mb={4}
+                    border="1px"
+                    borderColor={borderColor}
+                    borderRadius="lg"
+                    overflow="hidden"
+                  >
+                    <h2>
+                      <AccordionButton py={3} px={4}>
+                        <Box flex="1" textAlign="left">
+                          <Flex align="center">
+                            <Icon as={FiLayers as React.ElementType} mr={3} color="blue.500" />
+                            <Heading size="md">{algo.name}</Heading>
+                          </Flex>
+                        </Box>
+                        <AccordionIcon />
+                      </AccordionButton>
+                    </h2>
+                    <AccordionPanel pb={4} bg={accentBg} borderTop="1px" borderColor={borderColor}>
+                      <Grid templateColumns={{ base: '1fr', md: '2fr 1fr' }} gap={6}>
+                        <Box>
+                          <Text mb={4}>{algo.description}</Text>
+
+                          <Box mb={4}>
+                            <Heading size="sm" mb={2}>
+                              Advantages
+                            </Heading>
+                            <List spacing={1}>
+                              {algo.advantages.map((adv, i) => (
+                                <ListItem key={i} display="flex" alignItems="center">
+                                  <ListIcon
+                                    as={FiCheckCircle as React.ElementType}
+                                    color="green.500"
+                                  />
+                                  {adv}
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Box>
+
+                          <Box mb={4}>
+                            <Heading size="sm" mb={2}>
+                              Limitations
+                            </Heading>
+                            <List spacing={1}>
+                              {algo.limitations.map((lim, i) => (
+                                <ListItem key={i} display="flex" alignItems="center">
+                                  <ListIcon
+                                    as={FiAlertCircle as React.ElementType}
+                                    color="orange.500"
+                                  />
+                                  {lim}
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Box>
+
+                          <Box>
+                            <Heading size="sm" mb={2}>
+                              Common Use Cases
+                            </Heading>
+                            <List spacing={1}>
+                              {algo.use_cases.map((use, i) => (
+                                <ListItem key={i} display="flex" alignItems="center">
+                                  <ListIcon
+                                    as={FiCpu as React.ElementType}
+                                    color="purple.500"
+                                  />
+                                  {use}
+                                </ListItem>
+                              ))}
+                            </List>
+                          </Box>
+                        </Box>
+
+                        <Box>
+                          <Box p={4} bg={bgColor} borderRadius="md" mb={4}>
+                            <Heading size="sm" mb={3}>
+                              Original Publication
+                            </Heading>
+                            <Text fontWeight="medium" mb={1}>
+                              {algo.paper}
+                            </Text>
+                            <Text fontSize="sm" mb={2}>
+                              {algo.authors}, {algo.year}
+                            </Text>
+                            <Link color="blue.500" fontSize="sm" display="flex" alignItems="center">
+                              View Paper <Icon as={FiExternalLink as React.ElementType} ml={1} />
+                            </Link>
+                          </Box>
+
+                          <Button
+                            colorScheme="blue"
+                            leftIcon={<Icon as={FiCode as React.ElementType} />}
+                            w="full"
+                            mb={2}
+                          >
+                            Implementation Guide
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            leftIcon={<Icon as={FiDownload as React.ElementType} />}
+                            w="full"
+                          >
+                            Sample Code
+                          </Button>
+                        </Box>
+                      </Grid>
+                    </AccordionPanel>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            ) : (
+              <Box
+                p={8}
+                textAlign="center"
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+              >
+                <Icon as={FiAlertCircle as React.ElementType} boxSize={10} color="blue.500" mb={4} />
+                <Heading size="md" mb={2}>
+                  No Algorithms Found
+                </Heading>
+                <Text color={subtleText}>
+                  {algorithms.length === 0
+                    ? 'Algorithms data is not available.'
+                    : "Try adjusting your search to find the algorithms you're looking for."}
+                </Text>
+              </Box>
+            )}
+          </TabPanel>
+
+          {/* Tutorials Panel */}
+          <TabPanel p={0}>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+              {/* Esempio di tutorial card (statico) */}
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+                transition="all 0.2s"
+                _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
+                height="100%"
+                display="flex"
+                flexDirection="column"
+              >
+                <Image
+                  src="/api/placeholder/400/200"
+                  alt="Federated Learning Implementation Tutorial"
+                  borderRadius="md"
+                  mb={4}
+                />
+                <Heading size="md" mb={2} color={textColor}>
+                  Building Your First Federated Learning System
+                </Heading>
+                <Text fontSize="sm" mb={3} color={subtleText}>
+                  A step-by-step tutorial for implementing federated learning with TensorFlow
+                  Federated
+                </Text>
+                <Flex gap={2} mb={4}>
+                  <Badge colorScheme="blue">TensorFlow</Badge>
+                  <Badge colorScheme="green">Beginner</Badge>
+                </Flex>
+                <Flex alignItems="center" mt="auto">
+                  <Icon as={FiCpu as React.ElementType} mr={2} />
+                  <Text fontWeight="medium">60 minutes</Text>
+                  <Button
+                    ml="auto"
+                    rightIcon={<Icon as={FiArrowRight as React.ElementType} />}
+                    colorScheme="blue"
+                    size="sm"
+                  >
+                    Start
+                  </Button>
+                </Flex>
+              </Box>
+
+              {/* ... altre tutorial card */}
+            </SimpleGrid>
+          </TabPanel>
+
+          {/* Resources Panel */}
+          <TabPanel p={0}>
+            <Grid
+              templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }}
+              gap={6}
+            >
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Research Papers
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Access curated collections of seminal papers in federated learning research
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as React.ElementType} />} colorScheme="blue">
+                  Browse Papers
+                </Button>
+              </Box>
+
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Open-Source Libraries
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Explore popular frameworks and libraries for federated learning implementation
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as React.ElementType} />} colorScheme="blue">
+                  View Libraries
+                </Button>
+              </Box>
+
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Datasets
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Find benchmark datasets specifically designed for federated learning research
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as React.ElementType} />} colorScheme="blue">
+                  Access Datasets
+                </Button>
+              </Box>
+
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Video Lectures
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Watch recorded lectures and presentations from leading federated learning researchers
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as React.ElementType} />} colorScheme="blue">
+                  Watch Videos
+                </Button>
+              </Box>
+
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Discussion Forum
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Join the community forum to discuss implementation challenges and research directions
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as React.ElementType} />} colorScheme="blue">
+                  Join Forum
+                </Button>
+              </Box>
+
+              <Box
+                p={5}
+                borderRadius="lg"
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                boxShadow="sm"
+              >
+                <Heading size="md" mb={4} color={textColor}>
+                  Industry Use Cases
+                </Heading>
+                <Text mb={4} color={subtleText}>
+                  Explore real-world applications of federated learning across various industries
+                </Text>
+                <Button rightIcon={<Icon as={FiExternalLink as React.ElementType} />} colorScheme="blue">
+                  View Use Cases
+                </Button>
+              </Box>
+            </Grid>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
+    </Box>
+  );
+};
+
+export default CompendiumPage;

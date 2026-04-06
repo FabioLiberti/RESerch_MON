@@ -1,0 +1,121 @@
+import React from 'react';
+import {
+  Box,
+  Flex,
+  Text,
+  Heading,
+  Image,
+  useColorModeValue,
+  Icon,
+} from '@chakra-ui/react';
+import { FiExternalLink } from 'react-icons/fi';
+import { motion } from 'framer-motion';
+
+const MotionBox = motion(Box);
+
+interface PaperCardProps {
+  title: string;
+  authors: string;
+  conference: string;
+  imageUrl?: string;
+  onClick?: () => void;
+}
+
+export const PaperCard: React.FC<PaperCardProps> = ({
+  title,
+  authors,
+  conference,
+  imageUrl,
+  onClick,
+}) => {
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const hoverBorderColor = useColorModeValue('blue.300', 'blue.600');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const authorColor = useColorModeValue('gray.600', 'gray.400');
+  const conferenceColor = useColorModeValue('blue.600', 'blue.300');
+  
+  // Placeholder image when no image URL is provided
+  const placeholderImg = 'https://via.placeholder.com/120x160?text=Paper';
+
+  return (
+    <MotionBox
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.2 }}
+    >
+      <Box
+        p={4}
+        borderRadius="lg"
+        bg={bgColor}
+        border="1px"
+        borderColor={borderColor}
+        boxShadow="sm"
+        cursor="pointer"
+        onClick={onClick}
+        role="group"
+        position="relative"
+        overflow="hidden"
+        _hover={{
+          borderColor: hoverBorderColor,
+          boxShadow: 'md',
+        }}
+      >
+        <Flex alignItems="center">
+          <Box
+            minW="120px"
+            h="120px"
+            mr={4}
+            borderRadius="md"
+            overflow="hidden"
+            bg="gray.100"
+            _dark={{ bg: 'gray.700' }}
+          >
+            <Image
+              src={imageUrl || placeholderImg}
+              alt={title}
+              objectFit="cover"
+              w="100%"
+              h="100%"
+              fallbackSrc={placeholderImg}
+            />
+          </Box>
+          
+          <Box flex="1">
+            <Heading
+              as="h3"
+              size="sm"
+              color={textColor}
+              mb={2}
+              lineHeight="1.4"
+              noOfLines={2}
+            >
+              {title}
+            </Heading>
+            
+            <Text fontSize="sm" color={authorColor} mb={1}>
+              {authors}
+            </Text>
+            
+            <Text fontSize="xs" color={conferenceColor} fontWeight="medium">
+              {conference}
+            </Text>
+          </Box>
+          
+          <Box
+            position="absolute"
+            top={2}
+            right={2}
+            opacity={0}
+            _groupHover={{ opacity: 1 }}
+            transition="opacity 0.2s"
+          >
+            <Icon as={FiExternalLink as React.ElementType} boxSize={5} color="blue.500" />
+          </Box>
+        </Flex>
+      </Box>
+    </MotionBox>
+  );
+};
+
+export default PaperCard;

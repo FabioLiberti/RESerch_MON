@@ -1,0 +1,103 @@
+import React from 'react';
+import {
+  Box,
+  Flex,
+  Text,
+  Stat,
+  StatLabel,
+  StatNumber,
+  StatHelpText,
+  Icon,
+  useColorModeValue,
+  As
+} from '@chakra-ui/react';
+import { motion } from 'framer-motion';
+
+const MotionBox = motion(Box);
+
+interface MetricCardProps {
+  title: string;
+  value: string;
+  delta?: string;
+  description?: string;
+  icon: As;
+}
+
+export const MetricCard: React.FC<MetricCardProps> = ({ 
+  title, 
+  value, 
+  delta, 
+  description,
+  icon 
+}) => {
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const iconBgColor = useColorModeValue('blue.50', 'blue.900');
+  const iconColor = useColorModeValue('blue.500', 'blue.300');
+  const deltaColor = useColorModeValue('green.500', 'green.300');
+  const descriptionColor = useColorModeValue('gray.600', 'gray.400');
+  
+  // Determine if delta is positive or negative
+  const isPositive = delta && !delta.startsWith('-');
+  
+  return (
+    <MotionBox
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.3 }}
+      width="full"
+      height="full"
+    >
+      <Box
+        p={4}
+        borderRadius="lg"
+        boxShadow="sm"
+        border="1px"
+        borderColor={borderColor}
+        bg={bgColor}
+        height="100%"
+      >
+        <Flex mb={2} alignItems="center">
+          {icon && (
+            <Box
+              p={2}
+              borderRadius="md"
+              bg={iconBgColor}
+              color={iconColor}
+              mr={3}
+            >
+              <Icon as={icon} boxSize={4} />
+            </Box>
+          )}
+          <Text fontSize="sm" fontWeight="medium" color={textColor}>
+            {title}
+          </Text>
+        </Flex>
+        
+        <Stat mt={1}>
+          <StatNumber fontSize="2xl" fontWeight="bold" color={textColor} lineHeight="1.2">
+            {value}
+          </StatNumber>
+          
+          {delta && (
+            <StatHelpText 
+              fontSize="sm" 
+              color={isPositive ? deltaColor : 'red.500'}
+              mb={0}
+            >
+              {delta}
+            </StatHelpText>
+          )}
+          
+          {description && (
+            <Text fontSize="xs" color={descriptionColor} mt={1}>
+              {description}
+            </Text>
+          )}
+        </Stat>
+      </Box>
+    </MotionBox>
+  );
+};
+
+export default MetricCard;

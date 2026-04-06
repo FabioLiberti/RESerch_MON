@@ -1,0 +1,259 @@
+// src/pages/TopicDetailPage.tsx
+import React, { useEffect, useState } from 'react';
+
+interface TopicDetail {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: string;
+  description: string;
+  content: string;
+  relatedTopics: Array<{id: string, title: string}>;
+  relatedPapers: Array<{id: string, title: string, authors: string}>;
+  codeExamples: Array<{title: string, language: string, code: string}>;
+}
+
+const TopicDetailPage: React.FC = () => {
+  // Get topicId from URL path
+  const pathname = window.location.pathname;
+  const topicId = pathname.split('/').pop();
+  
+  const [topic, setTopic] = useState<TopicDetail | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchTopicDetail = async () => {
+      try {
+        // In production, this would be an API call
+        const response = await fetch(`/data/topics/${topicId}.json`);
+        if (!response.ok) {
+          throw new Error('Topic not found');
+        }
+        const data = await response.json();
+        setTopic(data);
+      } catch (error) {
+        console.error('Error fetching topic details:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (topicId) {
+      fetchTopicDetail();
+    }
+  }, [topicId]);
+
+  const getCategoryColor = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'basics': return '#1976d2';
+      case 'algorithms': return '#9c27b0';
+      case 'applications': return '#2e7d32';
+      case 'privacy': return '#d32f2f';
+      case 'systems': return '#ed6c02';
+      default: return '#1976d2';
+    }
+  };
+
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty.toLowerCase()) {
+      case 'beginner': return '#2e7d32';
+      case 'intermediate': return '#ed6c02';
+      case 'advanced': return '#d32f2f';
+      default: return '#2e7d32';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-container" style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Loading topic details...</p>
+      </div>
+    );
+  }
+
+  if (!topic) {
+    return (
+      <div className="error-container" style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Topic not found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="topic-detail-container" style={{ padding: '1.5rem' }}>
+      <div className="breadcrumbs" style={{ marginBottom: '1rem' }}>
+        <a href="/compendium" style={{ textDecoration: 'none', color: '#555' }}>
+          Compendium
+        </a>
+        {' / '}
+        <span>{topic.title}</span>
+      </div>
+
+      <a 
+        href="/compendium" 
+        style={{ 
+          display: 'inline-block',
+          marginBottom: '1.5rem', 
+          textDecoration: 'none',
+          color: '#1976d2'
+        }}
+      >
+        ← Back to Topics
+      </a>
+
+      <div 
+        className="topic-content-card" 
+        style={{ 
+          background: 'white', 
+          padding: '2rem', 
+          borderRadius: '8px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24)',
+          marginBottom: '2rem'
+        }}
+      >
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '1rem' 
+        }}>
+          <h1 style={{ margin: 0, fontSize: '1.8rem' }}>{topic.title}</h1>
+          <div>
+            <span style={{ 
+              backgroundColor: getCategoryColor(topic.category),
+              color: 'white',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              marginRight: '0.5rem',
+              textTransform: 'uppercase'
+            }}>
+              {topic.category}
+            </span>
+            <span style={{ 
+              backgroundColor: getDifficultyColor(topic.difficulty),
+              color: 'white',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              textTransform: 'uppercase'
+            }}>
+              {topic.difficulty}
+            </span>
+          </div>
+        </div>
+
+        <p style={{ marginBottom: '1.5rem', fontSize: '1.1rem' }}>
+          {topic.description}
+        </p>
+
+        <hr style={{ margin: '1.5rem 0' }} />
+
+        <h2 style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ marginRight: '0.5rem' }}>📚</span>
+          Learning Content
+        </h2>
+        <div 
+          dangerouslySetInnerHTML={{ __html: topic.content }}
+          style={{ lineHeight: '1.6' }}
+        />
+
+        {topic.codeExamples && topic.codeExamples.length > 0 && (
+          <>
+            <hr style={{ margin: '1.5rem 0' }} />
+            <h2 style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ marginRight: '0.5rem' }}>💻</span>
+              Code Examples
+            </h2>
+            {topic.codeExamples.map((example, index) => (
+              <div key={index} style={{ marginBottom: '1.5rem' }}>
+                <h3>{example.title}</h3>
+                <div style={{ 
+                  padding: '1rem', 
+                  backgroundColor: '#f5f5f5', 
+                  overflowX: 'auto',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  borderRadius: '4px'
+                }}>
+                  <code>{example.code}</code>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {topic.relatedPapers && topic.relatedPapers.length > 0 && (
+          <>
+            <hr style={{ margin: '1.5rem 0' }} />
+            <h2 style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ marginRight: '0.5rem' }}>📄</span>
+              Related Research Papers
+            </h2>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+              gap: '1rem' 
+            }}>
+              {topic.relatedPapers.map((paper, index) => (
+                <div 
+                  key={index} 
+                  style={{ 
+                    border: '1px solid #e0e0e0', 
+                    borderRadius: '4px', 
+                    padding: '1rem' 
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem' }}>{paper.title}</h3>
+                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>{paper.authors}</p>
+                  <a 
+                    href={`/papers/${paper.id}`} 
+                    style={{
+                      display: 'inline-block',
+                      padding: '0.25rem 0.75rem',
+                      border: '1px solid #1976d2',
+                      borderRadius: '4px',
+                      textDecoration: 'none',
+                      color: '#1976d2',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    View Paper
+                  </a>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {topic.relatedTopics && topic.relatedTopics.length > 0 && (
+          <>
+            <hr style={{ margin: '1.5rem 0' }} />
+            <h2>Related Topics</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {topic.relatedTopics.map((relatedTopic, index) => (
+                <a
+                  key={index}
+                  href={`/compendium/topic/${relatedTopic.id}`}
+                  style={{
+                    display: 'inline-block',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#f0f0f0',
+                    borderRadius: '16px',
+                    textDecoration: 'none',
+                    color: '#333',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {relatedTopic.title}
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TopicDetailPage;
