@@ -37,38 +37,42 @@ async def enqueue_papers(db: AsyncSession, paper_ids: list[int], mode: str = "qu
     skipped = 0
 
     for paper_id in paper_ids:
-        # Check if already in queue (pending/running/done)
+        # Check if already pending or running
         existing = await db.execute(
             select(AnalysisQueue).where(
                 AnalysisQueue.paper_id == paper_id,
-                AnalysisQueue.status.in_(["pending", "running", "done"]),
+                AnalysisQueue.status.in_(["pending", "running"]),
             )
         )
         if existing.scalar_one_or_none():
             skipped += 1
             continue
 
-        # Check paper exists and has abstract
+        # Check paper exists and has abstract (for quick) or pdf (for deep)
         paper = await db.execute(
             select(Paper).where(Paper.id == paper_id)
         )
         p = paper.scalar_one_or_none()
-        if not p or not p.abstract:
+        if not p:
+            skipped += 1
+            continue
+        if mode == "quick" and not p.abstract:
             skipped += 1
             continue
 
-        # Remove any previous failed entry
+        # Remove any previous entry (done or failed) to allow regeneration
         await db.execute(
             update(AnalysisQueue)
-            .where(AnalysisQueue.paper_id == paper_id, AnalysisQueue.status == "failed")
-            .values(status="pending", error_message=None, started_at=None, completed_at=None)
+            .where(AnalysisQueue.paper_id == paper_id)
+            .values(status="pending", analysis_mode=mode, error_message=None,
+                    html_path=None, pdf_path=None, started_at=None, completed_at=None)
         )
 
-        # Check if we just updated a failed one
-        existing_failed = await db.execute(
+        # Check if we just updated an existing one
+        existing_any = await db.execute(
             select(AnalysisQueue).where(AnalysisQueue.paper_id == paper_id)
         )
-        if existing_failed.scalar_one_or_none():
+        if existing_any.scalar_one_or_none():
             added += 1
             continue
 

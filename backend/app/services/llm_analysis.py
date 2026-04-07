@@ -31,7 +31,8 @@ REGOLE FONDAMENTALI:
   [Osservazione dell'analista] per tue interpretazioni o estensioni
 - Riporta SEMPRE i dati quantitativi disponibili nell'abstract.
 - Non inventare informazioni non presenti nel testo fornito.
-- Se un'informazione non e' disponibile, dichiaralo esplicitamente.
+- Se un'informazione non e' disponibile nell'abstract, scrivi: "Non disponibile dall'abstract — richiede analisi Deep con full text."
+- IMPORTANTE: stai analizzando SOLO l'abstract, non il paper completo. Non fingere di avere accesso a tabelle, equazioni o sezioni che non sono nell'abstract.
 
 ---
 TITLE: {title}
@@ -101,7 +102,7 @@ Motivazione strutturata in 3-4 punti, ciascuno con evidenza dal paper.
 ### 11. Keyword Research
 Per ciascuna delle seguenti keyword, spiega come il paper si relaziona a quel concetto: {keywords}
 
-Rispondi SOLO con il report strutturato."""
+Rispondi SOLO con il report strutturato. NON aggiungere note, commenti, disclaimer o meta-osservazioni sul tuo processo di analisi. NON scrivere frasi come "ho mantenuto la struttura" o "per simulare". Produci SOLO il contenuto dell'analisi."""
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +197,7 @@ Motivazione in 3-4 punti con evidenza dal paper.
 ### 11. Keyword Research
 Per ciascuna keyword, spiega come il paper si relaziona: {keywords}
 
-Rispondi SOLO con il report strutturato."""
+Rispondi SOLO con il report strutturato. NON aggiungere note, commenti, disclaimer o meta-osservazioni sul tuo processo di analisi. NON scrivere frasi come "ho mantenuto la struttura" o "per simulare". Produci SOLO il contenuto dell'analisi."""
 
 
 # ---------------------------------------------------------------------------

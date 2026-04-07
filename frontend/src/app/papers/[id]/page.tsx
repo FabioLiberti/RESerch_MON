@@ -589,7 +589,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
 
   if (hasReport) {
     return (
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         <Link
           href="/reports"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-600 transition-colors"
@@ -620,6 +620,32 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           Analysis PDF
         </button>
         <SyncAnalysisToZotero paperId={paperId} />
+        <button
+          onClick={trigger}
+          disabled={status === "loading"}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--primary)] text-white text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50"
+        >
+          Rigenera Analisi
+        </button>
+        <select
+          value={analysisMode}
+          onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
+          className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
+        >
+          <option value="quick">Quick (abstract)</option>
+          <option value="deep">Deep (full PDF)</option>
+        </select>
+        {/* Upload PDF */}
+        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs cursor-pointer hover:bg-[var(--muted)] transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Upload PDF
+          <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUpload} className="hidden" />
+        </label>
+        {uploadMsg && (
+          <span className={`text-xs ${uploadMsg.includes("failed") ? "text-red-400" : "text-emerald-400"}`}>{uploadMsg}</span>
+        )}
       </div>
     );
   }
@@ -762,9 +788,7 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
   const [status, setStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
 
-  if (hasZoteroKey && status === "idle") {
-    return null; // Already on Zotero, badge shown in header
-  }
+  // Always show button — text changes based on state
 
   const sync = async () => {
     setStatus("syncing");
@@ -802,6 +826,8 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
           </>
         ) : status === "done" ? (
           "Synced!"
+        ) : hasZoteroKey ? (
+          "Update Zotero"
         ) : (
           "Sync to Zotero"
         )}
