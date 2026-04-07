@@ -43,6 +43,7 @@ class PaperSummary(BaseModel):
     sources: list[str]
     topics: list[str]
     keywords: list[str]
+    labels: list[dict] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -68,6 +69,7 @@ class PaperDetail(BaseModel):
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]
+    keyword_categories: dict = {}
     source_details: list[PaperSourceSchema]
     created_at: datetime
     updated_at: datetime

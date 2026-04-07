@@ -122,6 +122,13 @@ class IEEEXploreClient(BaseAPIClient):
             pdf_url=pdf_url,
             citation_count=article.get("citing_paper_count", 0),
             keywords=unique_keywords,
+            keyword_categories={
+                k: v for k, v in {
+                    "Author Keywords": author_terms,
+                    "IEEE Terms": ieee_terms,
+                    "INSPEC Terms": inspec_terms + inspec_nc,
+                }.items() if v
+            },
             external_ids={"ieee_id": article_number, "doi": doi},
             raw_data=article,
         )

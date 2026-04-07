@@ -31,6 +31,8 @@ class Paper(Base):
     external_ids_json = Column(Text, default="{}")
     # JSON-encoded list of keywords extracted from abstract/tags
     keywords_json = Column(Text, default="[]")
+    # JSON-encoded dict of categorized keywords: {"Author Keywords": [...], "MeSH Terms": [...]}
+    keyword_categories_json = Column(Text, default="{}")
     zotero_key = Column(String(100), nullable=True)
     validated = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -49,6 +51,14 @@ class Paper(Base):
     @keywords.setter
     def keywords(self, value: list[str]):
         self.keywords_json = json.dumps(value)
+
+    @property
+    def keyword_categories(self) -> dict:
+        return json.loads(self.keyword_categories_json) if self.keyword_categories_json else {}
+
+    @keyword_categories.setter
+    def keyword_categories(self, value: dict):
+        self.keyword_categories_json = json.dumps(value)
 
     @property
     def external_ids(self) -> dict:

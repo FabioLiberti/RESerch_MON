@@ -11,6 +11,7 @@ export interface Paper {
   sources: string[];
   topics: string[];
   keywords: string[];
+  labels: { id: number; name: string; color: string }[];
   created_at: string;
 }
 
@@ -28,6 +29,7 @@ export interface PaperDetail extends Paper {
   validated: boolean;
   zotero_key: string | null;
   authors: Author[];
+  keyword_categories: Record<string, string[]>;
   source_details: PaperSource[];
   updated_at: string;
 }

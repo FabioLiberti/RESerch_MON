@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.paper import Paper, PaperAuthor, PaperSource, Author
 from app.models.topic import PaperTopic, Topic
 from app.models.analysis import SyntheticAnalysis
+from app.models.label import Label, PaperLabel
 from app.schemas.paper import (
     AnalysisSchema,
     AuthorSchema,
@@ -24,7 +25,7 @@ from app.schemas.paper import (
 router = APIRouter()
 
 
-def _paper_to_summary(paper: Paper) -> PaperSummary:
+def _paper_to_summary(paper: Paper, labels: list[dict] | None = None) -> PaperSummary:
     return PaperSummary(
         id=paper.id,
         doi=paper.doi,
@@ -38,6 +39,7 @@ def _paper_to_summary(paper: Paper) -> PaperSummary:
         sources=[s.source_name for s in paper.sources],
         topics=[pt.topic.name for pt in paper.topics if pt.topic],
         keywords=paper.keywords,
+        labels=labels or [],
         created_at=paper.created_at,
     )
 
@@ -79,6 +81,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
             for pt in paper.topics
         ],
         keywords=paper.keywords,
+        keyword_categories=paper.keyword_categories,
         source_details=[
             PaperSourceSchema(
                 source_name=s.source_name,
@@ -107,6 +110,7 @@ async def list_papers(
     keyword: str | None = None,
     author: str | None = None,
     doi: str | None = None,
+    label: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -139,6 +143,10 @@ async def list_papers(
         ).where(Author.name.ilike(f"%{author}%"))
     if doi:
         query = query.where(Paper.doi.ilike(f"%{doi}%"))
+    if label:
+        query = query.join(PaperLabel, PaperLabel.paper_id == Paper.id).join(
+            Label, Label.id == PaperLabel.label_id
+        ).where(Label.name == label)
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -156,8 +164,20 @@ async def list_papers(
     result = await db.execute(query)
     papers = result.unique().scalars().all()
 
+    # Fetch labels for all papers in one query
+    paper_ids = [p.id for p in papers]
+    labels_result = await db.execute(
+        select(PaperLabel.paper_id, Label.id, Label.name, Label.color)
+        .join(Label, Label.id == PaperLabel.label_id)
+        .where(PaperLabel.paper_id.in_(paper_ids))
+    ) if paper_ids else None
+    paper_labels_map: dict[int, list[dict]] = {}
+    if labels_result:
+        for pid, lid, lname, lcolor in labels_result.all():
+            paper_labels_map.setdefault(pid, []).append({"id": lid, "name": lname, "color": lcolor})
+
     return PaperListResponse(
-        items=[_paper_to_summary(p) for p in papers],
+        items=[_paper_to_summary(p, paper_labels_map.get(p.id, [])) for p in papers],
         total=total,
         page=page,
         per_page=per_page,

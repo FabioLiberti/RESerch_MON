@@ -253,6 +253,7 @@ async def recent_searches(
             "status": j.status,
             "keywords": j.keywords,
             "mode": j.search_mode or "keywords",
+            "sources": j.sources,
             "total_found": j.total_found,
             "already_in_db": j.already_in_db,
             "created_at": j.created_at.isoformat() if j.created_at else None,
@@ -278,6 +279,7 @@ async def save_papers(
     results = job.results
     classifier = TopicClassifier()
     saved = 0
+    saved_map: dict[int, int] = {}  # idx → paper_id
     skipped = 0
 
     for idx in body.paper_indices:
@@ -351,6 +353,7 @@ async def save_papers(
 
         # Classify
         await classifier.classify_paper(db, paper.id, paper.title, paper.abstract)
+        saved_map[idx] = paper.id
         saved += 1
 
     # Update job results to reflect saved state
@@ -358,10 +361,12 @@ async def save_papers(
     for idx in body.paper_indices:
         if 0 <= idx < len(updated):
             updated[idx]["already_in_db"] = True
+            if idx in saved_map:
+                updated[idx]["db_paper_id"] = saved_map[idx]
     job.results = updated
 
     await db.flush()
-    return {"saved": saved, "skipped": skipped}
+    return {"saved": saved, "skipped": skipped, "saved_ids": saved_map}
 
 
 @router.post("/resume/{job_id}")

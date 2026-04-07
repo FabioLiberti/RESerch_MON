@@ -1,13 +1,16 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import useSWR, { mutate } from "swr";
 import { usePaper } from "@/hooks/usePapers";
-import { formatDate, SOURCE_LABELS, SOURCE_COLORS } from "@/lib/utils";
+import { api, authFetcher } from "@/lib/api";
+import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 
 export default function PaperDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data: paper, isLoading } = usePaper(Number(id));
+  const paperId = Number(id);
+  const { data: paper, isLoading } = usePaper(paperId);
 
   if (isLoading) {
     return (
@@ -64,6 +67,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
+      {/* Labels & Notes */}
+      <LabelsAndNotes paperId={paperId} />
+
       {/* Authors */}
       {paper.authors.length > 0 && (
         <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
@@ -104,17 +110,55 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       {paper.keywords && paper.keywords.length > 0 && (
         <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
           <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-3">Keywords</h3>
-          <div className="flex flex-wrap gap-2">
-            {paper.keywords.map((kw) => (
-              <Link
-                key={kw}
-                href={`/papers?keyword=${encodeURIComponent(kw)}`}
-                className="text-xs px-2.5 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-colors"
-              >
-                {kw}
-              </Link>
-            ))}
-          </div>
+
+          {/* Categorized keywords if available */}
+          {paper.keyword_categories && Object.keys(paper.keyword_categories).length > 0 ? (
+            <div className="space-y-3">
+              {Object.entries(paper.keyword_categories).map(([category, kws]) => (
+                <div key={category}>
+                  <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-1.5">
+                    {category}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(kws as string[]).map((kw) => (
+                      <Link
+                        key={`${category}-${kw}`}
+                        href={`/papers?keyword=${encodeURIComponent(kw)}`}
+                        className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                          category === "Author Keywords"
+                            ? "bg-[var(--primary)]/15 text-[var(--primary)] hover:bg-[var(--primary)]/25"
+                            : category === "MeSH Terms"
+                            ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                            : category === "arXiv Categories"
+                            ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                            : category === "IEEE Terms" || category === "INSPEC Terms"
+                            ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+                            : category === "Fields of Study" || category === "S2 Fields"
+                            ? "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
+                            : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]"
+                        }`}
+                      >
+                        {kw}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Flat keywords (legacy papers without categories) */
+            <div className="flex flex-wrap gap-2">
+              {paper.keywords.map((kw) => (
+                <Link
+                  key={kw}
+                  href={`/papers?keyword=${encodeURIComponent(kw)}`}
+                  className="text-xs px-2.5 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-colors"
+                >
+                  {kw}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -240,6 +284,197 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             Open in Compendium
           </Link>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+// --- Labels & Notes Component ---
+
+interface LabelData {
+  id: number;
+  name: string;
+  color: string;
+}
+
+function LabelsAndNotes({ paperId }: { paperId: number }) {
+  const { data: paperLabels, mutate: mutateLabels } = useSWR<LabelData[]>(
+    `/api/v1/labels/paper/${paperId}`, authFetcher
+  );
+  const { data: allLabels } = useSWR<LabelData[]>("/api/v1/labels", authFetcher);
+  const { data: noteData, mutate: mutateNote } = useSWR(
+    `/api/v1/labels/note/${paperId}`, authFetcher
+  );
+
+  const [noteText, setNoteText] = useState("");
+  const [noteLoaded, setNoteLoaded] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#6366f1");
+
+  // Load note text when data arrives
+  useEffect(() => {
+    if (noteData && !noteLoaded) {
+      setNoteText(noteData.text || "");
+      setNoteLoaded(true);
+    }
+  }, [noteData, noteLoaded]);
+
+  const assignLabel = async (labelId: number) => {
+    await api.assignLabel(paperId, labelId);
+    mutateLabels();
+    setShowLabelPicker(false);
+  };
+
+  const removeLabel = async (labelId: number) => {
+    await api.removeLabel(paperId, labelId);
+    mutateLabels();
+  };
+
+  const createAndAssign = async () => {
+    if (!newLabelName.trim()) return;
+    try {
+      const label = await api.createLabel({ name: newLabelName, color: newLabelColor });
+      await api.assignLabel(paperId, label.id);
+      mutateLabels();
+      mutate("/api/v1/labels");
+      setNewLabelName("");
+      setShowLabelPicker(false);
+    } catch {
+      // Label might already exist
+    }
+  };
+
+  const saveNote = async () => {
+    setSavingNote(true);
+    setNoteSaved(false);
+    await api.saveNote(paperId, noteText);
+    mutateNote();
+    setSavingNote(false);
+    setNoteSaved(true);
+    setTimeout(() => setNoteSaved(false), 2000);
+  };
+
+  const assignedIds = new Set((paperLabels || []).map((l) => l.id));
+  const availableLabels = (allLabels || []).filter((l) => !assignedIds.has(l.id));
+
+  const PRESET_COLORS = ["#6366f1", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#3b82f6", "#ec4899", "#14b8a6"];
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
+      {/* Labels */}
+      <div>
+        <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Labels</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          {(paperLabels || []).map((label) => (
+            <span
+              key={label.id}
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium"
+              style={{ backgroundColor: `${label.color}20`, color: label.color }}
+            >
+              {label.name}
+              <button
+                onClick={() => removeLabel(label.id)}
+                className="ml-0.5 hover:opacity-70"
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+
+          {/* Add label button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLabelPicker(!showLabelPicker)}
+              className="text-xs px-2 py-1 rounded-full border border-dashed border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            >
+              + Add Label
+            </button>
+
+            {showLabelPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowLabelPicker(false)} />
+                <div className="absolute left-0 top-8 z-50 w-56 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl p-3 space-y-2">
+                  {/* Existing labels */}
+                  {availableLabels.length > 0 && (
+                    <div className="space-y-1">
+                      {availableLabels.map((l) => (
+                        <button
+                          key={l.id}
+                          onClick={() => assignLabel(l.id)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--secondary)] transition-colors text-left"
+                        >
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                          <span className="text-xs">{l.name}</span>
+                        </button>
+                      ))}
+                      <div className="border-t border-[var(--border)] my-1" />
+                    </div>
+                  )}
+
+                  {/* Create new */}
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newLabelName}
+                      onChange={(e) => setNewLabelName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && createAndAssign()}
+                      placeholder="New label name..."
+                      className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none focus:border-[var(--primary)]"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      {PRESET_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setNewLabelColor(c)}
+                          className={cn(
+                            "w-5 h-5 rounded-full transition-all",
+                            newLabelColor === c ? "ring-2 ring-offset-1 ring-[var(--foreground)]" : ""
+                          )}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={createAndAssign}
+                      disabled={!newLabelName.trim()}
+                      className="w-full px-2 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                    >
+                      Create & Add
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Note */}
+      <div>
+        <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Note</h3>
+        <textarea
+          value={noteText}
+          onChange={(e) => { setNoteText(e.target.value); setNoteSaved(false); }}
+          placeholder="Add a personal note about this paper..."
+          className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] resize-none h-20"
+        />
+        <div className="flex items-center justify-between mt-2">
+          <button
+            onClick={saveNote}
+            disabled={savingNote}
+            className="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {savingNote ? "Saving..." : "Save Note"}
+          </button>
+          {noteSaved && (
+            <span className="text-xs text-emerald-400">Saved</span>
+          )}
+        </div>
       </div>
     </div>
   );

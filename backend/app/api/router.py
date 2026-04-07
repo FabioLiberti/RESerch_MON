@@ -13,6 +13,7 @@ from app.api.reports import router as reports_router
 from app.api.paper_analysis import router as paper_analysis_router
 from app.api.smart_search import router as smart_search_router
 from app.api.network import router as network_router
+from app.api.labels import router as labels_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -32,3 +33,4 @@ api_router.include_router(discovery_router, prefix="/discovery", tags=["discover
 api_router.include_router(paper_analysis_router, prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
 api_router.include_router(smart_search_router, prefix="/smart-search", tags=["smart-search"], dependencies=[Depends(get_current_user)])
 api_router.include_router(network_router, prefix="/network", tags=["network"], dependencies=[Depends(get_current_user)])
+api_router.include_router(labels_router, prefix="/labels", tags=["labels"], dependencies=[Depends(get_current_user)])

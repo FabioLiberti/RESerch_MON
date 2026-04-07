@@ -144,6 +144,12 @@ class SemanticScholarClient(BaseAPIClient):
             pdf_url=pdf_url,
             citation_count=data.get("citationCount", 0),
             keywords=keywords,
+            keyword_categories={
+                k: v for k, v in {
+                    "Fields of Study": fields,
+                    "S2 Fields": [f.get("category", "") for f in s2_fields if f.get("category") and f.get("category") not in fields],
+                }.items() if v
+            },
             external_ids={
                 "s2_id": s2_id,
                 "pmid": external_ids.get("PubMed"),

@@ -332,14 +332,19 @@ function RecentSearches() {
                     )}
                     {job.keywords.join(", ")}
                   </p>
-                  <div className="flex items-center gap-2 text-[10px] text-[var(--muted-foreground)]">
-                    {job.status === "done" && <span>{job.total_found} found ({job.total_found - job.already_in_db} new)</span>}
+                  <div className="flex items-center gap-2 text-[10px] text-[var(--muted-foreground)] flex-wrap">
+                    {(job as any).sources && (
+                      <span>
+                        {((job as any).sources as string[]).map((s: string) => SOURCE_LABELS[s] || s).join(", ")}
+                      </span>
+                    )}
+                    {job.status === "done" && <span>&middot; {job.total_found} found ({job.total_found - job.already_in_db} new)</span>}
                     {job.status === "running" && job.created_at && (
                       <span className="flex items-center gap-1">
                         <ElapsedTimer startTime={new Date(job.created_at).getTime()} />
                       </span>
                     )}
-                    {job.created_at && <span>{formatDate(job.created_at)}</span>}
+                    {job.created_at && <span>&middot; {formatDate(job.created_at)}</span>}
                   </div>
                 </div>
               </div>
@@ -550,8 +555,13 @@ function SmartSearchSection() {
         text: `${res.saved} paper salvati nel DB${res.skipped ? ` (${res.skipped} già presenti)` : ""}`,
       });
       setSelectedPapers(new Set());
+      const savedIds = res.saved_ids || {};
       setResults((prev) =>
-        prev?.map((r, i) => (selectedPapers.has(i) ? { ...r, already_in_db: true } : r)) || null
+        prev?.map((r, i) =>
+          selectedPapers.has(i)
+            ? { ...r, already_in_db: true, db_paper_id: savedIds[String(i)] || r.db_paper_id }
+            : r
+        ) || null
       );
     } catch (e: any) {
       setMessage({ type: "error", text: e.message || "Save failed" });
@@ -788,7 +798,7 @@ function SmartSearchSection() {
                 className={cn(
                   "flex items-start gap-3 p-3 rounded-lg transition-colors",
                   r.already_in_db
-                    ? "opacity-50"
+                    ? "opacity-70"
                     : selectedPapers.has(i)
                     ? "bg-[var(--primary)]/5"
                     : "hover:bg-[var(--secondary)]"
@@ -806,6 +816,22 @@ function SmartSearchSection() {
                     <Link href={`/papers/${r.db_paper_id}`} className="text-sm hover:text-[var(--primary)] line-clamp-2">
                       {r.title}
                     </Link>
+                  ) : r.doi ? (
+                    <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                      {r.title}
+                    </a>
+                  ) : r.external_ids?.arxiv_id ? (
+                    <a href={`https://arxiv.org/abs/${r.external_ids.arxiv_id}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                      {r.title}
+                    </a>
+                  ) : r.external_ids?.s2_id ? (
+                    <a href={`https://www.semanticscholar.org/paper/${r.external_ids.s2_id}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                      {r.title}
+                    </a>
+                  ) : r.external_ids?.pmid ? (
+                    <a href={`https://pubmed.ncbi.nlm.nih.gov/${r.external_ids.pmid}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                      {r.title}
+                    </a>
                   ) : (
                     <p className="text-sm line-clamp-2">{r.title}</p>
                   )}
@@ -830,7 +856,7 @@ function SmartSearchSection() {
                       </span>
                     )}
                     {r.already_in_db && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900 text-sky-100 font-semibold">
                         already in DB
                       </span>
                     )}

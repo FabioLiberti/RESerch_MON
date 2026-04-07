@@ -4,6 +4,7 @@ from app.models.paper import Author, Paper, PaperAuthor, PaperSource
 from app.models.topic import PaperTopic, Topic
 from app.models.analysis import AnalysisQueue, DailyReport, FetchLog, SmartSearchJob, SyntheticAnalysis
 from app.models.user import User
+from app.models.label import Label, PaperLabel, PaperNote
 
 __all__ = [
     "Paper",
@@ -17,5 +18,8 @@ __all__ = [
     "DailyReport",
     "AnalysisQueue",
     "SmartSearchJob",
+    "Label",
+    "PaperLabel",
+    "PaperNote",
     "User",
 ]

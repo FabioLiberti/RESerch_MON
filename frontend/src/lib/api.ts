@@ -164,6 +164,21 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Labels & Notes
+  getLabels: () => fetchAPI<any>("/labels"),
+  createLabel: (data: { name: string; color: string }) =>
+    fetchAPI<any>("/labels", { method: "POST", body: JSON.stringify(data) }),
+  deleteLabel: (id: number) =>
+    fetchAPI<any>(`/labels/${id}`, { method: "DELETE" }),
+  getPaperLabels: (paperId: number) => fetchAPI<any>(`/labels/paper/${paperId}`),
+  assignLabel: (paperId: number, labelId: number) =>
+    fetchAPI<any>(`/labels/paper/${paperId}/${labelId}`, { method: "POST" }),
+  removeLabel: (paperId: number, labelId: number) =>
+    fetchAPI<any>(`/labels/paper/${paperId}/${labelId}`, { method: "DELETE" }),
+  getNote: (paperId: number) => fetchAPI<any>(`/labels/note/${paperId}`),
+  saveNote: (paperId: number, text: string) =>
+    fetchAPI<any>(`/labels/note/${paperId}`, { method: "PUT", body: JSON.stringify({ text }) }),
+
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,
 };

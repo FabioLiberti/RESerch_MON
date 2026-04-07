@@ -28,7 +28,8 @@ class RawPaperResult:
     open_access: bool = False
     pdf_url: str | None = None
     citation_count: int = 0
-    keywords: list[str] = field(default_factory=list)  # Real keywords from source
+    keywords: list[str] = field(default_factory=list)  # All keywords (flat list)
+    keyword_categories: dict = field(default_factory=dict)  # {"Author Keywords": [...], "MeSH Terms": [...]}
     external_ids: dict = field(default_factory=dict)
     raw_data: dict = field(default_factory=dict)
 

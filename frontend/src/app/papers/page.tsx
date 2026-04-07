@@ -29,6 +29,7 @@ export default function PapersPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [keywordFilter, setKeywordFilter] = useState("");
+  const [labelFilter, setLabelFilter] = useState("");
   const [activeTab, setActiveTab] = useState<SourceTab>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [analyzing, setAnalyzing] = useState(false);
@@ -70,6 +71,7 @@ export default function PapersPage() {
   };
 
   const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", authFetcher);
+  const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>("/api/v1/labels", authFetcher);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -82,6 +84,7 @@ export default function PapersPage() {
   if (doiFilter) params.doi = doiFilter;
   if (topicFilter) params.topic = topicFilter;
   if (keywordFilter) params.keyword = keywordFilter;
+  if (labelFilter) params.label = labelFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -246,10 +249,22 @@ export default function PapersPage() {
               </option>
             ))}
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter) && (
+        {(allLabels || []).length > 0 && (
+          <select
+            value={labelFilter}
+            onChange={(e) => { setLabelFilter(e.target.value); setPage(1); }}
+            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-44"
+          >
+            <option value="">All Labels</option>
+            {(allLabels || []).map((l) => (
+              <option key={l.id} value={l.name}>{l.name}</option>
+            ))}
+          </select>
+        )}
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -380,8 +395,21 @@ export default function PapersPage() {
                       <Link href={`/papers/${paper.id}`} className="text-sm hover:text-[var(--primary)]">
                         <span className="line-clamp-2">{paper.title}</span>
                       </Link>
+                      {paper.labels && paper.labels.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {paper.labels.map((l) => (
+                            <span
+                              key={l.id}
+                              className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                              style={{ backgroundColor: `${l.color}20`, color: l.color }}
+                            >
+                              {l.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {paper.keywords && paper.keywords.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
+                        <div className="flex flex-wrap gap-1 mt-1">
                           {paper.keywords.slice(0, 4).map((kw) => (
                             <button
                               key={kw}

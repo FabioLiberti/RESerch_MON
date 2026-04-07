@@ -137,7 +137,8 @@ class ArXivClient(BaseAPIClient):
             paper_type="preprint",
             open_access=True,
             pdf_url=pdf_url,
-            keywords=categories,  # arXiv categories as keywords (e.g., cs.LG, cs.CR)
+            keywords=categories,
+            keyword_categories={"arXiv Categories": categories} if categories else {},
             external_ids={"arxiv_id": arxiv_id, "categories": categories},
             raw_data={"arxiv_id": arxiv_id, "categories": categories},
         )
