@@ -272,7 +272,7 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
 
 <!-- Analysis Content -->
 <div class="analysis-content">
-  {{ analysis_html }}
+  {{ analysis_html | safe }}
 </div>
 
 <div class="report-footer">
@@ -375,12 +375,39 @@ def save_report(html: str, paper_id: int) -> Path:
     return path
 
 
+PDF_OVERRIDE_CSS = """
+    body { background: white !important; color: #1a1a2e !important; }
+    .report-header { border-color: #d1d5db !important; }
+    .report-title { color: #111827 !important; }
+    .report-meta { color: #374151 !important; }
+    .meta-label { color: #6b7280 !important; }
+    .keywords-section { background: #f9fafb !important; border-color: #e5e7eb !important; }
+    .keywords-title { color: #374151 !important; }
+    .analysis-content { background: #ffffff !important; border-color: #e5e7eb !important; }
+    .analysis-content h3 { color: #4338ca !important; border-color: #e5e7eb !important; }
+    .analysis-content p { color: #1f2937 !important; }
+    .analysis-content li { color: #1f2937 !important; }
+    .analysis-content strong { color: #111827 !important; }
+    .analysis-content em { color: #4b5563 !important; }
+    .report-footer { color: #6b7280 !important; border-color: #e5e7eb !important; }
+    .keyword-category { border-color: #e5e7eb !important; }
+    .category-label { color: #374151 !important; }
+    a { color: #4338ca !important; }
+"""
+
+
 def generate_pdf(html_path: Path) -> Path | None:
-    """Generate PDF from HTML report. Returns PDF path or None on failure."""
+    """Generate PDF from HTML report with light-theme colors for readability."""
+    import os
+    # Ensure homebrew libraries are findable (macOS)
+    if "DYLD_FALLBACK_LIBRARY_PATH" not in os.environ:
+        os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = "/opt/homebrew/lib"
     try:
-        from weasyprint import HTML
+        from weasyprint import HTML, CSS
         pdf_path = html_path.with_suffix(".pdf")
-        HTML(filename=str(html_path)).write_pdf(str(pdf_path))
+        html_doc = HTML(filename=str(html_path))
+        css_override = CSS(string=PDF_OVERRIDE_CSS)
+        html_doc.write_pdf(str(pdf_path), stylesheets=[css_override])
         logger.info(f"PDF generated: {pdf_path}")
         return pdf_path
     except ImportError:

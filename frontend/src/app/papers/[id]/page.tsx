@@ -284,6 +284,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             Open in Compendium
           </Link>
         )}
+
+        {/* Generate Analysis */}
+        <AnalysisButton paperId={paperId} />
       </div>
     </div>
   );
@@ -478,4 +481,157 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
       </div>
     </div>
   );
+}
+
+
+// --- Analysis Button ---
+
+function AnalysisButton({ paperId }: { paperId: number }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "queued" | "error">("idle");
+  const [startTime, setStartTime] = useState<number | null>(null);
+
+  // Poll for analysis completion
+  const { data: analysisStatus } = useSWR(
+    status === "queued" ? "/api/v1/analysis/status" : null,
+    authFetcher,
+    { refreshInterval: 3000 }
+  );
+
+  // Check if report exists (endpoint returns HTML, not JSON)
+  const htmlFetcher = (url: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
+    if (!token) return Promise.reject(new Error("No token"));
+    return fetch(url, { headers: { Authorization: `Bearer ${token}` } }).then((r) => {
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error(`${r.status}`);
+      return r.text();
+    });
+  };
+
+  const { data: existingReport } = useSWR(
+    `/api/v1/analysis/${paperId}/html`,
+    htmlFetcher,
+    {
+      shouldRetryOnError: false,
+      refreshInterval: status === "queued" ? 5000 : 0,
+    }
+  );
+
+  const hasReport = existingReport && typeof existingReport === "string" && existingReport.includes("<!DOCTYPE");
+
+  // When report appears, reset status
+  useEffect(() => {
+    if (hasReport && status === "queued") {
+      setStatus("idle");
+      setStartTime(null);
+    }
+  }, [hasReport, status]);
+
+  const trigger = async () => {
+    setStatus("loading");
+    try {
+      await api.triggerAnalysis([paperId]);
+      setStatus("queued");
+      setStartTime(Date.now());
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  if (hasReport) {
+    return (
+      <div className="flex gap-2">
+        <Link
+          href="/reports"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          View Analysis
+        </Link>
+        <button
+          onClick={() => {
+            const token = localStorage.getItem("fl-token");
+            fetch(`/api/v1/analysis/${paperId}/pdf`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            })
+              .then((r) => r.blob())
+              .then((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `analysis_paper_${paperId}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+              });
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+        >
+          Analysis PDF
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "queued" && startTime) {
+    return (
+      <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-[var(--primary)]/10 border border-[var(--primary)]/20">
+        <svg className="w-4 h-4 animate-spin text-[var(--primary)]" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <span className="text-sm text-[var(--primary)]">
+          Analyzing with Gemma4...
+        </span>
+        <span className="text-sm text-[var(--primary)] tabular-nums">
+          <ElapsedTimer startTime={startTime} />
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={trigger}
+      disabled={status === "loading"}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 transition-colors disabled:opacity-50"
+    >
+      {status === "loading" ? (
+        <>
+          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Sending...
+        </>
+      ) : status === "error" ? (
+        "Error (Ollama running?)"
+      ) : (
+        <>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Genera Analisi
+        </>
+      )}
+    </button>
+  );
+}
+
+// Reuse ElapsedTimer
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  return <span className="font-mono">{mins}:{secs.toString().padStart(2, "0")}</span>;
 }
