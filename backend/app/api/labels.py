@@ -136,6 +136,33 @@ async def assign_label(
     return {"status": "assigned"}
 
 
+class BatchAssignRequest(BaseModel):
+    paper_ids: list[int]
+    label_id: int
+
+
+@router.post("/batch-assign")
+async def batch_assign_label(
+    body: BatchAssignRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Assign a label to multiple papers at once."""
+    assigned = 0
+    for paper_id in body.paper_ids:
+        existing = await db.execute(
+            select(PaperLabel).where(
+                PaperLabel.paper_id == paper_id,
+                PaperLabel.label_id == body.label_id,
+            )
+        )
+        if not existing.scalar_one_or_none():
+            db.add(PaperLabel(paper_id=paper_id, label_id=body.label_id))
+            assigned += 1
+    await db.flush()
+    return {"assigned": assigned}
+
+
 @router.delete("/paper/{paper_id}/{label_id}")
 async def remove_label(
     paper_id: int,

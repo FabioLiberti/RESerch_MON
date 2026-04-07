@@ -133,6 +133,7 @@ class AnalysisQueue(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), nullable=False)
+    analysis_mode = Column(String(10), default="quick")  # quick or deep
     status = Column(String(20), default="pending")  # pending, running, done, failed
     error_message = Column(Text, nullable=True)
     html_path = Column(Text, nullable=True)

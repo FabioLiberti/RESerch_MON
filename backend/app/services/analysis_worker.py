@@ -31,7 +31,7 @@ def get_worker_status() -> dict:
     }
 
 
-async def enqueue_papers(db: AsyncSession, paper_ids: list[int]) -> dict:
+async def enqueue_papers(db: AsyncSession, paper_ids: list[int], mode: str = "quick") -> dict:
     """Add papers to the analysis queue. Skips already queued/done papers."""
     added = 0
     skipped = 0
@@ -72,7 +72,7 @@ async def enqueue_papers(db: AsyncSession, paper_ids: list[int]) -> dict:
             added += 1
             continue
 
-        queue_item = AnalysisQueue(paper_id=paper_id)
+        queue_item = AnalysisQueue(paper_id=paper_id, analysis_mode=mode)
         db.add(queue_item)
         added += 1
 
@@ -129,7 +129,19 @@ async def process_queue():
                 paper = paper_data["paper"]
                 _worker_progress["current_paper"] = paper.title[:80]
 
-                logger.info(f"Analyzing paper {item.paper_id}: {paper.title[:60]}")
+                analysis_mode = getattr(item, "analysis_mode", "quick") or "quick"
+                logger.info(f"Analyzing paper {item.paper_id} ({analysis_mode}): {paper.title[:60]}")
+
+                # For deep mode, need PDF path
+                paper_pdf_path = paper.pdf_local_path if analysis_mode == "deep" else None
+
+                # If deep mode requested but no PDF available, try to use pdf_url
+                if analysis_mode == "deep" and not paper_pdf_path:
+                    item.status = "failed"
+                    item.error_message = "Deep analysis requires a downloaded PDF. No PDF available for this paper."
+                    item.completed_at = datetime.utcnow()
+                    await db.flush()
+                    continue
 
                 # Generate analysis via LLM
                 analysis_text = await generate_paper_analysis(
@@ -140,6 +152,8 @@ async def process_queue():
                     doi=paper.doi,
                     paper_type=paper.paper_type,
                     keywords=paper.keywords,
+                    mode=analysis_mode,
+                    pdf_path=paper_pdf_path,
                 )
 
                 if not analysis_text:

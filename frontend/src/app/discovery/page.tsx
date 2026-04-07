@@ -87,6 +87,9 @@ export default function DiscoveryPage() {
       {/* Smart Search */}
       <SmartSearchSection />
 
+      {/* Import Bibliography */}
+      <ImportBibliography />
+
       {/* Recent Searches */}
       <RecentSearches />
 
@@ -220,6 +223,429 @@ export default function DiscoveryPage() {
     </div>
   );
 }
+
+// --- Import Bibliography ---
+
+interface BibResult {
+  doi: string;
+  title: string | null;
+  authors: string[];
+  year: number | null;
+  journal: string | null;
+  abstract: string | null;
+  status: "found" | "not_found" | "already_in_db" | "error";
+  db_paper_id: number | null;
+  external_ids: Record<string, string>;
+  keywords: string[];
+  pdf_url: string | null;
+  open_access: boolean;
+  citation_count: number;
+  publication_date: string | null;
+  paper_type: string;
+  source: string;
+}
+
+function ImportBibliography() {
+  const { isAdmin } = useAuth();
+  const [bibText, setBibText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [results, setResults] = useState<BibResult[] | null>(null);
+  const [stats, setStats] = useState<{ total_dois: number; resolved: number; not_found: number; already_in_db: number } | null>(null);
+  const [selectedPapers, setSelectedPapers] = useState<Set<number>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [extractStartTime, setExtractStartTime] = useState<number | null>(null);
+  const [selectedLabelId, setSelectedLabelId] = useState<number | undefined>(undefined);
+  const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>(
+    "/api/v1/labels", authFetcher
+  );
+
+  if (!isAdmin) return null;
+
+  const doExtract = async () => {
+    if (!bibText.trim()) return;
+    setExtracting(true);
+    setExtractStartTime(Date.now());
+    setResults(null);
+    setStats(null);
+    setMessage(null);
+    setSelectedPapers(new Set());
+
+    try {
+      const res = await api.bibliographyExtract(bibText);
+      setResults(res.results);
+      setStats({ total_dois: res.total_dois, resolved: res.resolved, not_found: res.not_found, already_in_db: res.already_in_db });
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Extraction failed" });
+    }
+    setExtracting(false);
+    setExtractStartTime(null);
+  };
+
+  const togglePaper = (idx: number) => {
+    setSelectedPapers((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (!results) return;
+    const selectableIdxs = results.map((r, i) => i).filter((i) => i >= 0);
+    const allSelected = selectableIdxs.every((i) => selectedPapers.has(i));
+    setSelectedPapers((prev) => {
+      const next = new Set(prev);
+      selectableIdxs.forEach((i) => (allSelected ? next.delete(i) : next.add(i)));
+      return next;
+    });
+  };
+
+  const savePapers = async () => {
+    if (!results || selectedPapers.size === 0) return;
+    setSaving(true);
+    setMessage(null);
+    const toSave = Array.from(selectedPapers).map((i) => results[i]);
+    try {
+      const res = await api.bibliographySave(toSave, selectedLabelId);
+      const parts = [];
+      if (res.saved) parts.push(`${res.saved} paper salvati`);
+      if (res.labeled) parts.push(`${res.labeled} label assegnate`);
+      if (res.skipped) parts.push(`${res.skipped} skipped`);
+      setMessage({ type: "success", text: parts.join(", ") });
+      setSelectedPapers(new Set());
+      setResults((prev) =>
+        prev?.map((r, i) =>
+          selectedPapers.has(i) && r.status === "found" ? { ...r, status: "already_in_db" as const } : r
+        ) || null
+      );
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Save failed" });
+    }
+    setSaving(false);
+  };
+
+  const clear = () => {
+    setBibText("");
+    setResults(null);
+    setStats(null);
+    setSelectedPapers(new Set());
+    setMessage(null);
+    setExpanded(false);
+  };
+
+  const newCount = results?.filter((r) => r.status === "found").length || 0;
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-6 py-4 text-left"
+      >
+        <h3 className="font-medium flex items-center gap-2 text-sm">
+          <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+          Import Bibliography
+          {results && (
+            <span className="text-xs text-[var(--muted-foreground)]">
+              ({stats?.total_dois} DOIs, {newCount} new)
+            </span>
+          )}
+        </h3>
+        <svg
+          className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform", expanded && "rotate-180")}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="px-6 pb-6 space-y-4">
+          {/* Textarea */}
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)] mb-2">
+              Paste a bibliography (Harvard, APA, or any format with DOIs). The system will extract DOIs and resolve each paper via Semantic Scholar.
+            </p>
+            <textarea
+              value={bibText}
+              onChange={(e) => setBibText(e.target.value)}
+              placeholder="Paste bibliography here..."
+              className="w-full px-4 py-3 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] resize-none h-32 font-mono"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2">
+            <button
+              onClick={doExtract}
+              disabled={extracting || !bibText.trim()}
+              className="px-5 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+            >
+              {extracting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Extracting & Resolving...
+                  {extractStartTime && (
+                    <span className="tabular-nums ml-1">
+                      <ElapsedTimer startTime={extractStartTime} />
+                    </span>
+                  )}
+                </>
+              ) : (
+                "Extract & Search"
+              )}
+            </button>
+            {results && (
+              <button
+                onClick={clear}
+                className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)]"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Message */}
+          {message && (
+            <div className={cn(
+              "px-4 py-2.5 rounded-lg text-sm",
+              message.type === "success"
+                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border border-red-500/20 text-red-400"
+            )}>
+              {message.text}
+            </div>
+          )}
+
+          {/* Stats */}
+          {stats && (
+            <div className="flex gap-4 text-sm">
+              <span><strong>{stats.total_dois}</strong> DOIs found</span>
+              <span className="text-emerald-400"><strong>{stats.resolved}</strong> resolved</span>
+              <span className="text-[var(--muted-foreground)]"><strong>{stats.already_in_db}</strong> already in DB</span>
+              {stats.not_found > 0 && (
+                <span className="text-red-400"><strong>{stats.not_found}</strong> not found</span>
+              )}
+            </div>
+          )}
+
+          {/* Results */}
+          {results && results.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAll}
+                  className="text-xs px-2.5 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] transition-colors"
+                >
+                  Select all
+                </button>
+              </div>
+
+              <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                {results.map((r, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex items-start gap-3 p-3 rounded-lg transition-colors",
+                      r.status === "already_in_db" ? "opacity-70" :
+                      r.status === "not_found" || r.status === "error" ? "opacity-50" :
+                      selectedPapers.has(i) ? "bg-[var(--primary)]/5" :
+                      "hover:bg-[var(--secondary)]"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPapers.has(i)}
+                      onChange={() => togglePaper(i)}
+                      className="mt-1 rounded accent-[var(--primary)]"
+                    />
+                    <div className="flex-1 min-w-0">
+                      {r.status === "already_in_db" && r.db_paper_id ? (
+                        <Link href={`/papers/${r.db_paper_id}`} className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                          {r.title || r.doi}
+                        </Link>
+                      ) : r.title ? (
+                        <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                          {r.title}
+                        </a>
+                      ) : (
+                        <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)]">
+                          {r.doi}
+                        </a>
+                      )}
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{r.doi}</span>
+                        {r.authors.length > 0 && (
+                          <span className="text-[10px] text-[var(--muted-foreground)] truncate max-w-48">
+                            {r.authors.slice(0, 3).join(", ")}{r.authors.length > 3 ? " et al." : ""}
+                          </span>
+                        )}
+                        {r.status === "already_in_db" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900 text-sky-100 font-semibold">already in DB</span>
+                        )}
+                        {r.status === "not_found" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-100 font-semibold">not found in S2</span>
+                        )}
+                        {r.status === "error" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-100 font-semibold">error</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Save bar with label selector */}
+              {selectedPapers.size > 0 && (
+                <BibSaveBar
+                  count={selectedPapers.size}
+                  saving={saving}
+                  onSave={savePapers}
+                  allLabels={allLabels || []}
+                  selectedLabelId={selectedLabelId}
+                  onLabelChange={setSelectedLabelId}
+                  selectedPaperIds={
+                    results
+                      ? Array.from(selectedPapers)
+                          .map((i) => results[i]?.db_paper_id)
+                          .filter((id): id is number => id !== null && id !== undefined)
+                      : []
+                  }
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// --- Bib Save Bar with inline label creation ---
+
+function BibSaveBar({ count, saving, onSave, allLabels, selectedLabelId, onLabelChange, selectedPaperIds }: {
+  count: number;
+  saving: boolean;
+  onSave: () => void;
+  allLabels: { id: number; name: string; color: string }[];
+  selectedLabelId: number | undefined;
+  onLabelChange: (id: number | undefined) => void;
+  selectedPaperIds?: number[];
+}) {
+  const [assigning, setAssigning] = useState(false);
+  const [assignMsg, setAssignMsg] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState("#6366f1");
+
+  const createLabel = async () => {
+    if (!newName.trim()) return;
+    try {
+      const label = await api.createLabel({ name: newName, color: newColor });
+      onLabelChange(label.id);
+      setCreating(false);
+      setNewName("");
+      mutate("/api/v1/labels");
+    } catch { }
+  };
+
+  const COLORS = ["#6366f1", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#3b82f6", "#ec4899", "#14b8a6"];
+
+  return (
+    <div className="pt-3 border-t border-[var(--border)] flex items-center gap-3 flex-wrap">
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+      >
+        {saving ? "Saving..." : `Save ${count} to DB`}
+      </button>
+      {selectedPaperIds && selectedPaperIds.length > 0 && selectedLabelId && (
+        <button
+          onClick={async () => {
+            setAssigning(true);
+            setAssignMsg(null);
+            try {
+              const res = await api.batchAssignLabel(selectedPaperIds, selectedLabelId);
+              setAssignMsg(`${res.assigned} label assegnate`);
+            } catch { setAssignMsg("Error"); }
+            setAssigning(false);
+          }}
+          disabled={assigning}
+          className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+        >
+          {assigning ? "Assigning..." : `Assign Label (${count})`}
+        </button>
+      )}
+      {assignMsg && <span className="text-xs text-emerald-400">{assignMsg}</span>}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-[var(--muted-foreground)]">with label:</span>
+        <select
+          value={selectedLabelId || ""}
+          onChange={(e) => onLabelChange(e.target.value ? Number(e.target.value) : undefined)}
+          className="px-2 py-1.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-xs"
+        >
+          <option value="">No label</option>
+          {allLabels.map((l) => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
+        </select>
+        {!creating ? (
+          <button
+            onClick={() => setCreating(true)}
+            className="text-xs px-2 py-1.5 rounded border border-dashed border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+          >
+            + New
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && createLabel()}
+              placeholder="Label name"
+              className="px-2 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-xs w-28 focus:outline-none focus:border-[var(--primary)]"
+              autoFocus
+            />
+            <div className="flex gap-0.5">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setNewColor(c)}
+                  className={cn("w-4 h-4 rounded-full", newColor === c && "ring-1 ring-offset-1 ring-white")}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+            <button
+              onClick={createLabel}
+              disabled={!newName.trim()}
+              className="text-xs px-2 py-1 rounded bg-[var(--primary)] text-white disabled:opacity-50"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => setCreating(false)}
+              className="text-xs text-[var(--muted-foreground)]"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 // --- Recent Searches ---
 
@@ -470,10 +896,11 @@ function SmartSearchSection() {
     localStorage.removeItem("smart-search-job-id");
   }
 
-  // When job completes, load results
+  // When job completes, load results and clear jobId from localStorage
   if (jobStatus?.status === "done" && jobStatus.results && !results) {
     setResults(jobStatus.results);
     setQueriesUsed(jobStatus.queries_used || {});
+    localStorage.removeItem("smart-search-job-id");
   }
   if (jobStatus?.status === "failed" && !message) {
     setMessage({ type: "error", text: jobStatus.error_message || "Search failed" });
@@ -484,6 +911,11 @@ function SmartSearchSection() {
   if (!isAdmin) return null;
 
   const searching = jobId !== null && !results;
+
+  // Auto-expand when searching
+  useEffect(() => {
+    if (searching) setSmartExpanded(true);
+  }, [searching]);
 
   const toggleSource = (src: string) => {
     setSelectedSources((prev) => {
@@ -601,16 +1033,33 @@ function SmartSearchSection() {
   };
 
   const [showInfo, setShowInfo] = useState(false);
+  const [smartExpanded, setSmartExpanded] = useState(false);
   const newCount = results?.filter((r) => !r.already_in_db).length || 0;
   const dbCount = results?.filter((r) => r.already_in_db).length || 0;
 
   return (
-    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
-      <h3 className="font-medium mb-4 flex items-center gap-2">
-        <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
+      <button
+        onClick={() => setSmartExpanded(!smartExpanded)}
+        className="w-full flex items-center justify-between px-6 py-4 text-left"
+      >
+        <h3 className="font-medium flex items-center gap-2 text-sm">
+          <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          Smart Search
+          {searching && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] animate-pulse">active</span>}
+          {results && <span className="text-xs text-[var(--muted-foreground)]">({results.length} results)</span>}
+        </h3>
+        <svg
+          className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform", smartExpanded && "rotate-180")}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
-        Smart Search
+      </button>
+
+      {smartExpanded && <div className="px-6 pb-6">
         {/* Info button */}
         <div className="relative">
           <button
@@ -651,7 +1100,6 @@ function SmartSearchSection() {
             </>
           )}
         </div>
-      </h3>
 
       {/* Search form */}
       <div className="space-y-3">
@@ -972,6 +1420,7 @@ function SmartSearchSection() {
           </div>
         );
       })()}
+    </div>}
     </div>
   );
 }

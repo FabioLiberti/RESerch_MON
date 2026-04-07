@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
+import { authFetcher } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 
@@ -23,15 +25,16 @@ const SUN_ICON = "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.3
 const MOON_ICON = "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z";
 
 // Learning path topics with their compendium categories
+// available: true = topic page exists in compendium, false = not yet created
 const LEARNING_TOPICS = [
-  { label: "Introduction to FL", level: "beginner", id: "intro-fl", categories: ["Basics"] },
-  { label: "FedAvg Algorithm", level: "beginner", id: "fedavg", categories: ["Algorithms"] },
-  { label: "Non-IID Data", level: "intermediate", id: "non-iid", categories: ["Algorithms"] },
-  { label: "FL Healthcare", level: "intermediate", id: "fl-healthcare", categories: ["Applications"] },
-  { label: "FL Edge Devices", level: "intermediate", id: "fl-edge", categories: ["Systems"] },
-  { label: "Differential Privacy", level: "advanced", id: "diff-privacy", categories: ["Privacy"] },
-  { label: "Secure Aggregation", level: "advanced", id: "secure-agg", categories: ["Privacy"] },
-  { label: "Personalization", level: "advanced", id: "personalization", categories: ["Algorithms", "Privacy"] },
+  { label: "Introduction to FL", level: "beginner", id: "intro-fl", categories: ["Basics"], available: false },
+  { label: "FedAvg Algorithm", level: "beginner", id: "fedavg", categories: ["Algorithms"], available: true },
+  { label: "Non-IID Data", level: "intermediate", id: "non-iid", categories: ["Algorithms"], available: false },
+  { label: "FL Healthcare", level: "intermediate", id: "fl-healthcare", categories: ["Applications"], available: false },
+  { label: "FL Edge Devices", level: "intermediate", id: "fl-edge", categories: ["Systems"], available: false },
+  { label: "Differential Privacy", level: "advanced", id: "diff-privacy", categories: ["Privacy"], available: false },
+  { label: "Secure Aggregation", level: "advanced", id: "secure-agg", categories: ["Privacy"], available: false },
+  { label: "Personalization", level: "advanced", id: "personalization", categories: ["Algorithms", "Privacy"], available: false },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -42,40 +45,149 @@ const CATEGORY_COLORS: Record<string, string> = {
   Systems: "bg-cyan-500/15 text-cyan-400",
 };
 
-function LearningPathSection() {
+type SidebarTab = "labels" | "topics" | "paths";
+
+function SidebarTabs() {
+  const [activeTab, setActiveTab] = useState<SidebarTab>("labels");
+
   return (
     <div className="mt-4 pt-4 border-t border-[var(--border)]">
-      <p className="px-6 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
-        Learning Path
+      {/* Tab selector */}
+      <div className="flex mx-4 mb-2 gap-0.5 p-0.5 rounded-lg bg-[var(--secondary)]">
+        {([
+          { key: "labels" as const, label: "Labels" },
+          { key: "topics" as const, label: "Topics" },
+          { key: "paths" as const, label: "Paths" },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "flex-1 px-2 py-1.5 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all",
+              activeTab === tab.key
+                ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === "labels" && <LabelsSection />}
+      {activeTab === "topics" && <TopicsSection />}
+      {activeTab === "paths" && <LearningPathSection />}
+    </div>
+  );
+}
+
+function LabelsSection() {
+  const { data: labels } = useSWR<{ id: number; name: string; color: string }[]>(
+    "/api/v1/labels", authFetcher
+  );
+
+  if (!labels || labels.length === 0) {
+    return (
+      <p className="px-6 py-2 text-[10px] text-[var(--muted-foreground)]">
+        No labels yet. Create one from a paper detail page.
       </p>
-      {LEARNING_TOPICS.map((topic) => (
+    );
+  }
+
+  return (
+    <div>
+      {labels.map((label) => (
         <Link
-          key={topic.id}
-          href={`/compendium?topic=${topic.id}`}
-          className="flex items-center gap-2 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors group"
+          key={label.id}
+          href={`/papers?label=${encodeURIComponent(label.name)}`}
+          className="flex items-center gap-2 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
         >
-          <span className={cn(
-            "w-1.5 h-1.5 rounded-full shrink-0",
-            topic.level === "beginner" && "bg-emerald-400",
-            topic.level === "intermediate" && "bg-amber-400",
-            topic.level === "advanced" && "bg-red-400",
-          )} />
-          <span className="flex-1 truncate">{topic.label}</span>
-          <span className="flex gap-0.5 shrink-0">
-            {topic.categories.map((cat) => (
-              <span
-                key={cat}
-                className={cn(
-                  "text-[8px] px-1 py-0.5 rounded leading-none",
-                  CATEGORY_COLORS[cat] || "bg-[var(--muted)] text-[var(--muted-foreground)]",
-                )}
-              >
-                {cat}
-              </span>
-            ))}
-          </span>
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
+          <span className="flex-1 truncate">{label.name}</span>
         </Link>
       ))}
+    </div>
+  );
+}
+
+function TopicsSection() {
+  const { data: topics } = useSWR<{ id: number; name: string; keywords: string[] }[]>(
+    "/api/v1/topics", authFetcher
+  );
+
+  if (!topics || topics.length === 0) {
+    return (
+      <p className="px-6 py-2 text-[10px] text-[var(--muted-foreground)]">
+        No topics configured.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      {topics.map((topic) => (
+        <Link
+          key={topic.id}
+          href={`/papers?topic=${encodeURIComponent(topic.name)}`}
+          className="flex items-center gap-2 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
+        >
+          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--primary)]" />
+          <span className="flex-1 truncate">{topic.name}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function LearningPathSection() {
+  return (
+    <div>
+      {LEARNING_TOPICS.map((topic) => {
+        const content = topic.available ? (
+          <Link
+            key={topic.id}
+            href={`/compendium?topic=${topic.id}`}
+            className="flex items-center gap-2 px-6 py-2 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors group"
+          >
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full shrink-0",
+              topic.level === "beginner" && "bg-emerald-400",
+              topic.level === "intermediate" && "bg-amber-400",
+              topic.level === "advanced" && "bg-red-400",
+            )} />
+            <span className="flex-1 truncate">{topic.label}</span>
+            <span className="flex gap-0.5 shrink-0">
+              {topic.categories.map((cat) => (
+                <span
+                  key={cat}
+                  className={cn(
+                    "text-[8px] px-1 py-0.5 rounded leading-none",
+                    CATEGORY_COLORS[cat] || "bg-[var(--muted)] text-[var(--muted-foreground)]",
+                  )}
+                >
+                  {cat}
+                </span>
+              ))}
+            </span>
+          </Link>
+        ) : (
+          <div
+            key={topic.id}
+            className="flex items-center gap-2 px-6 py-2 text-xs text-[var(--muted-foreground)] opacity-40 cursor-not-allowed"
+          >
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full shrink-0",
+              topic.level === "beginner" && "bg-emerald-400",
+              topic.level === "intermediate" && "bg-amber-400",
+              topic.level === "advanced" && "bg-red-400",
+            )} />
+            <span className="flex-1 truncate">{topic.label}</span>
+            <span className="text-[8px]">soon</span>
+          </div>
+        );
+        return content;
+      })}
     </div>
   );
 }
@@ -139,8 +251,8 @@ export default function Sidebar() {
           );
         })}
 
-        {/* Learning Path */}
-        <LearningPathSection />
+        {/* Sidebar Tabs: Labels / Topics / Learning Paths */}
+        <SidebarTabs />
       </nav>
 
       {/* Footer: User + Theme Toggle + Status */}

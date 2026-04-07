@@ -81,6 +81,20 @@ export const api = {
   },
   getPaper: (id: number) => fetchAPI<any>(`/papers/${id}`),
   getPaperAnalysis: (id: number) => fetchAPI<any>(`/papers/${id}/analysis`),
+  enrichPaper: (id: number) => fetchAPI<any>(`/papers/${id}/enrich`, { method: "POST" }),
+  uploadPdf: (paperId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
+    return fetch(`/api/v1/analysis/${paperId}/upload-pdf`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then((r) => {
+      if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
+      return r.json();
+    });
+  },
 
   // Analytics
   getOverview: () => fetchAPI<any>("/analytics/overview"),
@@ -125,10 +139,10 @@ export const api = {
     fetchAPI<any>("/auth/me/password", { method: "PUT", body: JSON.stringify(data) }),
 
   // Paper Analysis
-  triggerAnalysis: (paperIds: number[]) =>
+  triggerAnalysis: (paperIds: number[], mode: string = "quick") =>
     fetchAPI<any>("/analysis/trigger", {
       method: "POST",
-      body: JSON.stringify({ paper_ids: paperIds }),
+      body: JSON.stringify({ paper_ids: paperIds, mode }),
     }),
   getAnalysisStatus: () => fetchAPI<any>("/analysis/status"),
   getAnalysisQueue: () => fetchAPI<any>("/analysis/queue"),
@@ -173,11 +187,33 @@ export const api = {
   getPaperLabels: (paperId: number) => fetchAPI<any>(`/labels/paper/${paperId}`),
   assignLabel: (paperId: number, labelId: number) =>
     fetchAPI<any>(`/labels/paper/${paperId}/${labelId}`, { method: "POST" }),
+  batchAssignLabel: (paperIds: number[], labelId: number) =>
+    fetchAPI<any>("/labels/batch-assign", {
+      method: "POST",
+      body: JSON.stringify({ paper_ids: paperIds, label_id: labelId }),
+    }),
   removeLabel: (paperId: number, labelId: number) =>
     fetchAPI<any>(`/labels/paper/${paperId}/${labelId}`, { method: "DELETE" }),
   getNote: (paperId: number) => fetchAPI<any>(`/labels/note/${paperId}`),
   saveNote: (paperId: number, text: string) =>
     fetchAPI<any>(`/labels/note/${paperId}`, { method: "PUT", body: JSON.stringify({ text }) }),
+
+  // Bibliography Import
+  bibliographyExtract: (text: string) =>
+    fetch("http://localhost:8000/api/v1/bibliography/extract", {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(180000),
+    }).then((r) => {
+      if (!r.ok) throw new Error(`API Error: ${r.status}`);
+      return r.json();
+    }),
+  bibliographySave: (papers: any[], labelId?: number) =>
+    fetchAPI<any>("/bibliography/save", {
+      method: "POST",
+      body: JSON.stringify({ papers, label_id: labelId || null }),
+    }),
 
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,

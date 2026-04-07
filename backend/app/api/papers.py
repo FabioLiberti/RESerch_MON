@@ -230,6 +230,132 @@ async def get_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     return _paper_to_detail(paper)
 
 
+@router.post("/{paper_id}/enrich")
+async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Re-enrich a paper's metadata by looking up its DOI on S2, PubMed, CrossRef."""
+    import json as json_mod
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if not paper.doi:
+        raise HTTPException(status_code=400, detail="Paper has no DOI to enrich from")
+
+    doi = paper.doi
+    enriched_from = None
+
+    # 1. Try Semantic Scholar
+    try:
+        from app.clients.semantic_scholar import SemanticScholarClient
+        s2 = SemanticScholarClient()
+        result = await s2.fetch_metadata(f"DOI:{doi}")
+        await s2.close()
+        if result and result.title:
+            paper.title = result.title
+            paper.abstract = result.abstract or paper.abstract
+            paper.journal = result.journal or paper.journal
+            paper.publication_date = result.publication_date or paper.publication_date
+            paper.paper_type = result.paper_type or paper.paper_type
+            paper.open_access = result.open_access
+            paper.pdf_url = result.pdf_url or paper.pdf_url
+            paper.citation_count = max(paper.citation_count, result.citation_count)
+            if result.keywords:
+                paper.keywords = result.keywords
+            if result.keyword_categories:
+                paper.keyword_categories = result.keyword_categories
+            paper.external_ids = {**(paper.external_ids or {}), **(result.external_ids or {})}
+            paper.validated = True
+            enriched_from = "semantic_scholar"
+
+            # Add authors if missing
+            from sqlalchemy.orm import selectinload
+            pa_result = await db.execute(
+                select(PaperAuthor).where(PaperAuthor.paper_id == paper_id)
+            )
+            if not pa_result.scalars().first() and result.authors:
+                for i, a in enumerate(result.authors):
+                    name = a.get("name", "")
+                    if not name:
+                        continue
+                    auth_result = await db.execute(select(Author).where(Author.name == name))
+                    author = auth_result.scalar_one_or_none()
+                    if not author:
+                        author = Author(name=name, affiliation=a.get("affiliation"), orcid=a.get("orcid"))
+                        db.add(author)
+                        await db.flush()
+                    db.add(PaperAuthor(paper_id=paper_id, author_id=author.id, position=i))
+    except Exception:
+        pass
+
+    # 2. Try PubMed if S2 failed
+    if not enriched_from:
+        try:
+            from app.clients.pubmed import PubMedClient
+            pubmed = PubMedClient()
+            results = await pubmed.search(f'"{doi}"[DOI]', max_results=1)
+            await pubmed.close()
+            if results:
+                r = results[0]
+                paper.title = r.title or paper.title
+                paper.abstract = r.abstract or paper.abstract
+                paper.journal = r.journal or paper.journal
+                paper.publication_date = r.publication_date or paper.publication_date
+                paper.open_access = r.open_access
+                paper.pdf_url = r.pdf_url or paper.pdf_url
+                if r.keywords:
+                    paper.keywords = r.keywords
+                if r.keyword_categories:
+                    paper.keyword_categories = r.keyword_categories
+                paper.external_ids = {**(paper.external_ids or {}), **(r.external_ids or {})}
+                paper.validated = True
+                enriched_from = "pubmed"
+        except Exception:
+            pass
+
+    # 3. Try CrossRef if both failed
+    if not enriched_from:
+        try:
+            from app.clients.crossref import resolve_doi
+            cr = await resolve_doi(doi)
+            if cr and cr.get("title"):
+                paper.title = cr["title"]
+                paper.abstract = cr.get("abstract") or paper.abstract
+                paper.journal = cr.get("journal") or paper.journal
+                paper.publication_date = cr.get("publication_date") or paper.publication_date
+                paper.paper_type = cr.get("paper_type") or paper.paper_type
+                paper.open_access = cr.get("open_access", False)
+                paper.pdf_url = cr.get("pdf_url") or paper.pdf_url
+                paper.citation_count = max(paper.citation_count, cr.get("citation_count", 0))
+                paper.validated = True
+                enriched_from = "crossref"
+
+                # Add authors if missing
+                pa_result = await db.execute(
+                    select(PaperAuthor).where(PaperAuthor.paper_id == paper_id)
+                )
+                if not pa_result.scalars().first() and cr.get("authors"):
+                    for i, name in enumerate(cr["authors"]):
+                        auth_result = await db.execute(select(Author).where(Author.name == name))
+                        author = auth_result.scalar_one_or_none()
+                        if not author:
+                            author = Author(name=name)
+                            db.add(author)
+                            await db.flush()
+                        db.add(PaperAuthor(paper_id=paper_id, author_id=author.id, position=i))
+        except Exception:
+            pass
+
+    if not enriched_from:
+        return {"status": "not_found", "message": "Could not enrich from any source"}
+
+    # Reclassify into topics
+    from app.services.topic_classifier import TopicClassifier
+    await TopicClassifier().classify_paper(db, paper.id, paper.title, paper.abstract)
+
+    await db.flush()
+    return {"status": "enriched", "source": enriched_from, "title": paper.title}
+
+
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)
 async def get_paper_analysis(paper_id: int, db: AsyncSession = Depends(get_db)):
     """Get synthetic analysis for a paper."""

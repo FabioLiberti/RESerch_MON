@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { usePaper } from "@/hooks/usePapers";
@@ -285,6 +285,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           </Link>
         )}
 
+        {/* Enrich metadata */}
+        {paper.doi && <EnrichButton paperId={paperId} />}
+
         {/* Generate Analysis */}
         <AnalysisButton paperId={paperId} />
       </div>
@@ -527,15 +530,50 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     }
   }, [hasReport, status]);
 
+  const [analysisMode, setAnalysisMode] = useState<"quick" | "deep">("quick");
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const trigger = async () => {
     setStatus("loading");
     try {
-      await api.triggerAnalysis([paperId]);
+      const res = await api.triggerAnalysis([paperId], analysisMode);
+      // Check PDF status for deep mode
+      if (analysisMode === "deep" && res.pdf_status) {
+        const pdfInfo = res.pdf_status.find((p: any) => p.id === paperId);
+        if (pdfInfo?.status === "no_pdf_url") {
+          setStatus("error");
+          setUploadMsg("No PDF URL available. Upload the PDF manually.");
+          return;
+        }
+        if (pdfInfo?.status === "download_failed") {
+          setStatus("error");
+          setUploadMsg("PDF download failed. Upload the PDF manually.");
+          return;
+        }
+        if (pdfInfo?.status === "downloaded") {
+          setUploadMsg("PDF downloaded automatically");
+        }
+      }
       setStatus("queued");
       setStartTime(Date.now());
     } catch {
       setStatus("error");
     }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadMsg("Uploading...");
+    try {
+      const res = await api.uploadPdf(paperId, file);
+      setUploadMsg(`PDF uploaded (${res.size_kb} KB). You can now run Deep Analysis.`);
+      setStatus("idle");
+    } catch (err: any) {
+      setUploadMsg(`Upload failed: ${err.message}`);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   if (hasReport) {
@@ -591,7 +629,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     );
   }
 
-  return (
+  return (<>
     <button
       onClick={trigger}
       disabled={status === "loading"}
@@ -616,8 +654,95 @@ function AnalysisButton({ paperId }: { paperId: number }) {
         </>
       )}
     </button>
+    <select
+      value={analysisMode}
+      onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
+      className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
+    >
+      <option value="quick">Quick (abstract)</option>
+      <option value="deep">Deep (full PDF)</option>
+    </select>
+    {/* Upload PDF button */}
+    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs cursor-pointer hover:bg-[var(--muted)] transition-colors">
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+      Upload PDF
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf"
+        onChange={handleUpload}
+        className="hidden"
+      />
+    </label>
+    {uploadMsg && (
+      <span className={`text-xs ${uploadMsg.includes("failed") || uploadMsg.includes("No PDF") ? "text-red-400" : "text-emerald-400"}`}>
+        {uploadMsg}
+      </span>
+    )}
+    </>
   );
 }
+
+// --- Enrich Button ---
+
+function EnrichButton({ paperId }: { paperId: number }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [result, setResult] = useState<string | null>(null);
+
+  const enrich = async () => {
+    setStatus("loading");
+    try {
+      const res = await api.enrichPaper(paperId);
+      if (res.status === "enriched") {
+        setStatus("done");
+        setResult(`Enriched from ${res.source}`);
+        // Reload page to show updated data
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setStatus("error");
+        setResult("Not found on any source");
+      }
+    } catch {
+      setStatus("error");
+      setResult("Enrichment failed");
+    }
+  };
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <button
+        onClick={enrich}
+        disabled={status === "loading" || status === "done"}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 text-white text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
+      >
+        {status === "loading" ? (
+          <>
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Enriching...
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Enrich Metadata
+          </>
+        )}
+      </button>
+      {result && (
+        <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>
+          {result}
+        </span>
+      )}
+    </div>
+  );
+}
+
 
 // Reuse ElapsedTimer
 function ElapsedTimer({ startTime }: { startTime: number }) {

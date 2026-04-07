@@ -3,12 +3,13 @@
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.analysis import AnalysisQueue
 from app.models.paper import Paper
@@ -24,6 +25,7 @@ router = APIRouter()
 
 class AnalysisRequest(BaseModel):
     paper_ids: list[int]
+    mode: str = "quick"  # "quick" or "deep"
 
 
 class QueueItemResponse(BaseModel):
@@ -56,15 +58,67 @@ async def trigger_analysis(
             detail="Ollama is not running or Gemma4 model not available. Start Ollama first.",
         )
 
-    result = await enqueue_papers(db, body.paper_ids)
+    if body.mode not in ("quick", "deep"):
+        raise HTTPException(status_code=400, detail="Mode must be 'quick' or 'deep'")
+
+    # For deep mode, auto-download PDFs if not already available
+    pdf_status = []
+    if body.mode == "deep":
+        from app.services.pdf_manager import PDFManager
+        pdf_mgr = PDFManager()
+
+        for paper_id in body.paper_ids:
+            paper = await db.get(Paper, paper_id)
+            if not paper:
+                continue
+
+            if paper.pdf_local_path and Path(paper.pdf_local_path).exists():
+                pdf_status.append({"id": paper_id, "status": "ready"})
+                continue
+
+            if paper.pdf_url:
+                logger.info(f"Auto-downloading PDF for paper {paper_id}: {paper.pdf_url}")
+                try:
+                    year = paper.publication_date[:4] if paper.publication_date else None
+                    source = "download"
+                    # Detect source from paper sources
+                    from app.models.paper import PaperSource
+                    src_result = await db.execute(
+                        select(PaperSource.source_name).where(PaperSource.paper_id == paper_id).limit(1)
+                    )
+                    src_row = src_result.scalar_one_or_none()
+                    if src_row:
+                        source = src_row
+
+                    pdf_path = await pdf_mgr.download_pdf(
+                        paper.pdf_url, paper.title, source, year=year
+                    )
+                    if pdf_path:
+                        paper.pdf_local_path = str(pdf_path)
+                        pdf_status.append({"id": paper_id, "status": "downloaded"})
+                    else:
+                        pdf_status.append({"id": paper_id, "status": "download_failed"})
+                except Exception as e:
+                    logger.warning(f"PDF download failed for paper {paper_id}: {e}")
+                    pdf_status.append({"id": paper_id, "status": "download_failed"})
+            else:
+                pdf_status.append({"id": paper_id, "status": "no_pdf_url"})
+
+        await pdf_mgr.close()
+        await db.flush()
+
+    result = await enqueue_papers(db, body.paper_ids, mode=body.mode)
     background_tasks.add_task(process_queue)
 
-    return {
+    response = {
         "status": "started",
         "added": result["added"],
         "skipped": result["skipped"],
-        "message": f"{result['added']} papers queued for analysis",
+        "message": f"{result['added']} papers queued for {body.mode} analysis",
     }
+    if body.mode == "deep":
+        response["pdf_status"] = pdf_status
+    return response
 
 
 @router.get("/status")
@@ -129,6 +183,52 @@ async def list_analysis_reports(
             completed_at=q.completed_at.isoformat() if q.completed_at else None,
         ))
     return items
+
+
+@router.post("/{paper_id}/upload-pdf")
+async def upload_pdf(
+    paper_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a PDF file for a paper (for deep analysis when auto-download is not available)."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    # Validate file
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+
+    content = await file.read()
+    if len(content) < 1000:
+        raise HTTPException(status_code=400, detail="File too small, likely not a valid PDF")
+
+    # Check PDF magic bytes
+    if not content[:5].startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Invalid PDF file")
+
+    # Save to data/pdfs/uploads/
+    pdf_dir = Path(settings.pdf_storage_path) / "uploads"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sanitize filename
+    import re
+    safe_title = re.sub(r'[^\w\s-]', '', paper.title[:80]).strip().replace(' ', '_')
+    pdf_path = pdf_dir / f"{safe_title}_{paper_id}.pdf"
+
+    pdf_path.write_bytes(content)
+    paper.pdf_local_path = str(pdf_path)
+    await db.flush()
+
+    logger.info(f"PDF uploaded for paper {paper_id}: {pdf_path} ({len(content) / 1024:.0f} KB)")
+
+    return {
+        "status": "uploaded",
+        "path": str(pdf_path),
+        "size_kb": len(content) // 1024,
+    }
 
 
 @router.get("/{paper_id}/html")

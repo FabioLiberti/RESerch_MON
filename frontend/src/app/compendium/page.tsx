@@ -1,27 +1,33 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useRef, useEffect, useState } from "react";
 
 function CompendiumIframe() {
   const searchParams = useSearchParams();
   const topic = searchParams.get("topic");
   const section = searchParams.get("section");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [counter, setCounter] = useState(0);
 
-  // Build iframe src that CRA will read as window.location.pathname
-  // Next.js rewrites /topic/:id → /compendium/index.html
-  // so CRA sees pathname="/topic/intro-fl" and routes correctly
-  let iframeSrc = "/compendium/index.html";
-  if (topic) {
-    iframeSrc = `/topic/${topic}`;
-  } else if (section === "learning-path") {
-    iframeSrc = "/learning-path";
-  }
+  // Build iframe URL
+  const getSrc = () => {
+    if (topic) return `/topic/${topic}`;
+    if (section) return `/compendium/index.html?s=${section}&_=${counter}`;
+    return "/compendium/index.html";
+  };
+
+  // Force iframe reload when params change
+  useEffect(() => {
+    setCounter((c) => c + 1);
+  }, [topic, section]);
 
   return (
     <div className="space-y-4 -m-8">
       <iframe
-        src={iframeSrc}
+        key={`${topic}-${section}-${counter}`}
+        ref={iframeRef}
+        src={getSrc()}
         className="w-full border-0"
         style={{
           height: "calc(100vh)",

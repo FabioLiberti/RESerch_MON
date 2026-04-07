@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { usePapers } from "@/hooks/usePapers";
 import { useTopics } from "@/hooks/useAnalytics";
@@ -22,6 +23,7 @@ const TABS: { key: SourceTab; label: string; description: string }[] = [
 const API_SOURCES = ["pubmed", "semantic_scholar", "arxiv", "biorxiv", "medrxiv", "ieee"];
 
 export default function PapersPage() {
+  const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
@@ -30,6 +32,18 @@ export default function PapersPage() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [keywordFilter, setKeywordFilter] = useState("");
   const [labelFilter, setLabelFilter] = useState("");
+
+  // Sync URL params with state
+  useEffect(() => {
+    const label = searchParams.get("label");
+    const topic = searchParams.get("topic");
+    const keyword = searchParams.get("keyword");
+    const source = searchParams.get("source");
+    if (label !== null) { setLabelFilter(label); setPage(1); }
+    if (topic !== null) { setTopicFilter(topic); setPage(1); }
+    if (keyword !== null) { setKeywordFilter(keyword); setPage(1); }
+    if (source !== null) { setSourceFilter(source); setPage(1); }
+  }, [searchParams]);
   const [activeTab, setActiveTab] = useState<SourceTab>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [analyzing, setAnalyzing] = useState(false);
@@ -56,13 +70,15 @@ export default function PapersPage() {
     });
   };
 
+  const [analysisMode, setAnalysisMode] = useState<"quick" | "deep">("quick");
+
   const triggerAnalysis = async () => {
     if (selectedIds.size === 0) return;
     setAnalyzing(true);
     setAnalysisMsg(null);
     try {
-      const res = await api.triggerAnalysis(Array.from(selectedIds));
-      setAnalysisMsg(`${res.added} paper in coda per analisi${res.skipped ? ` (${res.skipped} già analizzati)` : ""}`);
+      const res = await api.triggerAnalysis(Array.from(selectedIds), analysisMode);
+      setAnalysisMsg(`${res.added} paper in coda per ${analysisMode} analysis${res.skipped ? ` (${res.skipped} già analizzati)` : ""}`);
       setSelectedIds(new Set());
     } catch (e: any) {
       setAnalysisMsg(e.message || "Errore avvio analisi");
@@ -116,9 +132,15 @@ export default function PapersPage() {
         <div>
           <h1 className="text-2xl font-bold">Papers</h1>
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
-            {data?.total ?? 0} papers
+            <span className="font-semibold text-[var(--foreground)]">{data?.total ?? 0}</span> papers
             {activeTab === "compendium" && " in Compendium"}
             {activeTab === "api" && " from API sources"}
+            {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter) && (
+              <span className="ml-1">(filtered)</span>
+            )}
+            {selectedIds.size > 0 && (
+              <span className="ml-2 text-[var(--primary)]">· {selectedIds.size} selected</span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -311,6 +333,14 @@ export default function PapersPage() {
                 `Genera Analisi (${selectedIds.size})`
               )}
             </button>
+            <select
+              value={analysisMode}
+              onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
+              className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
+            >
+              <option value="quick">Quick (abstract)</option>
+              <option value="deep">Deep (full PDF)</option>
+            </select>
           </div>
         </div>
       )}
