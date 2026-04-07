@@ -348,12 +348,41 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     if not enriched_from:
         return {"status": "not_found", "message": "Could not enrich from any source"}
 
+    # 4. Extract keywords from PDF if available
+    pdf_keywords_extracted = False
+    if paper.pdf_local_path:
+        try:
+            from app.services.pdf_keywords import extract_keywords_from_pdf
+            from pathlib import Path
+            if Path(paper.pdf_local_path).exists():
+                pdf_kw = extract_keywords_from_pdf(paper.pdf_local_path)
+                if pdf_kw:
+                    # Merge with existing keyword_categories
+                    existing_cats = paper.keyword_categories or {}
+                    existing_cats.update(pdf_kw)
+                    paper.keyword_categories = existing_cats
+                    # Also add to flat keywords list (dedup)
+                    existing_kw = set(k.lower() for k in (paper.keywords or []))
+                    new_kw = list(paper.keywords or [])
+                    for cat_kws in pdf_kw.values():
+                        for kw in cat_kws:
+                            if kw.lower() not in existing_kw:
+                                new_kw.append(kw)
+                                existing_kw.add(kw.lower())
+                    paper.keywords = new_kw
+                    pdf_keywords_extracted = True
+        except Exception:
+            pass
+
     # Reclassify into topics
     from app.services.topic_classifier import TopicClassifier
     await TopicClassifier().classify_paper(db, paper.id, paper.title, paper.abstract)
 
     await db.flush()
-    return {"status": "enriched", "source": enriched_from, "title": paper.title}
+    result = {"status": "enriched", "source": enriched_from, "title": paper.title}
+    if pdf_keywords_extracted:
+        result["pdf_keywords"] = True
+    return result
 
 
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)
