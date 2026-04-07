@@ -215,6 +215,14 @@ export const api = {
       body: JSON.stringify({ papers, label_id: labelId || null }),
     }),
 
+  // Zotero
+  syncToZotero: (paperIds: number[]) =>
+    fetchAPI<any>("/zotero/sync", { method: "POST", body: JSON.stringify({ paper_ids: paperIds }) }),
+  syncAllToZotero: () =>
+    fetchAPI<any>("/zotero/sync-all", { method: "POST" }),
+  syncAnalysisToZotero: (paperId: number) =>
+    fetchAPI<any>(`/zotero/sync-analysis/${paperId}`, { method: "POST" }),
+
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,
 };

@@ -83,14 +83,17 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               >
                 {a.name}
                 {a.orcid && (
-                  <a
-                    href={`https://orcid.org/${a.orcid}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-1 text-[var(--primary)]"
-                  >
-                    ORCID
-                  </a>
+                  <>
+                    {" "}
+                    <a
+                      href={`https://orcid.org/${a.orcid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[9px] text-[var(--primary)] hover:underline"
+                    >
+                      [ORCID]
+                    </a>
+                  </>
                 )}
               </span>
             ))}
@@ -608,6 +611,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
         >
           Analysis PDF
         </button>
+        <SyncAnalysisToZotero paperId={paperId} />
       </div>
     );
   }
@@ -737,6 +741,56 @@ function EnrichButton({ paperId }: { paperId: number }) {
       {result && (
         <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>
           {result}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+// --- Sync Analysis to Zotero ---
+
+function SyncAnalysisToZotero({ paperId }: { paperId: number }) {
+  const [status, setStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const sync = async () => {
+    setStatus("syncing");
+    setMsg(null);
+    try {
+      const res = await api.syncAnalysisToZotero(paperId);
+      setStatus("done");
+      setMsg(`Uploaded: ${res.filename}`);
+    } catch (e: any) {
+      setStatus("error");
+      setMsg(e.message || "Sync failed");
+    }
+  };
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <button
+        onClick={sync}
+        disabled={status === "syncing" || status === "done"}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 text-white text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
+      >
+        {status === "syncing" ? (
+          <>
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Syncing...
+          </>
+        ) : status === "done" ? (
+          "Synced to Zotero"
+        ) : (
+          "Sync Analysis to Zotero"
+        )}
+      </button>
+      {msg && (
+        <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>
+          {msg}
         </span>
       )}
     </div>

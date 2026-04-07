@@ -341,6 +341,20 @@ export default function PapersPage() {
               <option value="quick">Quick (abstract)</option>
               <option value="deep">Deep (full PDF)</option>
             </select>
+            <button
+              onClick={async () => {
+                setAnalysisMsg(null);
+                try {
+                  const res = await api.syncToZotero(Array.from(selectedIds));
+                  setAnalysisMsg(`Zotero: ${res.synced} synced${res.failed ? `, ${res.failed} failed` : ""}`);
+                } catch (e: any) {
+                  setAnalysisMsg(e.message || "Zotero sync failed");
+                }
+              }}
+              className="px-3 py-1.5 text-xs rounded-lg bg-cyan-700 text-white font-medium hover:bg-cyan-600"
+            >
+              Sync to Zotero
+            </button>
           </div>
         </div>
       )}
