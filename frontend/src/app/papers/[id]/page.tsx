@@ -302,6 +302,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Generate Analysis */}
         <AnalysisButton paperId={paperId} />
       </div>
+
+      {/* Analysis History */}
+      <AnalysisHistory paperId={paperId} />
     </div>
   );
 }
@@ -545,8 +548,12 @@ function AnalysisButton({ paperId }: { paperId: number }) {
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+
   const trigger = async () => {
     setStatus("loading");
+    setAnalysisResult(null);
+    setStartTime(Date.now());
     try {
       const res = await api.triggerAnalysis([paperId], analysisMode);
       // Check PDF status for deep mode
@@ -555,21 +562,32 @@ function AnalysisButton({ paperId }: { paperId: number }) {
         if (pdfInfo?.status === "no_pdf_url") {
           setStatus("error");
           setUploadMsg("No PDF URL available. Upload the PDF manually.");
+          setStartTime(null);
           return;
         }
         if (pdfInfo?.status === "download_failed") {
           setStatus("error");
           setUploadMsg("PDF download failed. Upload the PDF manually.");
+          setStartTime(null);
           return;
         }
-        if (pdfInfo?.status === "downloaded") {
-          setUploadMsg("PDF downloaded automatically");
-        }
       }
-      setStatus("queued");
-      setStartTime(Date.now());
+      const detail = res.details?.[0];
+      const engineName = res.engine === "claude" ? "Claude Opus 4.6 (API)" : "Gemma4:e4b (local)";
+      const duration = detail?.duration_s || (startTime ? Math.round((Date.now() - startTime) / 1000) : 0);
+      const chars = detail?.chars || "?";
+      const now = new Date().toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      setAnalysisResult(
+        `${analysisMode.toUpperCase()} analysis completed | Engine: ${engineName} | Output: ${chars} chars | Duration: ${duration}s | Completed: ${now}`
+      );
+      setStatus("idle");
+      setStartTime(null);
+      // Refresh history data
+      mutate(`/api/v1/analysis/${paperId}/history`);
+      mutate(`/api/v1/analysis/${paperId}/html`);
     } catch {
       setStatus("error");
+      setStartTime(null);
     }
   };
 
@@ -625,8 +643,23 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           disabled={status === "loading"}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--primary)] text-white text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50"
         >
-          Rigenera Analisi
+          {status === "loading" ? (
+            <>
+              <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {analysisMode === "deep" ? "Deep" : "Quick"} Analysis via Claude Opus 4.6... {startTime && <ElapsedTimer startTime={startTime} />}
+            </>
+          ) : (
+            "Rigenera Analisi"
+          )}
         </button>
+        {analysisResult && (
+          <div className="w-full mt-2 px-4 py-2.5 rounded-lg bg-emerald-800 border border-emerald-600 text-sm text-white font-medium">
+            {analysisResult}
+          </div>
+        )}
         <select
           value={analysisMode}
           onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
@@ -679,10 +712,10 @@ function AnalysisButton({ paperId }: { paperId: number }) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Sending...
+          Analyzing... {startTime && <ElapsedTimer startTime={startTime} />}
         </>
       ) : status === "error" ? (
-        "Error (Ollama running?)"
+        "Error — check configuration"
       ) : (
         <>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -692,6 +725,9 @@ function AnalysisButton({ paperId }: { paperId: number }) {
         </>
       )}
     </button>
+    {analysisResult && (
+      <span className="text-xs text-emerald-400">{analysisResult}</span>
+    )}
     <select
       value={analysisMode}
       onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
@@ -722,6 +758,131 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     </>
   );
 }
+
+// --- Analysis History ---
+
+interface AnalysisRun {
+  id: number;
+  mode: string;
+  status: string;
+  engine: string;
+  chars: number | null;
+  cost: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_s: number | null;
+  html_path: string | null;
+  pdf_path: string | null;
+}
+
+function AnalysisHistory({ paperId }: { paperId: number }) {
+  const { data: history } = useSWR<AnalysisRun[]>(
+    `/api/v1/analysis/${paperId}/history`,
+    authFetcher,
+    { shouldRetryOnError: false }
+  );
+
+  if (!history || history.length === 0) return null;
+
+  const engineLabel = (engine: string) => {
+    if (engine.includes("claude")) return "Claude Opus 4.6";
+    if (engine.includes("gemma")) return "Gemma4:e4b (local)";
+    return engine;
+  };
+
+  const formatDt = (iso: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
+      <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-3">Analysis History</h3>
+      <div className="space-y-2">
+        {history.map((run) => (
+          <details key={run.id} className="rounded-lg bg-[var(--secondary)]">
+            <summary className="flex items-center justify-between p-3 cursor-pointer">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                  run.mode === "deep" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
+                }`}>
+                  {run.mode.toUpperCase()}
+                </span>
+                <span className="text-xs font-medium">{engineLabel(run.engine)}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  run.status === "done" ? "bg-emerald-700 text-white" :
+                  run.status === "failed" ? "bg-red-700 text-white" :
+                  "bg-amber-700 text-white"
+                }`}>
+                  {run.status}
+                </span>
+                {run.duration_s !== null && (
+                  <span className="text-[10px] text-[var(--muted-foreground)]">
+                    {run.duration_s < 60 ? `${run.duration_s}s` : `${Math.floor(run.duration_s / 60)}m ${run.duration_s % 60}s`}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-1.5 ml-3 shrink-0">
+                {run.html_path && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const token = localStorage.getItem("fl-token");
+                      fetch(`/api/v1/analysis/${paperId}/html`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      }).then(r => r.text()).then(html => {
+                        const w = window.open();
+                        if (w) { w.document.write(html); w.document.close(); }
+                      });
+                    }}
+                    className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-600"
+                  >
+                    View
+                  </button>
+                )}
+                {run.pdf_path && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const token = localStorage.getItem("fl-token");
+                      fetch(`/api/v1/analysis/${paperId}/pdf`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      }).then(r => r.blob()).then(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `analysis_${run.mode}_${paperId}.pdf`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      });
+                    }}
+                    className="text-[10px] px-2 py-1 rounded bg-red-700 text-white hover:bg-red-600"
+                  >
+                    PDF
+                  </button>
+                )}
+              </div>
+            </summary>
+            <div className="px-3 pb-3 pt-1 text-[10px] text-[var(--muted-foreground)] space-y-1 border-t border-[var(--border)]">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                <span>Engine:</span><span className="text-[var(--foreground)]">{engineLabel(run.engine)}</span>
+                <span>Mode:</span><span className="text-[var(--foreground)]">{run.mode.toUpperCase()}</span>
+                <span>Start:</span><span className="text-[var(--foreground)]">{formatDt(run.started_at)}</span>
+                <span>End:</span><span className="text-[var(--foreground)]">{formatDt(run.completed_at)}</span>
+                <span>Duration:</span><span className="text-[var(--foreground)]">{run.duration_s !== null ? (run.duration_s < 60 ? `${run.duration_s} seconds` : `${Math.floor(run.duration_s / 60)}m ${run.duration_s % 60}s`) : "—"}</span>
+                {run.chars && <><span>Output:</span><span className="text-[var(--foreground)]">{run.chars.toLocaleString()} chars</span></>}
+                {run.cost && <><span>Est. Cost:</span><span className="text-[var(--foreground)]">${run.cost.toFixed(4)}</span></>}
+                {run.html_path && <><span>Report:</span><span className="text-[var(--foreground)] font-mono truncate">{run.html_path}</span></>}
+              </div>
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 // --- Enrich Button ---
 

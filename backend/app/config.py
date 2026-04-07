@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     zotero_api_key: str = ""
     zotero_user_id: str = ""
 
+    # Claude API
+    anthropic_api_key: str = ""
+
     # Authentication
     jwt_secret_key: str = "CHANGE-ME-IN-PRODUCTION"
     jwt_algorithm: str = "HS256"

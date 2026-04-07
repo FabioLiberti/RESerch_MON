@@ -1,6 +1,10 @@
-"""LLM-based paper analysis using local Ollama (Gemma4:e4b).
+"""LLM-based paper analysis.
 
-Supports two modes:
+Supports:
+- Claude API (Opus 4.6, Sonnet 4.6, Haiku 4.5) — default, high quality
+- Local Ollama (Gemma4:e4b) — fallback when no API key
+
+Modes:
 - Quick Analysis: abstract only
 - Deep Analysis: full PDF text
 """
@@ -14,8 +18,12 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Ollama settings (fallback)
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "gemma4:e4b"
+OLLAMA_MODEL = "gemma4:e4b"
+
+# Claude API settings (default)
+CLAUDE_MODEL = "claude-opus-4-6"
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +212,11 @@ Rispondi SOLO con il report strutturato. NON aggiungere note, commenti, disclaim
 # Functions
 # ---------------------------------------------------------------------------
 
+def is_claude_configured() -> bool:
+    """Check if Claude API is configured."""
+    return bool(settings.anthropic_api_key)
+
+
 async def check_ollama_available() -> bool:
     """Check if Ollama is running and the model is available."""
     try:
@@ -211,10 +224,15 @@ async def check_ollama_available() -> bool:
             res = await client.get("http://localhost:11434/api/tags")
             if res.status_code == 200:
                 models = [m["name"] for m in res.json().get("models", [])]
-                return any(MODEL_NAME.split(":")[0] in m for m in models)
+                return any(OLLAMA_MODEL.split(":")[0] in m for m in models)
     except Exception:
         pass
     return False
+
+
+def check_analysis_available() -> bool:
+    """Check if any analysis engine is available."""
+    return is_claude_configured()  # Claude is always available if configured
 
 
 def extract_text_from_pdf(pdf_path: str) -> str | None:
@@ -249,7 +267,7 @@ async def generate_paper_analysis(
     mode: str = "quick",
     pdf_path: str | None = None,
 ) -> str | None:
-    """Generate analysis for a single paper using Gemma4 via Ollama.
+    """Generate analysis using Claude API (default) or Ollama (fallback).
 
     Args:
         mode: "quick" (abstract only) or "deep" (full PDF text)
@@ -259,6 +277,7 @@ async def generate_paper_analysis(
     """
     kw_str = ", ".join(keywords) if keywords else "N/A"
 
+    # Build prompt
     if mode == "deep" and pdf_path:
         full_text = extract_text_from_pdf(pdf_path)
         if not full_text:
@@ -274,7 +293,7 @@ async def generate_paper_analysis(
                 keywords=kw_str,
                 full_text=full_text,
             )
-            num_predict = 8192  # Deep analysis needs more tokens
+            max_tokens = 8192
             logger.info(f"Deep analysis for '{title[:60]}' ({len(full_text)} chars from PDF)")
 
     if mode == "quick":
@@ -290,19 +309,68 @@ async def generate_paper_analysis(
             keywords=kw_str,
             abstract=abstract,
         )
-        num_predict = 4096
+        max_tokens = 4096
 
+    # Try Claude API first
+    if is_claude_configured():
+        result = await _generate_with_claude(prompt, max_tokens, mode, title)
+        if result:
+            return result
+        logger.warning("Claude API failed, trying Ollama fallback")
+
+    # Fallback to Ollama
+    return await _generate_with_ollama(prompt, max_tokens, mode, title)
+
+
+async def _generate_with_claude(prompt: str, max_tokens: int, mode: str, title: str) -> str | None:
+    """Generate analysis using Claude API."""
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        message = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        response_text = message.content[0].text
+        input_tokens = message.usage.input_tokens
+        output_tokens = message.usage.output_tokens
+
+        # Estimate cost
+        if "opus" in CLAUDE_MODEL:
+            cost = (input_tokens * 15 + output_tokens * 75) / 1_000_000
+        elif "sonnet" in CLAUDE_MODEL:
+            cost = (input_tokens * 3 + output_tokens * 15) / 1_000_000
+        else:
+            cost = (input_tokens * 0.8 + output_tokens * 4) / 1_000_000
+
+        logger.info(
+            f"{mode.upper()} analysis via Claude ({CLAUDE_MODEL}) for '{title[:60]}': "
+            f"{input_tokens}+{output_tokens} tokens, ~${cost:.4f}"
+        )
+
+        return response_text if response_text.strip() else None
+
+    except Exception as e:
+        logger.error(f"Claude API error for '{title[:60]}': {e}")
+        return None
+
+
+async def _generate_with_ollama(prompt: str, max_tokens: int, mode: str, title: str) -> str | None:
+    """Generate analysis using local Ollama (fallback)."""
     try:
         async with httpx.AsyncClient(timeout=900.0) as client:
             res = await client.post(
                 OLLAMA_URL,
                 json={
-                    "model": MODEL_NAME,
+                    "model": OLLAMA_MODEL,
                     "prompt": prompt,
                     "stream": False,
                     "options": {
                         "temperature": 0.3,
-                        "num_predict": num_predict,
+                        "num_predict": max_tokens,
                     },
                 },
             )
@@ -317,7 +385,7 @@ async def generate_paper_analysis(
             duration = data.get("total_duration", 0) / 1e9
 
             logger.info(
-                f"{mode.upper()} analysis for '{title[:60]}': "
+                f"{mode.upper()} analysis via Ollama for '{title[:60]}': "
                 f"{eval_count} tokens in {duration:.1f}s"
             )
 

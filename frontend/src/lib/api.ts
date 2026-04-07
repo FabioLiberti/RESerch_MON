@@ -147,6 +147,7 @@ export const api = {
   getAnalysisStatus: () => fetchAPI<any>("/analysis/status"),
   getAnalysisQueue: () => fetchAPI<any>("/analysis/queue"),
   getAnalysisReports: () => fetchAPI<any>("/analysis/reports"),
+  getAnalysisHistory: (paperId: number) => fetchAPI<any>(`/analysis/${paperId}/history`),
 
   // Smart Search
   smartSearch: (data: { keywords: string[]; sources: string[]; max_per_source: number; mode?: string }) =>

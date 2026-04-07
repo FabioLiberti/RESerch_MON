@@ -168,7 +168,7 @@ async def process_queue():
                     continue
 
                 # Render HTML report
-                html = render_paper_report(paper_data, analysis_text)
+                html = render_paper_report(paper_data, analysis_text, engine="Gemma4:e4b (Ollama)")
                 html_path = save_report(html, item.paper_id)
 
                 # Generate PDF
