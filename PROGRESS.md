@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v1.5.0 — LLM Paper Analysis Reports
-**Current Version:** v1.5.0
-**Status:** Individual paper analysis with Gemma4:e4b via Ollama
+**Current Phase:** v2.3.0 — Paper Comparison + Citations + Summary
+**Current Version:** v2.3.0
+**Status:** Full analysis pipeline with Claude Opus 4.6, comparison, citation refresh, summary cards
 
 ---
 
@@ -90,8 +90,10 @@
 | v1.2.0 | Integration | Unified papers, learning path, DOI enrichment |
 | v1.4.0 | Auth | JWT multi-user auth, RBAC, login page, user management |
 | v1.5.0 | LLM Analysis | Individual paper reports with Gemma4, keyword categorization, PDF |
+| v2.0.0–v2.2.7 | Claude Opus + Smart Search | Claude API analysis, Smart Search, labels, notes, bibliography import, Zotero sync, PDF fixes |
+| v2.3.0 | Comparison + Citations + Summary | Paper comparison table, citation refresh, summary card/LLM, keyword browser, Excel export |
 
-**Total files:** ~85 | **Total lines:** ~10,000+ | **Real papers tested:** 9/9 validated
+**Total files:** ~95 | **Total lines:** ~15,000+ | **Papers in DB:** 525+ | **Structured analyses:** 11+
 
 #### v1.1.0 — FedCompendium XL embed
 - FedCompendium embedded as iframe at /compendium
@@ -183,3 +185,75 @@
 - **Frontend Papers page**: checkbox selezione + barra "Genera Analisi" (admin only)
 - **Frontend Reports page**: tab Daily/Analysis, viewer HTML, download PDF
 - **Dependencies**: weasyprint
+
+#### v2.0.0–v2.2.7 — Claude Opus Analysis + Smart Search + UI
+- **Claude Opus 4.6 API** replaces Gemma4 as default analysis engine (~$0.33/paper, ~60-80s)
+- **AsyncAnthropic** client for non-blocking analysis (other requests served during analysis)
+- **Prompt v2**: R1-R6 rules, [Dal paper]/[Osservazione] labels, LaTeX formulas, Italian output
+- **Quick mode** (1500-2500 words, ~5 pages) + **Deep mode** (3500-6000 words, ~7+ pages)
+- **Auto PDF download** before analysis for both modes
+- **Direct backend call** from frontend (bypass Next.js proxy, 5min timeout)
+- **Structured data extraction** via Claude Haiku 4.5 (~$0.001/paper, 20+ fields)
+- **Smart Search**: keywords (AND logic), title, author, DOI across 5 sources
+- **Bibliography import**: paste bibliography text, extract DOIs with line-break handling, resolve via CrossRef
+- **CrossRef API** client for universal DOI resolution (no API key)
+- **Labels + Notes**: create/assign/remove labels per paper, personal notes with save
+- **Paper disable/enable** toggle
+- **PDF upload** + **View PDF** button serving local files from backend
+- **Enrich**: merge keywords from S2/PubMed/PDF (not overwrite), PDF keywords replace category
+- **PDF keyword extraction**: robust regex with Unicode-aware terminators
+- **Zotero sync**: label→sub-collection mapping, upload attachment 3-step flow
+- **JWT auto-refresh** on 401 in authFetcher
+- **Analysis History**: collapsible details with engine, duration, cost, chars
+- **High contrast buttons**: dark solid backgrounds with white text (user feedback)
+- **525+ papers** in DB from 5+ sources
+
+#### v2.3.0 — Paper Comparison + Citation Refresh + Summary (2026-04-08)
+- **Paper Comparison page** (`/comparison`):
+  - Structured comparison table: 13 fields (problem, method, FL techniques, datasets, metrics, privacy, reproducibility, novelty, relevance, healthcare, findings, limitations)
+  - Papers as columns, fields as rows, sticky "Field" column, horizontal scroll
+  - Best metric highlighted in green among comparable papers
+  - Research Gaps tab: aggregated FL techniques, datasets, privacy mechanisms, novelty/relevance distribution, common limitations
+  - Saved comparisons in localStorage with rename/delete, paper titles, labels
+  - Export to Excel (.xlsx) via SheetJS (dynamic import, 22 fields)
+  - "Confronta (N)" button in Papers batch selection bar
+  - Comparison link in sidebar navigation
+- **Citation Refresh Service** (`backend/app/services/citation_refresh.py`):
+  - `refresh_citations_batch()`: S2 batch API (500 papers/request), rate limited 1 req/sec
+  - `refresh_citation_single()`: single paper lookup via S2
+  - `fetch_s2_citation_count()`: quick DOI→citation count for discovery fallback
+  - Scheduled job at 07:00 UTC via APScheduler (after discovery at 06:00)
+  - S2 fallback during discovery for PubMed/arXiv/bioRxiv papers with 0 citations
+  - "Refresh Citations (N)" button in Papers batch selection (selected papers only)
+  - Refresh icon next to citation count in paper detail page
+- **Summary Card** (from structured data, zero cost):
+  - Section in paper detail page: Problem, Method, FL Techniques (badges), Datasets (badges), Performance (metric + delta + baseline), Assessment grid (Novelty, Relevance, Healthcare, Privacy, Reproducibility with stars), Key Findings, Limitations
+  - PDF export via dedicated 1-page HTML template with weasyprint
+  - Endpoint: `GET /analysis/{paper_id}/summary-card` (JSON) + `GET /analysis/{paper_id}/summary-card-pdf` (PDF)
+- **Summary LLM mode** (Claude Opus 4.6, 1 page, ~400 words):
+  - Third analysis mode alongside Quick and Deep
+  - Tight prompt: Overview (2-3 sentences), Method (2-3 sentences), Key Results (3-5 bullets), Assessment (novelty, relevance, healthcare, privacy, limitations)
+  - Max 1500 tokens output
+  - Badge arancione SUMMARY in analysis history and report header
+- **Keyword Browser** in Discovery Smart Search:
+  - `GET /papers/keywords/categorized` endpoint with case-insensitive dedup
+  - Browse panel with keywords grouped by category (Author Keywords, S2 Fields, MeSH Terms, etc.)
+  - Filter input to search within keywords
+  - Click to add keyword to search field (comma-separated), disabled if already selected
+  - Count badge per keyword showing paper frequency
+- **Zotero sync improvements**:
+  - Upload all analysis modes: summary → quick → deep (order avoids Zotero rename)
+  - Delete old `analysis_*` attachments before upload (case-insensitive match)
+  - `mtime` parameter added to upload auth (Zotero API requirement)
+  - Force re-upload when Zotero returns "exists" (append timestamp to change md5)
+  - If-None-Match/If-Match fallback chain for auth and register steps
+- **Papers list improvements**:
+  - Sort selector: 8 options (newest/oldest added, pub date newest/oldest, most/least cited, title A-Z/Z-A)
+  - Analysis badges deduplicated per mode with SUMMARY badge (arancione)
+  - Labels sorted alphabetically
+- **Label picker** redesigned:
+  - "ASSIGN EXISTING" section showing available labels with color dots
+  - "CREATE NEW" section with name input, color preset picker, Create & Add button
+  - Wider dropdown (w-64) with max-height scroll
+- **Mode badge in reports**: QUICK (blue), DEEP (purple), SUMMARY (orange) badge in HTML+PDF report header
+- **Dependencies added**: xlsx (SheetJS)

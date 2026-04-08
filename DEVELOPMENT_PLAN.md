@@ -1,6 +1,6 @@
 # FL-RESEARCH-MONITOR — Development Plan
 
-**Last Updated:** 2026-04-06
+**Last Updated:** 2026-04-08
 
 ---
 
@@ -116,9 +116,79 @@
 
 ---
 
+## Phase 8: Claude Opus Analysis + Smart Search (v2.0.0–v2.2.7) — COMPLETATA
+
+- [x] Claude Opus 4.6 API come engine principale (sostituisce Gemma4)
+- [x] AsyncAnthropic client per non-blocking durante analisi
+- [x] Prompt v2 con regole R1-R6, etichette [Dal paper]/[Osservazione], formule LaTeX
+- [x] Quick mode (~5 pagine, 1500-2500 parole) + Deep mode (~7+ pagine, 3500-6000 parole)
+- [x] Auto PDF download prima dell'analisi (entrambi i mode)
+- [x] Direct backend call (bypass Next.js proxy timeout)
+- [x] Structured data extraction via Claude Haiku 4.5 (20+ campi)
+- [x] Analysis History con CURRENT/SUPERSEDED per tipo
+- [x] Smart Search ibrido: keywords, title, author, DOI
+- [x] Bibliography import con DOI extraction multi-sorgente
+- [x] CrossRef API per DOI resolution universale
+- [x] Labels + Notes per paper
+- [x] Paper disable/enable toggle
+- [x] PDF upload + View PDF locale (serve file da backend)
+- [x] Enrich: keyword merge da S2, PubMed, PDF extraction
+- [x] PDF keyword extraction robusta (regex per section headings, footnotes, Unicode)
+- [x] Zotero sync con label→sub-collection mapping
+- [x] JWT auto-refresh su 401
+- [x] High contrast buttons (dark backgrounds, white text)
+
+---
+
+## Phase 9: Comparison + Citations + Summary (v2.3.0) — COMPLETATA
+
+- [x] **Paper Comparison page** (`/comparison`):
+  - Tabella strutturata (13 campi) con paper in colonne
+  - Research Gaps tab con aggregazioni (FL techniques, datasets, privacy, novelty, relevance)
+  - Saved comparisons repository in localStorage con rename/delete
+  - Export Excel (.xlsx) con SheetJS
+  - Bottone "Confronta" nella selezione batch Papers
+  - Sidebar link "Comparison"
+  - Labels per paper nel comparison data
+- [x] **Citation Refresh**:
+  - Service batch via S2 batch API (500 paper/request, rate limited)
+  - Service singolo paper via S2 single API
+  - Fallback S2 durante discovery (PubMed/arXiv/bioRxiv con citation_count=0)
+  - Job schedulato alle 07:00 UTC (dopo discovery 06:00)
+  - Bottone "Refresh Citations (N)" nella selezione batch Papers
+  - Icona refresh accanto a citation count nella pagina paper detail
+- [x] **Summary Card** (da dati strutturati, zero costi):
+  - Sezione nella pagina paper detail con Problem, Method, FL Techniques, Datasets, Performance, Assessment grid (Novelty, Relevance, Healthcare, Privacy, Reproducibility), Key Findings, Limitations
+  - PDF export con template dedicato 1 pagina
+- [x] **Summary LLM mode** (Claude Opus, 1 pagina, ~400 parole):
+  - Terza modalità analisi accanto a Quick e Deep
+  - Prompt tight: Overview, Method, Key Results, Assessment
+  - Max 1500 tokens, badge arancione SUMMARY
+  - Mode badge (QUICK/DEEP/SUMMARY) nel report header HTML+PDF
+- [x] **Keyword Browser** in Discovery Smart Search:
+  - Endpoint `/keywords/categorized` con dedup case-insensitive
+  - Pannello browse con keyword per categoria (Author Keywords, S2 Fields, MeSH Terms)
+  - Click per aggiungere keyword alla ricerca
+  - Tag selector con remove singolo e "Clear all"
+- [x] **Zotero sync migliorato**:
+  - Upload tutti i mode (summary → quick → deep, ordine per evitare rename)
+  - Delete vecchi attachment prima di upload
+  - Gestione "exists" con force re-upload
+  - mtime obbligatorio per Zotero API
+- [x] **Papers list**:
+  - Sort selector (8 opzioni: newest/oldest added, pub date, citations, title)
+  - Analysis badges deduplicati con SUMMARY mode (arancione)
+  - Labels in ordine alfabetico
+- [x] **Label picker** con sezione "Assign existing" + "Create new"
+
+---
+
 ## Future Enhancements
 
+- [ ] Deploy web (VPS con Docker Compose o Cloudflare Tunnel)
 - [ ] Citation network data from Semantic Scholar references
 - [ ] Author tracking and affiliation analytics
 - [ ] Full-text search via PostgreSQL tsvector
 - [ ] Webhook notifications for new high-relevance papers
+- [ ] Dashboard widgets per structured data aggregati
+- [ ] Comparison UI refinement dopo uso reale

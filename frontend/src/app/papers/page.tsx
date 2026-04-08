@@ -496,7 +496,7 @@ export default function PapersPage() {
                       </Link>
                       {paper.labels && paper.labels.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {paper.labels.map((l) => (
+                          {[...paper.labels].sort((a, b) => a.name.localeCompare(b.name)).map((l) => (
                             <span
                               key={l.id}
                               className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
