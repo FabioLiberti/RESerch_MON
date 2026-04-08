@@ -802,10 +802,11 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
       <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-3">Analysis History</h3>
       <div className="space-y-2">
-        {history.map((run) => (
+        {history.map((run, idx) => (
           <details key={run.id} className="rounded-lg bg-[var(--secondary)]">
             <summary className="flex items-center justify-between p-3 cursor-pointer">
               <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{history.length - idx}</span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                   run.mode === "deep" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
                 }`}>

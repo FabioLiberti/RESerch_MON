@@ -33,11 +33,30 @@ class QueueItemResponse(BaseModel):
     paper_id: int
     paper_title: str | None = None
     status: str
+    mode: str | None = None
+    engine: str | None = None
     error_message: str | None = None
     html_path: str | None = None
     pdf_path: str | None = None
     created_at: str
     completed_at: str | None = None
+
+
+def _parse_engine(error_message: str | None) -> str:
+    """Extract engine name from error_message metadata field."""
+    if not error_message:
+        return "unknown"
+    for part in error_message.split("|"):
+        if part.startswith("engine:"):
+            engine = part.replace("engine:", "")
+            if "opus" in engine:
+                return "Claude Opus 4.6"
+            if "sonnet" in engine:
+                return "Claude Sonnet 4.6"
+            if "gemma" in engine:
+                return "Gemma4:e4b"
+            return engine
+    return "unknown"
 
 
 @router.post("/trigger")
@@ -289,7 +308,7 @@ async def list_analysis_reports(
         .order_by(AnalysisQueue.completed_at.desc())
     )
     items = []
-    for row in result.all():
+    for i, row in enumerate(result.all()):
         q = row[0]
         title = row[1]
         items.append(QueueItemResponse(
@@ -297,6 +316,8 @@ async def list_analysis_reports(
             paper_id=q.paper_id,
             paper_title=title,
             status=q.status,
+            mode=q.analysis_mode or "quick",
+            engine=_parse_engine(q.error_message),
             html_path=q.html_path,
             pdf_path=q.pdf_path,
             created_at=q.created_at.isoformat() if q.created_at else "",

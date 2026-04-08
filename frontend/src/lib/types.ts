@@ -115,6 +115,8 @@ export interface AnalysisQueueItem {
   paper_id: number;
   paper_title: string | null;
   status: "pending" | "running" | "done" | "failed";
+  mode: string | null;
+  engine: string | null;
   error_message: string | null;
   html_path: string | null;
   pdf_path: string | null;

@@ -203,7 +203,7 @@ export default function ReportsPage() {
                 </p>
               </div>
             ) : (
-              analysisReports.map((item) => (
+              analysisReports.map((item, idx) => (
                 <button
                   key={item.id}
                   onClick={() => viewAnalysisReport(item.paper_id)}
@@ -214,22 +214,45 @@ export default function ReportsPage() {
                       : "bg-[var(--card)] border-[var(--border)] hover:border-[var(--border)]/80"
                   )}
                 >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{analysisReports.length - idx}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                      item.mode === "deep" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
+                    }`}>
+                      {(item.mode || "quick").toUpperCase()}
+                    </span>
+                    {item.engine && (
+                      <span className="text-[10px] text-[var(--muted-foreground)]">{item.engine}</span>
+                    )}
+                  </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-sm line-clamp-2">{item.paper_title}</span>
                     <div className="flex gap-1 shrink-0">
                       {item.pdf_path && (
-                        <a
-                          href={`/api/v1/analysis/${item.paper_id}/pdf`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const token = localStorage.getItem("fl-token");
+                            fetch(`/api/v1/analysis/${item.paper_id}/pdf`, {
+                              headers: token ? { Authorization: `Bearer ${token}` } : {},
+                            }).then(r => r.blob()).then(blob => {
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `analysis_${item.mode}_${item.paper_id}.pdf`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            });
+                          }}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-red-700 text-white hover:bg-red-600"
                         >
                           PDF
-                        </a>
+                        </button>
                       )}
                     </div>
                   </div>
                   <div className="text-xs text-[var(--muted-foreground)] mt-1">
-                    Completed {formatDate(item.completed_at)}
+                    {formatDate(item.completed_at)}
                   </div>
                 </button>
               ))
