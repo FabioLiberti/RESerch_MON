@@ -80,9 +80,9 @@ async def trigger_analysis(
     if body.mode not in ("quick", "deep"):
         raise HTTPException(status_code=400, detail="Mode must be 'quick' or 'deep'")
 
-    # For deep mode, auto-download PDFs if not already available
+    # Auto-download PDFs if not already available (both modes benefit from full text)
     pdf_status = []
-    if body.mode == "deep":
+    if True:  # Always try to get PDFs
         from app.services.pdf_manager import PDFManager
         pdf_mgr = PDFManager()
 
