@@ -578,6 +578,14 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           setUploadMsg("PDF download failed — analyzing from abstract only. Upload PDF for full analysis.");
         }
       }
+      // Check if nothing was analyzed
+      if (res.added === 0 && res.skipped > 0) {
+        setStatus("error");
+        setUploadMsg("No analysis possible — paper has no abstract and no PDF. Upload the PDF manually.");
+        setStartTime(null);
+        return;
+      }
+
       const detail = res.details?.[0];
       const engineName = res.engine === "claude" ? "Claude Opus 4.6 (API)" : "Gemma4:e4b (local)";
       const duration = detail?.duration_s || (startTime ? Math.round((Date.now() - startTime) / 1000) : 0);
