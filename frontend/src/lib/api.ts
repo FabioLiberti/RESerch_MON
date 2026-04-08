@@ -58,19 +58,42 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/** SWR-compatible fetcher that includes auth headers.
- *  Returns null silently if no token — prevents 401 spam before login. */
-export function authFetcher(url: string) {
+/** SWR-compatible fetcher that includes auth headers with auto-refresh. */
+export async function authFetcher(url: string) {
   const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
   if (!token) return Promise.reject(new Error("No token"));
 
-  return fetch(url, { headers: getAuthHeaders() }).then((r) => {
-    if (r.status === 401) {
-      throw new Error("Not authenticated");
+  let res = await fetch(url, { headers: getAuthHeaders() });
+
+  // Auto-refresh on 401
+  if (res.status === 401 && typeof window !== "undefined") {
+    const refreshToken = localStorage.getItem("fl-refresh-token");
+    if (refreshToken) {
+      const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        localStorage.setItem("fl-token", data.access_token);
+        // Retry with new token
+        res = await fetch(url, {
+          headers: { ...getAuthHeaders(), Authorization: `Bearer ${data.access_token}` },
+        });
+      } else {
+        localStorage.removeItem("fl-token");
+        localStorage.removeItem("fl-refresh-token");
+        localStorage.removeItem("fl-user");
+        throw new Error("Not authenticated");
+      }
     }
-    if (!r.ok) throw new Error(`API Error: ${r.status}`);
-    return r.json();
-  });
+  }
+
+  if (res.status === 401) throw new Error("Not authenticated");
+  if (!res.ok) throw new Error(`API Error: ${res.status}`);
+  return res.json();
 }
 
 export const api = {
@@ -140,9 +163,14 @@ export const api = {
 
   // Paper Analysis
   triggerAnalysis: (paperIds: number[], mode: string = "quick") =>
-    fetchAPI<any>("/analysis/trigger", {
+    fetch("http://localhost:8000/api/v1/analysis/trigger", {
       method: "POST",
+      headers: getAuthHeaders(),
       body: JSON.stringify({ paper_ids: paperIds, mode }),
+      signal: AbortSignal.timeout(300000), // 5 min timeout for Claude Opus
+    }).then((r) => {
+      if (!r.ok) throw new Error(`API Error: ${r.status}`);
+      return r.json();
     }),
   getAnalysisStatus: () => fetchAPI<any>("/analysis/status"),
   getAnalysisQueue: () => fetchAPI<any>("/analysis/queue"),

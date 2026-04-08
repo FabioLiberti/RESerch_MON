@@ -147,6 +147,24 @@ class DiscoveryService:
                         )
                         if pdf_path:
                             paper.pdf_local_path = str(pdf_path)
+                            # Extract keywords from PDF
+                            try:
+                                from app.services.pdf_keywords import extract_keywords_from_pdf
+                                pdf_kw = extract_keywords_from_pdf(str(pdf_path))
+                                if pdf_kw:
+                                    existing_cats = paper.keyword_categories or {}
+                                    existing_cats.update(pdf_kw)
+                                    paper.keyword_categories = existing_cats
+                                    existing_kw = set(k.lower() for k in (paper.keywords or []))
+                                    new_kw = list(paper.keywords or [])
+                                    for cat_kws in pdf_kw.values():
+                                        for kw in cat_kws:
+                                            if kw.lower() not in existing_kw:
+                                                new_kw.append(kw)
+                                                existing_kw.add(kw.lower())
+                                    paper.keywords = new_kw
+                            except Exception:
+                                pass
                     except Exception as e:
                         logger.warning(f"PDF download error: {e}")
 

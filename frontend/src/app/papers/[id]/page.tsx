@@ -582,9 +582,11 @@ function AnalysisButton({ paperId }: { paperId: number }) {
       );
       setStatus("idle");
       setStartTime(null);
-      // Refresh history data
-      mutate(`/api/v1/analysis/${paperId}/history`);
-      mutate(`/api/v1/analysis/${paperId}/html`);
+      // Refresh history and report data after short delay
+      setTimeout(() => {
+        mutate(`/api/v1/analysis/${paperId}/history`);
+        mutate(`/api/v1/analysis/${paperId}/html`);
+      }, 500);
     } catch {
       setStatus("error");
       setStartTime(null);

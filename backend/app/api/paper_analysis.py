@@ -114,13 +114,11 @@ async def trigger_analysis(
         from app.models.analysis import AnalysisQueue
         from datetime import datetime
 
-        print(f"=== CLAUDE TRIGGER: {len(body.paper_ids)} papers, mode={body.mode} ===")
         logger.info(f"Starting CLAUDE analysis for {len(body.paper_ids)} papers, mode={body.mode}")
 
         processed = 0
         for paper_id in body.paper_ids:
             start_time = datetime.utcnow()
-            print(f"=== Processing paper {paper_id} ===")
             logger.info(f"Processing paper {paper_id} for {body.mode} analysis")
 
             result_check = await db.execute(select(Paper).where(Paper.id == paper_id))
