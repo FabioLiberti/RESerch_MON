@@ -128,7 +128,7 @@ async def trigger_analysis(
 
     # With Claude API: run inline (fast, ~5-10s per paper)
     if is_claude_configured():
-        from app.services.llm_analysis import generate_paper_analysis, _generate_with_claude, QUICK_ANALYSIS_PROMPT, DEEP_ANALYSIS_PROMPT, extract_text_from_pdf
+        from app.services.llm_analysis import generate_paper_analysis
         from app.services.paper_report_generator import get_paper_data, render_paper_report, save_report, generate_pdf
         from app.models.analysis import AnalysisQueue
         from datetime import datetime
@@ -138,56 +138,29 @@ async def trigger_analysis(
         processed = 0
         for paper_id in body.paper_ids:
             start_time = datetime.utcnow()
-            logger.info(f"Processing paper {paper_id} for {body.mode} analysis")
 
             result_check = await db.execute(select(Paper).where(Paper.id == paper_id))
             paper = result_check.scalar_one_or_none()
             if not paper:
-                logger.warning(f"Paper {paper_id} not found in DB")
                 continue
 
             paper_data = await get_paper_data(db, paper_id)
             if not paper_data:
-                logger.warning(f"Paper data not found for {paper_id}")
                 continue
 
-            logger.info(f"Paper {paper_id}: title='{paper.title[:40]}', abstract={len(paper.abstract or '')} chars")
-
-            # Build prompt directly here to ensure Claude is used
-            kw_str = ", ".join(paper.keywords) if paper.keywords else "N/A"
-
-            if body.mode == "deep" and paper.pdf_local_path:
-                full_text = extract_text_from_pdf(paper.pdf_local_path)
-                if full_text:
-                    prompt = DEEP_ANALYSIS_PROMPT.format(
-                        title=paper.title, journal=paper.journal or "N/A",
-                        date=paper.publication_date or "N/A", doi=paper.doi or "N/A",
-                        paper_type=paper.paper_type or "N/A", keywords=kw_str,
-                        full_text=full_text,
-                    )
-                    max_tokens = 8192
-                    logger.info(f"Deep analysis for paper {paper_id}: {len(full_text)} chars from PDF")
-                else:
-                    prompt = QUICK_ANALYSIS_PROMPT.format(
-                        title=paper.title, journal=paper.journal or "N/A",
-                        date=paper.publication_date or "N/A", doi=paper.doi or "N/A",
-                        paper_type=paper.paper_type or "N/A", keywords=kw_str,
-                        abstract=paper.abstract or "",
-                    )
-                    max_tokens = 4096
-                    logger.warning(f"PDF extraction failed for {paper_id}, using quick mode")
-            else:
-                prompt = QUICK_ANALYSIS_PROMPT.format(
-                    title=paper.title, journal=paper.journal or "N/A",
-                    date=paper.publication_date or "N/A", doi=paper.doi or "N/A",
-                    paper_type=paper.paper_type or "N/A", keywords=kw_str,
-                    abstract=paper.abstract or "",
-                )
-                max_tokens = 4096
-
-            # Call Claude directly — NO Ollama fallback
-            logger.info(f"Calling Claude Opus for paper {paper_id}, prompt length: {len(prompt)} chars")
-            analysis_text = await _generate_with_claude(prompt, max_tokens, body.mode, paper.title)
+            # Use unified generate_paper_analysis with prompt v2
+            analysis_text = await generate_paper_analysis(
+                title=paper.title,
+                abstract=paper.abstract,
+                journal=paper.journal,
+                date=paper.publication_date,
+                doi=paper.doi,
+                paper_type=paper.paper_type,
+                keywords=paper.keywords,
+                mode=body.mode,
+                pdf_path=paper.pdf_local_path,
+                paper_id=paper_id,
+            )
 
             if analysis_text:
                 end_time = datetime.utcnow()
