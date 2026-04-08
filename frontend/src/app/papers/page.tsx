@@ -422,7 +422,8 @@ export default function PapersPage() {
                     className={cn(
                       "border-b border-[var(--border)] hover:bg-[var(--secondary)] transition-colors",
                       isCompendium && "border-l-2 border-l-purple-500/40",
-                      selectedIds.has(paper.id) && "bg-[var(--primary)]/5"
+                      selectedIds.has(paper.id) && "bg-[var(--primary)]/5",
+                      paper.disabled && "opacity-40"
                     )}
                   >
                     {isAdmin && (
@@ -464,6 +465,20 @@ export default function PapersPage() {
                               {a.mode === "deep" ? "DEEP" : "QUICK"}
                             </span>
                           ))}
+                        </div>
+                      )}
+                      {(paper.has_note || paper.disabled) && (
+                        <div className="flex gap-1 mt-1">
+                          {paper.has_note && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-700 text-white" title="Has note">
+                              NOTE
+                            </span>
+                          )}
+                          {paper.disabled && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-800 text-white" title="Paper disabled">
+                              DISABLED
+                            </span>
+                          )}
                         </div>
                       )}
                       {paper.keywords && paper.keywords.length > 0 && (

@@ -25,7 +25,7 @@ from app.schemas.paper import (
 router = APIRouter()
 
 
-def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None) -> PaperSummary:
+def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None, has_note: bool = False) -> PaperSummary:
     return PaperSummary(
         id=paper.id,
         doi=paper.doi,
@@ -41,6 +41,8 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         keywords=paper.keywords,
         labels=labels or [],
         analyses=analyses or [],
+        has_note=has_note,
+        disabled=paper.disabled or False,
         created_at=paper.created_at,
     )
 
@@ -63,6 +65,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         external_ids=paper.external_ids,
         validated=paper.validated,
         zotero_key=paper.zotero_key,
+        disabled=paper.disabled or False,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -188,8 +191,19 @@ async def list_papers(
         for pid, mode, status in analyses_result.all():
             paper_analyses_map.setdefault(pid, []).append({"mode": mode or "quick", "status": status})
 
+    # Fetch notes for all papers
+    from app.models.label import PaperNote
+    notes_result = await db.execute(
+        select(PaperNote.paper_id)
+        .where(PaperNote.paper_id.in_(paper_ids))
+    ) if paper_ids else None
+    paper_has_note: set[int] = set()
+    if notes_result:
+        for (pid,) in notes_result.all():
+            paper_has_note.add(pid)
+
     return PaperListResponse(
-        items=[_paper_to_summary(p, paper_labels_map.get(p.id, []), paper_analyses_map.get(p.id, [])) for p in papers],
+        items=[_paper_to_summary(p, paper_labels_map.get(p.id, []), paper_analyses_map.get(p.id, []), p.id in paper_has_note) for p in papers],
         total=total,
         page=page,
         per_page=per_page,
@@ -395,6 +409,17 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     if pdf_keywords_extracted:
         result["pdf_keywords"] = True
     return result
+
+
+@router.post("/{paper_id}/toggle-disabled")
+async def toggle_disabled(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Toggle the disabled status of a paper."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    paper.disabled = not (paper.disabled or False)
+    await db.flush()
+    return {"disabled": paper.disabled}
 
 
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)

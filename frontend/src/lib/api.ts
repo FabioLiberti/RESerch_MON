@@ -105,6 +105,7 @@ export const api = {
   getPaper: (id: number) => fetchAPI<any>(`/papers/${id}`),
   getPaperAnalysis: (id: number) => fetchAPI<any>(`/papers/${id}/analysis`),
   enrichPaper: (id: number) => fetchAPI<any>(`/papers/${id}/enrich`, { method: "POST" }),
+  toggleDisabled: (id: number) => fetchAPI<any>(`/papers/${id}/toggle-disabled`, { method: "POST" }),
   uploadPdf: (paperId: number, file: File) => {
     const formData = new FormData();
     formData.append("file", file);

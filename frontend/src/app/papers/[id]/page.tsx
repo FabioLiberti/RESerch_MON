@@ -299,6 +299,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Enrich metadata */}
         {paper.doi && <EnrichButton paperId={paperId} />}
 
+        {/* Disable toggle */}
+        <DisableToggle paperId={paperId} initialDisabled={paper.disabled || false} />
+
         {/* Generate Analysis */}
         <AnalysisButton paperId={paperId} />
       </div>
@@ -581,7 +584,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
       // Check if nothing was analyzed
       if (res.added === 0 && res.skipped > 0) {
         setStatus("error");
-        setUploadMsg("No analysis possible — paper has no abstract and no PDF. Upload the PDF manually.");
+        setUploadMsg(null);
         setStartTime(null);
         return;
       }
@@ -693,7 +696,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUpload} className="hidden" />
         </label>
         {uploadMsg && (
-          <span className={`text-xs ${uploadMsg.includes("failed") ? "text-red-400" : "text-emerald-400"}`}>{uploadMsg}</span>
+          <span className={`text-xs ${uploadMsg.includes("failed") || uploadMsg.includes("ERROR") || uploadMsg.includes("No PDF") ? "text-red-400" : "text-emerald-400"}`}>{uploadMsg}</span>
         )}
       </div>
     );
@@ -731,7 +734,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           Analyzing... {startTime && <ElapsedTimer startTime={startTime} />}
         </>
       ) : status === "error" ? (
-        "Error — check configuration"
+        <span className="text-red-300">No abstract and no PDF — upload PDF to analyze</span>
       ) : (
         <>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -897,6 +900,31 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
         ))}
       </div>
     </div>
+  );
+}
+
+
+// --- Disable Toggle ---
+
+function DisableToggle({ paperId, initialDisabled }: { paperId: number; initialDisabled: boolean }) {
+  const [disabled, setDisabled] = useState(initialDisabled);
+
+  const toggle = async () => {
+    const res = await api.toggleDisabled(paperId);
+    setDisabled(res.disabled);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+        disabled
+          ? "bg-red-800 text-white hover:bg-red-700"
+          : "bg-[var(--secondary)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]"
+      }`}
+    >
+      {disabled ? "DISABLED — Click to Enable" : "Disable Paper"}
+    </button>
   );
 }
 

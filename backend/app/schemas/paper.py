@@ -45,6 +45,8 @@ class PaperSummary(BaseModel):
     keywords: list[str]
     labels: list[dict] = []
     analyses: list[dict] = []
+    has_note: bool = False
+    disabled: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -67,6 +69,7 @@ class PaperDetail(BaseModel):
     external_ids: dict
     validated: bool
     zotero_key: str | None = None
+    disabled: bool = False
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

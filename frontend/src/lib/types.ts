@@ -13,6 +13,8 @@ export interface Paper {
   keywords: string[];
   labels: { id: number; name: string; color: string }[];
   analyses: { mode: string; status: string }[];
+  has_note: boolean;
+  disabled: boolean;
   created_at: string;
 }
 
@@ -29,6 +31,7 @@ export interface PaperDetail extends Paper {
   external_ids: Record<string, string | null>;
   validated: boolean;
   zotero_key: string | null;
+  disabled: boolean;
   authors: Author[];
   keyword_categories: Record<string, string[]>;
   source_details: PaperSource[];
