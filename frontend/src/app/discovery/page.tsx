@@ -879,6 +879,7 @@ function SmartSearchSection() {
   const [showTopicForm, setShowTopicForm] = useState(false);
   const [topicName, setTopicName] = useState("");
   const [savingTopic, setSavingTopic] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Poll for job status when a job is active
   const { data: jobStatus, error: jobError } = useSWR(
@@ -1060,86 +1061,130 @@ function SmartSearchSection() {
       </button>
 
       {smartExpanded && <div className="px-6 pb-6">
-        {/* Info button */}
-        <div className="relative">
-          <button
-            onClick={() => setShowInfo(!showInfo)}
-            className="w-5 h-5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center text-xs font-semibold transition-colors"
-          >
-            i
-          </button>
-          {showInfo && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowInfo(false)} />
-              <div className="absolute left-0 top-8 z-50 w-80 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl p-4 space-y-3 text-xs">
-                <p className="font-medium text-sm text-[var(--foreground)]">Search Rules</p>
-                <div className="space-y-2 text-[var(--secondary-foreground)]">
-                  <p><strong>Keywords separated by comma</strong> — each keyword is combined with AND logic across all sources.</p>
-                  <p>Example: <code className="bg-[var(--muted)] px-1 py-0.5 rounded">federated learning, blockchain</code> searches papers containing <em>both</em> terms.</p>
-                  <p>For OR logic, write terms as a single keyword: <code className="bg-[var(--muted)] px-1 py-0.5 rounded">OMOP OHDSI</code></p>
-                  <div className="pt-2 border-t border-[var(--border)]">
-                    <p className="font-medium text-[var(--foreground)] mb-1">Auto-generated queries per source:</p>
-                    <ul className="space-y-1 text-[10px] font-mono">
-                      <li><span style={{color: SOURCE_COLORS.pubmed}}>PubMed</span>: "kw1"[Title/Abstract] AND "kw2"[...]</li>
-                      <li><span style={{color: SOURCE_COLORS.arxiv}}>arXiv</span>: (ti:"kw1" OR abs:"kw1") AND ...</li>
-                      <li><span style={{color: SOURCE_COLORS.biorxiv}}>bioRxiv</span>: plain text (local keyword filter)</li>
-                      <li><span style={{color: SOURCE_COLORS.semantic_scholar}}>S. Scholar</span>: full text search</li>
-                      <li><span style={{color: SOURCE_COLORS.ieee}}>IEEE</span>: "kw1" AND "kw2"</li>
-                    </ul>
-                  </div>
-                  <div className="pt-2 border-t border-[var(--border)]">
-                    <p className="font-medium text-[var(--foreground)] mb-1">Tips:</p>
-                    <ul className="space-y-0.5">
-                      <li>2-3 keywords give the best balance</li>
-                      <li>4+ keywords may be too restrictive</li>
-                      <li>Use "Save as Topic" to reuse this search in scheduled Discovery</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
 
       {/* Search form */}
       <div className="space-y-3">
         {/* Mode selector */}
-        <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--secondary)] w-fit">
-          {([
-            { key: "keywords", label: "Keywords" },
-            { key: "title", label: "Title" },
-            { key: "author", label: "Author" },
-            { key: "doi", label: "DOI" },
-          ] as const).map((m) => (
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--secondary)] w-fit">
+            {([
+              { key: "keywords", label: "Keywords" },
+              { key: "title", label: "Title" },
+              { key: "author", label: "Author" },
+              { key: "doi", label: "DOI" },
+            ] as const).map((m) => (
+              <button
+                key={m.key}
+                onClick={() => { setSearchMode(m.key); setShowSuggestions(false); }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  searchMode === m.key
+                    ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                )}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {/* Info button */}
+          <div className="relative">
             <button
-              key={m.key}
-              onClick={() => setSearchMode(m.key)}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                searchMode === m.key
-                  ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
-                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-              )}
+              onClick={() => setShowInfo(!showInfo)}
+              className="w-5 h-5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center text-xs font-semibold transition-colors"
             >
-              {m.label}
+              i
             </button>
-          ))}
+            {showInfo && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowInfo(false)} />
+                <div className="absolute left-0 top-8 z-50 w-80 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl p-4 space-y-3 text-xs">
+                  <p className="font-medium text-sm text-[var(--foreground)]">Search Rules</p>
+                  <div className="space-y-2 text-[var(--secondary-foreground)]">
+                    <p><strong>Keywords separated by comma</strong> — each keyword is combined with AND logic across all sources.</p>
+                    <p>Example: <code className="bg-[var(--muted)] px-1 py-0.5 rounded">federated learning, blockchain</code> searches papers containing <em>both</em> terms.</p>
+                    <p>For OR logic, write terms as a single keyword: <code className="bg-[var(--muted)] px-1 py-0.5 rounded">OMOP OHDSI</code></p>
+                    <div className="pt-2 border-t border-[var(--border)]">
+                      <p className="font-medium text-[var(--foreground)] mb-1">Auto-generated queries per source:</p>
+                      <ul className="space-y-1 text-[10px] font-mono">
+                        <li><span style={{color: SOURCE_COLORS.pubmed}}>PubMed</span>: &quot;kw1&quot;[Title/Abstract] AND &quot;kw2&quot;[...]</li>
+                        <li><span style={{color: SOURCE_COLORS.arxiv}}>arXiv</span>: (ti:&quot;kw1&quot; OR abs:&quot;kw1&quot;) AND ...</li>
+                        <li><span style={{color: SOURCE_COLORS.biorxiv}}>bioRxiv</span>: plain text (local keyword filter)</li>
+                        <li><span style={{color: SOURCE_COLORS.semantic_scholar}}>S. Scholar</span>: full text search</li>
+                        <li><span style={{color: SOURCE_COLORS.ieee}}>IEEE</span>: &quot;kw1&quot; AND &quot;kw2&quot;</li>
+                      </ul>
+                    </div>
+                    <div className="pt-2 border-t border-[var(--border)]">
+                      <p className="font-medium text-[var(--foreground)] mb-1">Tips:</p>
+                      <ul className="space-y-0.5">
+                        <li>2-3 keywords give the best balance</li>
+                        <li>4+ keywords may be too restrictive</li>
+                        <li>Use &quot;Save as Topic&quot; to reuse this search in scheduled Discovery</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
+        {/* Selected keywords tags */}
+        {searchMode === "keywords" && keywords.trim() && (
+          <div className="flex flex-wrap gap-1.5">
+            {keywords.split(",").map((kw) => kw.trim()).filter(Boolean).map((kw, i) => (
+              <span
+                key={`${kw}-${i}`}
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[var(--primary)] text-white font-medium"
+              >
+                {kw}
+                <button
+                  onClick={() => {
+                    const updated = keywords.split(",").map((s) => s.trim()).filter(Boolean).filter((_, idx) => idx !== i);
+                    setKeywords(updated.join(", "));
+                  }}
+                  className="ml-0.5 hover:opacity-70"
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+            {keywords.split(",").filter((s) => s.trim()).length > 1 && (
+              <button
+                onClick={() => setKeywords("")}
+                className="text-[10px] px-2 py-1 rounded-full bg-amber-600 text-white font-medium hover:bg-amber-500"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && doSearch()}
-            placeholder={
-              searchMode === "keywords" ? "Keywords separated by comma (e.g. federated learning, blockchain)" :
-              searchMode === "title" ? "Paper title or partial title" :
-              searchMode === "author" ? "Author name (e.g. Smith, John)" :
-              "DOI (e.g. 10.1234/example)"
-            }
-            className="flex-1 px-4 py-2.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-          />
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={keywords}
+              onChange={(e) => setKeywords(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && doSearch()}
+              onFocus={() => searchMode === "keywords" && setShowSuggestions(true)}
+              placeholder={
+                searchMode === "keywords" ? "Keywords separated by comma (e.g. federated learning, blockchain)" :
+                searchMode === "title" ? "Paper title or partial title" :
+                searchMode === "author" ? "Author name (e.g. Smith, John)" :
+                "DOI (e.g. 10.1234/example)"
+              }
+              className="w-full px-4 py-2.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+            />
+            {searchMode === "keywords" && !showSuggestions && (
+              <button
+                onClick={() => setShowSuggestions(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-1 rounded bg-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                Browse keywords
+              </button>
+            )}
+          </div>
           <button
             onClick={doSearch}
             disabled={searching || !keywords.trim()}
@@ -1158,6 +1203,20 @@ function SmartSearchSection() {
             )}
           </button>
         </div>
+
+        {/* Keyword suggestions panel */}
+        {searchMode === "keywords" && showSuggestions && (
+          <KeywordSuggestionsPanel
+            currentKeywords={keywords}
+            onSelect={(kw) => {
+              const current = keywords.split(",").map((s) => s.trim()).filter(Boolean);
+              if (!current.some((k) => k.toLowerCase() === kw.toLowerCase())) {
+                setKeywords(current.length > 0 ? `${keywords}, ${kw}` : kw);
+              }
+            }}
+            onClose={() => setShowSuggestions(false)}
+          />
+        )}
 
         {/* Sources + max */}
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1504,6 +1563,122 @@ function SourcePapers({ sourceName }: { sourceName: string }) {
           View all {data.total} papers from {SOURCE_LABELS[sourceName] || sourceName}
         </Link>
       )}
+    </div>
+  );
+}
+
+
+// --- Keyword Suggestions Panel ---
+
+interface KwItem { keyword: string; count: number }
+
+function KeywordSuggestionsPanel({
+  currentKeywords,
+  onSelect,
+  onClose,
+}: {
+  currentKeywords: string;
+  onSelect: (kw: string) => void;
+  onClose: () => void;
+}) {
+  const { data } = useSWR<Record<string, KwItem[]>>(
+    "/api/v1/papers/keywords/categorized",
+    authFetcher
+  );
+  const [filter, setFilter] = useState("");
+
+  const selected = new Set(
+    currentKeywords.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+  );
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    "Author Keywords": "bg-emerald-700",
+    "S2 Fields": "bg-indigo-700",
+    "Fields of Study": "bg-blue-700",
+    "MeSH Terms": "bg-purple-700",
+    "Index Terms": "bg-teal-700",
+  };
+
+  if (!data) {
+    return (
+      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
+        <div className="h-20 flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  const filterLower = filter.toLowerCase();
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-medium text-[var(--muted-foreground)]">
+          Browse existing keywords — click to add to search
+        </h4>
+        <button
+          onClick={onClose}
+          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+        >
+          &times; Close
+        </button>
+      </div>
+
+      <input
+        type="text"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter keywords..."
+        className="w-full px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none focus:border-[var(--primary)]"
+      />
+
+      <div className="space-y-3 max-h-64 overflow-y-auto">
+        {Object.entries(data).map(([category, items]) => {
+          const filtered = items.filter((i) =>
+            filterLower ? i.keyword.toLowerCase().includes(filterLower) : true
+          );
+          if (filtered.length === 0) return null;
+
+          const color = CATEGORY_COLORS[category] || "bg-gray-600";
+
+          return (
+            <div key={category}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={cn("text-[9px] px-1.5 py-0.5 rounded text-white font-semibold", color)}>
+                  {category}
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground)]">{filtered.length} keywords</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {filtered.slice(0, 40).map((item) => {
+                  const isSelected = selected.has(item.keyword.toLowerCase());
+                  return (
+                    <button
+                      key={item.keyword}
+                      onClick={() => !isSelected && onSelect(item.keyword)}
+                      disabled={isSelected}
+                      className={cn(
+                        "text-[10px] px-2 py-0.5 rounded transition-colors",
+                        isSelected
+                          ? "bg-[var(--primary)]/30 text-[var(--primary)] cursor-default"
+                          : "bg-gray-700 text-white hover:bg-gray-600"
+                      )}
+                      title={`${item.count} paper${item.count > 1 ? "s" : ""}`}
+                    >
+                      {item.keyword}
+                      <span className="ml-1 opacity-50">{item.count}</span>
+                    </button>
+                  );
+                })}
+                {filtered.length > 40 && (
+                  <span className="text-[10px] text-[var(--muted-foreground)] px-1 py-0.5">+{filtered.length - 40} more</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

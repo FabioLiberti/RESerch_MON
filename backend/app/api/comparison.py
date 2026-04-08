@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.paper import Paper
+from app.models.label import Label, PaperLabel
 from app.models.structured_analysis import StructuredAnalysis
 from app.models.user import User
 from app.api.auth import get_current_user
@@ -35,6 +36,16 @@ async def get_comparison_data(
         .order_by(StructuredAnalysis.created_at.desc())
     )
 
+    # Fetch labels for all requested papers
+    label_result = await db.execute(
+        select(PaperLabel.paper_id, Label.name, Label.color)
+        .join(Label, PaperLabel.label_id == Label.id)
+        .where(PaperLabel.paper_id.in_(ids))
+    )
+    paper_labels: dict[int, list[dict]] = {}
+    for pid, lname, lcolor in label_result.all():
+        paper_labels.setdefault(pid, []).append({"name": lname, "color": lcolor})
+
     # Keep only latest per paper
     seen = set()
     items = []
@@ -49,6 +60,7 @@ async def get_comparison_data(
             "title": title,
             "doi": doi,
             "publication_date": pub_date,
+            "labels": paper_labels.get(sa.paper_id, []),
             "problem_addressed": sa.problem_addressed,
             "proposed_method": sa.proposed_method,
             "fl_techniques": sa.fl_techniques,

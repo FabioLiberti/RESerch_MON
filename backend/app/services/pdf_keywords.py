@@ -5,14 +5,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Unicode-aware whitespace class (includes \u2002, \u2003, \xa0, etc.)
+_S = r'[\s\u2002\u2003\u00a0\x07]'
+# Terminators: blank line, section headings (I., II., 1, 1., 2, INTRODUCTION, Abstract, etc.)
+_TERM = rf'(?:\n{_S}*\n|\n{_S}*(?:[IVX]+\.?{_S}+\S|\d+\.?{_S}+\S|INTRODUCTION|ABSTRACT|Copyright|©|\u00a9|\*{_S}*\S))'
+
 # Patterns for keyword sections in papers
 KEYWORD_PATTERNS = [
     # "Keywords: word1, word2, word3" or "Keywords  word1 · word2 · word3"
-    re.compile(r'(?:Keywords|Key\s*words|KEYWORDS|KEY\s*WORDS)\s*[:\-—\s]\s*(.+?)(?:\n\s*\n|\n\d|\n[A-Z][a-z]+ )', re.DOTALL | re.IGNORECASE),
+    re.compile(r'(?:Keywords|Key\s*words|KEYWORDS|KEY\s*WORDS)\s*[:\-—\s]\s*(.+?)' + _TERM, re.DOTALL | re.IGNORECASE),
     # "Index Terms—word1, word2, word3"
-    re.compile(r'(?:Index\s+Terms|INDEX\s+TERMS)\s*[:\-—]\s*(.+?)(?:\n\s*\n|\n\d|\n[A-Z][a-z]+ )', re.DOTALL | re.IGNORECASE),
+    re.compile(r'(?:Index\s+Terms|INDEX\s+TERMS)\s*[:\-—]\s*(.+?)' + _TERM, re.DOTALL | re.IGNORECASE),
     # "Subject terms: word1; word2; word3"
-    re.compile(r'(?:Subject\s+terms)\s*[:\-—]\s*(.+?)(?:\n\s*\n|\n\d|\n[A-Z][a-z]+ )', re.DOTALL | re.IGNORECASE),
+    re.compile(r'(?:Subject\s+terms)\s*[:\-—]\s*(.+?)' + _TERM, re.DOTALL | re.IGNORECASE),
 ]
 
 

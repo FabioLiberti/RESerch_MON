@@ -65,7 +65,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             </span>
           )}
           {paper.has_pdf && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-700 text-white font-medium">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-700 text-white font-medium">
               PDF
             </span>
           )}
@@ -209,7 +209,10 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="flex justify-between">
               <dt className="text-[var(--muted-foreground)]">Citations</dt>
-              <dd>{paper.citation_count}</dd>
+              <dd className="flex items-center gap-2">
+                {paper.citation_count}
+                <RefreshCitationButton paperId={paperId} />
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-[var(--muted-foreground)]">Open Access</dt>
@@ -242,20 +245,38 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           </a>
         )}
 
-        {/* PDF link */}
-        {paper.pdf_url && (
-          <a
-            href={paper.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 text-red-300 text-sm font-medium hover:bg-red-500/30 transition-colors"
+        {/* PDF — local file or external link */}
+        {paper.has_pdf ? (
+          <button
+            onClick={() => {
+              const token = localStorage.getItem("fl-token");
+              fetch(`/api/v1/papers/${paperId}/pdf-file`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              }).then(r => r.blob()).then(blob => {
+                const url = URL.createObjectURL(blob);
+                window.open(url, "_blank");
+              });
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-medium hover:bg-red-600 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             View PDF
+          </button>
+        ) : paper.pdf_url ? (
+          <a
+            href={paper.pdf_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            View PDF (external)
           </a>
-        )}
+        ) : null}
 
         {/* Source-specific links */}
         {paper.external_ids?.arxiv_id && (
@@ -310,6 +331,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Generate Analysis */}
         <AnalysisButton paperId={paperId} />
       </div>
+
+      {/* Summary Card */}
+      <SummaryCard paperId={paperId} />
 
       {/* Analysis History */}
       <AnalysisHistory paperId={paperId} />
@@ -425,10 +449,11 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
             {showLabelPicker && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowLabelPicker(false)} />
-                <div className="absolute left-0 top-8 z-50 w-56 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl p-3 space-y-2">
-                  {/* Existing labels */}
+                <div className="absolute left-0 top-8 z-50 w-64 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl p-3 space-y-2 max-h-80 overflow-y-auto">
+                  {/* Existing labels to assign */}
                   {availableLabels.length > 0 && (
                     <div className="space-y-1">
+                      <span className="text-[10px] text-[var(--muted-foreground)] font-medium uppercase">Assign existing</span>
                       {availableLabels.map((l) => (
                         <button
                           key={l.id}
@@ -445,6 +470,7 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
 
                   {/* Create new */}
                   <div className="space-y-2">
+                    <span className="text-[10px] text-[var(--muted-foreground)] font-medium uppercase">Create new</span>
                     <input
                       type="text"
                       value={newLabelName}
@@ -452,7 +478,6 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
                       onKeyDown={(e) => e.key === "Enter" && createAndAssign()}
                       placeholder="New label name..."
                       className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none focus:border-[var(--primary)]"
-                      autoFocus
                     />
                     <div className="flex gap-1">
                       {PRESET_COLORS.map((c) => (
@@ -552,7 +577,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     }
   }, [hasReport, status]);
 
-  const [analysisMode, setAnalysisMode] = useState<"quick" | "deep">("quick");
+  const [analysisMode, setAnalysisMode] = useState<"quick" | "deep" | "summary">("quick");
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -623,6 +648,8 @@ function AnalysisButton({ paperId }: { paperId: number }) {
       const res = await api.uploadPdf(paperId, file);
       setUploadMsg(`PDF uploaded (${res.size_kb} KB). You can now run Deep Analysis.`);
       setStatus("idle");
+      // Refresh paper data so has_pdf updates and View PDF button appears
+      mutate(`/api/v1/papers/${paperId}`);
     } catch (err: any) {
       setUploadMsg(`Upload failed: ${err.message}`);
     }
@@ -689,8 +716,9 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
           className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
         >
-          <option value="quick">Quick (abstract)</option>
-          <option value="deep">Deep (full PDF)</option>
+          <option value="quick">Quick (~5 pages)</option>
+          <option value="deep">Deep (~7+ pages)</option>
+          <option value="summary">Summary (1 page)</option>
         </select>
         {/* Upload PDF */}
         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs cursor-pointer hover:bg-[var(--muted)] transition-colors">
@@ -799,6 +827,219 @@ interface AnalysisRun {
   pdf_path: string | null;
 }
 
+// --- Summary Card (option A: from structured data, zero cost) ---
+
+interface SummaryCardData {
+  paper_id: number;
+  title: string;
+  doi: string | null;
+  journal: string | null;
+  publication_date: string | null;
+  authors: string[];
+  keywords: string[];
+  problem_addressed: string | null;
+  proposed_method: string | null;
+  fl_techniques: string[];
+  datasets: string[];
+  baselines: string[];
+  best_metric_name: string | null;
+  best_metric_value: number | null;
+  best_baseline_name: string | null;
+  best_baseline_value: number | null;
+  improvement_delta: number | null;
+  privacy_mechanism: string | null;
+  privacy_formal: boolean | null;
+  reproducibility_score: number | null;
+  novelty_level: string | null;
+  relevance: string | null;
+  healthcare_applicable: boolean | null;
+  healthcare_evidence: string | null;
+  key_findings_summary: string | null;
+  limitations_declared: string[];
+  limitations_identified: string[];
+}
+
+const NOVELTY_COLORS: Record<string, string> = {
+  paradigmatic: "bg-purple-700 text-white",
+  moderate: "bg-blue-700 text-white",
+  incremental: "bg-gray-600 text-white",
+};
+const RELEVANCE_COLORS: Record<string, string> = {
+  "Molto Alta": "bg-emerald-700 text-white",
+  "Alta": "bg-blue-700 text-white",
+  "Media": "bg-amber-600 text-white",
+  "Bassa": "bg-gray-600 text-white",
+};
+
+function SummaryCard({ paperId }: { paperId: number }) {
+  const { data, error } = useSWR<SummaryCardData>(
+    `/api/v1/analysis/${paperId}/summary-card`,
+    authFetcher,
+    { shouldRetryOnError: false }
+  );
+
+  if (error || !data) return null;
+
+  const repScore = data.reproducibility_score;
+  const lims = [...(data.limitations_declared || []), ...(data.limitations_identified || [])];
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Summary Card
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const token = localStorage.getItem("fl-token");
+              fetch(`/api/v1/analysis/${paperId}/summary-card-pdf`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              }).then(r => r.blob()).then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `summary_card_${paperId}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+              });
+            }}
+            className="text-[10px] px-2 py-1 rounded bg-red-700 text-white hover:bg-red-600"
+          >
+            PDF
+          </button>
+          <span className="text-[10px] text-[var(--muted-foreground)]">from structured analysis</span>
+        </div>
+      </div>
+
+      {/* Problem & Method */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {data.problem_addressed && (
+          <div className="rounded-lg bg-[var(--secondary)] p-3">
+            <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Problem</span>
+            <p className="text-xs mt-1">{data.problem_addressed}</p>
+          </div>
+        )}
+        {data.proposed_method && (
+          <div className="rounded-lg bg-[var(--secondary)] p-3">
+            <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Method</span>
+            <p className="text-xs mt-1 font-medium">{data.proposed_method}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Techniques & Datasets */}
+      <div className="flex flex-wrap gap-3">
+        {data.fl_techniques.length > 0 && (
+          <div>
+            <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">FL Techniques</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {data.fl_techniques.map((t) => (
+                <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-700 text-white">{t}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {data.datasets.length > 0 && (
+          <div>
+            <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Datasets</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {data.datasets.map((d) => (
+                <span key={d} className="text-[10px] px-1.5 py-0.5 rounded bg-teal-700 text-white">{d}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Performance */}
+      {data.best_metric_name && (
+        <div className="rounded-lg bg-[var(--secondary)] p-3">
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Performance</span>
+          <div className="flex items-baseline gap-3 mt-1">
+            <span className="text-xs text-[var(--muted-foreground)]">{data.best_metric_name}:</span>
+            <span className="text-sm font-bold">{data.best_metric_value ?? "—"}</span>
+            {data.improvement_delta != null && (
+              <span className="text-xs text-emerald-400 font-medium">+{data.improvement_delta}</span>
+            )}
+            {data.best_baseline_name && (
+              <span className="text-[10px] text-[var(--muted-foreground)]">vs {data.best_baseline_name}{data.best_baseline_value != null ? ` (${data.best_baseline_value})` : ""}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Assessment grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="text-center rounded-lg bg-[var(--secondary)] p-2">
+          <span className="text-[10px] text-[var(--muted-foreground)] block">Novelty</span>
+          {data.novelty_level ? (
+            <span className={cn("text-[10px] px-2 py-0.5 rounded font-semibold mt-1 inline-block", NOVELTY_COLORS[data.novelty_level] || "bg-gray-600 text-white")}>
+              {data.novelty_level.toUpperCase()}
+            </span>
+          ) : <span className="text-xs">—</span>}
+        </div>
+        <div className="text-center rounded-lg bg-[var(--secondary)] p-2">
+          <span className="text-[10px] text-[var(--muted-foreground)] block">Relevance</span>
+          {data.relevance ? (
+            <span className={cn("text-[10px] px-2 py-0.5 rounded font-semibold mt-1 inline-block", RELEVANCE_COLORS[data.relevance] || "bg-gray-600 text-white")}>
+              {data.relevance}
+            </span>
+          ) : <span className="text-xs">—</span>}
+        </div>
+        <div className="text-center rounded-lg bg-[var(--secondary)] p-2">
+          <span className="text-[10px] text-[var(--muted-foreground)] block">Healthcare</span>
+          {data.healthcare_applicable ? (
+            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-700 text-white font-semibold mt-1 inline-block">YES</span>
+          ) : (
+            <span className="text-[10px] px-2 py-0.5 rounded bg-gray-600 text-white mt-1 inline-block">NO</span>
+          )}
+          {data.healthcare_evidence && data.healthcare_evidence !== "none" && (
+            <span className="text-[9px] text-[var(--muted-foreground)] block">{data.healthcare_evidence}</span>
+          )}
+        </div>
+        <div className="text-center rounded-lg bg-[var(--secondary)] p-2">
+          <span className="text-[10px] text-[var(--muted-foreground)] block">Privacy</span>
+          <span className="text-[10px] font-medium mt-1 block">{data.privacy_mechanism || "none"}</span>
+          {data.privacy_formal && <span className="text-[9px] text-emerald-400">formal</span>}
+        </div>
+        <div className="text-center rounded-lg bg-[var(--secondary)] p-2">
+          <span className="text-[10px] text-[var(--muted-foreground)] block">Reproducibility</span>
+          {repScore != null ? (
+            <div className="flex items-center justify-center gap-0.5 mt-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <span key={i} className={cn("text-sm", i <= repScore ? "text-amber-400" : "text-gray-600")}>★</span>
+              ))}
+            </div>
+          ) : <span className="text-xs">—</span>}
+        </div>
+      </div>
+
+      {/* Key Findings */}
+      {data.key_findings_summary && (
+        <div className="rounded-lg bg-[var(--secondary)] p-3">
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Key Findings</span>
+          <p className="text-xs mt-1">{data.key_findings_summary}</p>
+        </div>
+      )}
+
+      {/* Limitations */}
+      {lims.length > 0 && (
+        <div>
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Limitations</span>
+          <ul className="text-xs mt-1 space-y-0.5 list-disc list-inside text-[var(--muted-foreground)]">
+            {lims.map((l, i) => <li key={i}>{l}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function AnalysisHistory({ paperId }: { paperId: number }) {
   const { data: history } = useSWR<AnalysisRun[]>(
     `/api/v1/analysis/${paperId}/history`,
@@ -824,13 +1065,21 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
       <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-3">Analysis History</h3>
       <div className="space-y-2">
-        {history.map((run, idx) => (
-          <details key={run.id} className="rounded-lg bg-[var(--secondary)]">
+        {history.map((run, idx) => {
+          // Superseded = there's a newer entry with the same mode
+          const isSuperseded = history.slice(0, idx).some(r => r.mode === run.mode && r.status === "done");
+          return (
+          <details key={run.id} className={cn("rounded-lg bg-[var(--secondary)]", isSuperseded && "opacity-50")}>
             <summary className="flex items-center justify-between p-3 cursor-pointer">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{history.length - idx}</span>
+                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{history.length - idx} (ID:{paperId})</span>
+                {isSuperseded ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-gray-600 text-white">SUPERSEDED</span>
+                ) : run.status === "done" ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-400 text-gray-800">CURRENT</span>
+                ) : null}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                  run.mode === "deep" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
+                  run.mode === "deep" ? "bg-purple-700 text-white" : run.mode === "summary" ? "bg-amber-600 text-white" : "bg-blue-700 text-white"
                 }`}>
                   {run.mode.toUpperCase()}
                 </span>
@@ -854,7 +1103,10 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     onClick={(e) => {
                       e.preventDefault();
                       const token = localStorage.getItem("fl-token");
-                      fetch(`/api/v1/analysis/${paperId}/html`, {
+                      const url = isSuperseded
+                        ? `/api/v1/analysis/${paperId}/html?queue_id=${run.id}`
+                        : `/api/v1/analysis/${paperId}/html`;
+                      fetch(url, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       }).then(r => r.text()).then(html => {
                         const w = window.open();
@@ -871,15 +1123,18 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     onClick={(e) => {
                       e.preventDefault();
                       const token = localStorage.getItem("fl-token");
-                      fetch(`/api/v1/analysis/${paperId}/pdf`, {
+                      const url = isSuperseded
+                        ? `/api/v1/analysis/${paperId}/pdf?queue_id=${run.id}`
+                        : `/api/v1/analysis/${paperId}/pdf`;
+                      fetch(url, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       }).then(r => r.blob()).then(blob => {
-                        const url = URL.createObjectURL(blob);
+                        const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
-                        a.href = url;
+                        a.href = blobUrl;
                         a.download = `analysis_${run.mode}_${paperId}.pdf`;
                         a.click();
-                        URL.revokeObjectURL(url);
+                        URL.revokeObjectURL(blobUrl);
                       });
                     }}
                     className="text-[10px] px-2 py-1 rounded bg-red-700 text-white hover:bg-red-600"
@@ -902,7 +1157,8 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
               </div>
             </div>
           </details>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1063,7 +1319,11 @@ function SyncAnalysisToZotero({ paperId }: { paperId: number }) {
     try {
       const res = await api.syncAnalysisToZotero(paperId);
       setStatus("done");
-      setMsg(`Uploaded: ${res.filename}`);
+      if (res.status === "already_synced") {
+        setMsg("Already synced to Zotero");
+      } else {
+        setMsg(`Uploaded: ${res.filenames?.join(", ") || res.filename}`);
+      }
     } catch (e: any) {
       setStatus("error");
       setMsg(e.message || "Sync failed");
@@ -1102,6 +1362,48 @@ function SyncAnalysisToZotero({ paperId }: { paperId: number }) {
 
 
 // Reuse ElapsedTimer
+function RefreshCitationButton({ paperId }: { paperId: number }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await api.refreshCitationsSingle(paperId);
+      if (res.status === "updated") {
+        setResult(`${res.old} -> ${res.new}`);
+        // Refresh paper data
+        mutate(`/api/v1/papers/${paperId}`);
+      } else if (res.status === "unchanged") {
+        setResult("up to date");
+      } else {
+        setResult(res.status);
+      }
+    } catch {
+      setResult("error");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <button
+        onClick={refresh}
+        disabled={loading}
+        className="p-0.5 rounded hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
+        title="Refresh citation count from Semantic Scholar"
+      >
+        <svg className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+      {result && <span className="text-[10px] text-emerald-400">{result}</span>}
+    </span>
+  );
+}
+
+
 function ElapsedTimer({ startTime }: { startTime: number }) {
   const [elapsed, setElapsed] = useState(0);
 

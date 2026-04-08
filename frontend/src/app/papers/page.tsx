@@ -48,6 +48,7 @@ export default function PapersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
+  const [refreshingCitations, setRefreshingCitations] = useState(false);
   const { isAdmin } = useAuth();
 
   const toggleSelect = (id: number) => {
@@ -71,6 +72,8 @@ export default function PapersPage() {
   };
 
   const [analysisMode, setAnalysisMode] = useState<"quick" | "deep">("quick");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   const triggerAnalysis = async () => {
     if (selectedIds.size === 0) return;
@@ -92,8 +95,8 @@ export default function PapersPage() {
   const params: Record<string, string> = {
     page: String(page),
     per_page: "20",
-    sort_by: "created_at",
-    sort_order: "desc",
+    sort_by: sortBy,
+    sort_order: sortOrder,
   };
   if (search) params.search = search;
   if (authorFilter) params.author = authorFilter;
@@ -283,6 +286,20 @@ export default function PapersPage() {
             ))}
           </select>
         )}
+        <select
+          value={`${sortBy}:${sortOrder}`}
+          onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+        >
+          <option value="created_at:desc">Newest added</option>
+          <option value="created_at:asc">Oldest added</option>
+          <option value="publication_date:desc">Pub date (newest)</option>
+          <option value="publication_date:asc">Pub date (oldest)</option>
+          <option value="citation_count:desc">Most cited</option>
+          <option value="citation_count:asc">Least cited</option>
+          <option value="title:asc">Title A-Z</option>
+          <option value="title:desc">Title Z-A</option>
+        </select>
         {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter) && (
           <button
             onClick={() => {
@@ -338,9 +355,46 @@ export default function PapersPage() {
               onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
               className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
             >
-              <option value="quick">Quick (abstract)</option>
-              <option value="deep">Deep (full PDF)</option>
+              <option value="quick">Quick (~5 pages)</option>
+              <option value="deep">Deep (~7+ pages)</option>
+              <option value="summary">Summary (1 page)</option>
             </select>
+            <Link
+              href={`/comparison?ids=${Array.from(selectedIds).join(",")}`}
+              className="px-4 py-1.5 text-xs rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500 flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Confronta ({selectedIds.size})
+            </Link>
+            <button
+              onClick={async () => {
+                setRefreshingCitations(true);
+                setAnalysisMsg(null);
+                try {
+                  const res = await api.refreshCitationsBatch(Array.from(selectedIds));
+                  setAnalysisMsg(`Citations: ${res.updated} updated / ${res.total} checked`);
+                } catch (e: any) {
+                  setAnalysisMsg(e.message || "Citation refresh failed");
+                }
+                setRefreshingCitations(false);
+              }}
+              disabled={refreshingCitations}
+              className="px-3 py-1.5 text-xs rounded-lg bg-indigo-700 text-white font-medium hover:bg-indigo-600 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {refreshingCitations ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Refreshing...
+                </>
+              ) : (
+                `Refresh Citations (${selectedIds.size})`
+              )}
+            </button>
             <button
               onClick={async () => {
                 setAnalysisMsg(null);
@@ -455,14 +509,14 @@ export default function PapersPage() {
                       )}
                       {paper.analyses && paper.analyses.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {paper.analyses.map((a, i) => (
+                          {[...new Set(paper.analyses.filter(a => a.status === "done").map(a => a.mode))].map((mode) => (
                             <span
-                              key={i}
+                              key={mode}
                               className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
-                                a.mode === "deep" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
+                                mode === "deep" ? "bg-purple-700 text-white" : mode === "summary" ? "bg-amber-600 text-white" : "bg-blue-700 text-white"
                               }`}
                             >
-                              {a.mode === "deep" ? "DEEP" : "QUICK"}
+                              {(mode || "quick").toUpperCase()}
                             </span>
                           ))}
                         </div>

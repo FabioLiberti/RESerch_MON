@@ -1,8 +1,11 @@
 """Papers API endpoints."""
 
 import math
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -237,6 +240,66 @@ async def get_all_keywords(db: AsyncSession = Depends(get_db)):
     ]
 
 
+@router.get("/keywords/categorized")
+async def get_categorized_keywords(db: AsyncSession = Depends(get_db)):
+    """Get unique keywords grouped by category (Author Keywords, S2 Fields, etc.)."""
+    import json
+    from collections import Counter
+
+    result = await db.execute(
+        select(Paper.keyword_categories_json).where(Paper.keyword_categories_json != "{}")
+    )
+    rows = result.scalars().all()
+
+    # Count by lowercase, track most common form per category
+    cat_counts: dict[str, dict[str, int]] = {}  # cat -> {lowercase: total_count}
+    cat_forms: dict[str, dict[str, Counter]] = {}  # cat -> {lowercase: Counter(form)}
+    for cat_json in rows:
+        try:
+            cats = json.loads(cat_json) if cat_json else {}
+            for cat_name, kws in cats.items():
+                if cat_name not in cat_counts:
+                    cat_counts[cat_name] = {}
+                    cat_forms[cat_name] = {}
+                for kw in kws:
+                    key = kw.strip().lower()
+                    if not key:
+                        continue
+                    cat_counts[cat_name][key] = cat_counts[cat_name].get(key, 0) + 1
+                    if key not in cat_forms[cat_name]:
+                        cat_forms[cat_name][key] = Counter()
+                    cat_forms[cat_name][key][kw.strip()] += 1
+        except json.JSONDecodeError:
+            continue
+
+    # Build result: use most common form for display, sum counts
+    result = {}
+    for cat in sorted(cat_counts.keys()):
+        items = []
+        for key, count in sorted(cat_counts[cat].items(), key=lambda x: -x[1]):
+            best_form = cat_forms[cat][key].most_common(1)[0][0]
+            items.append({"keyword": best_form, "count": count})
+        result[cat] = items
+    return result
+
+
+class CitationRefreshRequest(BaseModel):
+    paper_ids: list[int] | None = None
+
+
+@router.post("/refresh-citations")
+async def refresh_citations_batch(
+    body: CitationRefreshRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Refresh citation counts via Semantic Scholar. If paper_ids provided, only those."""
+    from app.services.citation_refresh import refresh_citations_batch as do_refresh
+    ids = body.paper_ids if body else None
+    result = await do_refresh(db, paper_ids=ids)
+    await db.commit()
+    return result
+
+
 @router.get("/{paper_id}", response_model=PaperDetail)
 async def get_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     """Get detailed paper information."""
@@ -285,10 +348,26 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
             paper.open_access = result.open_access
             paper.pdf_url = result.pdf_url or paper.pdf_url
             paper.citation_count = max(paper.citation_count, result.citation_count)
-            if result.keywords:
-                paper.keywords = result.keywords
-            if result.keyword_categories:
-                paper.keyword_categories = result.keyword_categories
+            # Merge keywords (keep existing, add new from S2)
+            existing_kw_lower = set(k.lower() for k in (paper.keywords or []))
+            merged_kw = list(paper.keywords or [])
+            for kw in (result.keywords or []):
+                if kw.lower() not in existing_kw_lower:
+                    merged_kw.append(kw)
+                    existing_kw_lower.add(kw.lower())
+            paper.keywords = merged_kw
+            # Merge keyword categories
+            merged_cats = dict(paper.keyword_categories or {})
+            for cat, kws in (result.keyword_categories or {}).items():
+                if cat not in merged_cats:
+                    merged_cats[cat] = kws
+                else:
+                    existing_cat_lower = set(k.lower() for k in merged_cats[cat])
+                    for kw in kws:
+                        if kw.lower() not in existing_cat_lower:
+                            merged_cats[cat].append(kw)
+                            existing_cat_lower.add(kw.lower())
+            paper.keyword_categories = merged_cats
             paper.external_ids = {**(paper.external_ids or {}), **(result.external_ids or {})}
             paper.validated = True
             enriched_from = "semantic_scholar"
@@ -328,10 +407,25 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
                 paper.publication_date = r.publication_date or paper.publication_date
                 paper.open_access = r.open_access
                 paper.pdf_url = r.pdf_url or paper.pdf_url
-                if r.keywords:
-                    paper.keywords = r.keywords
-                if r.keyword_categories:
-                    paper.keyword_categories = r.keyword_categories
+                # Merge keywords (keep existing, add new from PubMed)
+                existing_kw_lower = set(k.lower() for k in (paper.keywords or []))
+                merged_kw = list(paper.keywords or [])
+                for kw in (r.keywords or []):
+                    if kw.lower() not in existing_kw_lower:
+                        merged_kw.append(kw)
+                        existing_kw_lower.add(kw.lower())
+                paper.keywords = merged_kw
+                merged_cats = dict(paper.keyword_categories or {})
+                for cat, kws in (r.keyword_categories or {}).items():
+                    if cat not in merged_cats:
+                        merged_cats[cat] = kws
+                    else:
+                        existing_cat_lower = set(k.lower() for k in merged_cats[cat])
+                        for kw in kws:
+                            if kw.lower() not in existing_cat_lower:
+                                merged_cats[cat].append(kw)
+                                existing_cat_lower.add(kw.lower())
+                paper.keyword_categories = merged_cats
                 paper.external_ids = {**(paper.external_ids or {}), **(r.external_ids or {})}
                 paper.validated = True
                 enriched_from = "pubmed"
@@ -383,19 +477,19 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
             if Path(paper.pdf_local_path).exists():
                 pdf_kw = extract_keywords_from_pdf(paper.pdf_local_path)
                 if pdf_kw:
-                    # Merge with existing keyword_categories
+                    # PDF is authoritative: replace matching categories
                     existing_cats = paper.keyword_categories or {}
                     existing_cats.update(pdf_kw)
                     paper.keyword_categories = existing_cats
-                    # Also add to flat keywords list (dedup)
-                    existing_kw = set(k.lower() for k in (paper.keywords or []))
-                    new_kw = list(paper.keywords or [])
-                    for cat_kws in pdf_kw.values():
+                    # Rebuild flat keywords from all categories (clean)
+                    seen: set[str] = set()
+                    rebuilt: list[str] = []
+                    for cat_kws in existing_cats.values():
                         for kw in cat_kws:
-                            if kw.lower() not in existing_kw:
-                                new_kw.append(kw)
-                                existing_kw.add(kw.lower())
-                    paper.keywords = new_kw
+                            if kw.lower() not in seen:
+                                rebuilt.append(kw)
+                                seen.add(kw.lower())
+                    paper.keywords = rebuilt
                     pdf_keywords_extracted = True
         except Exception:
             pass
@@ -411,6 +505,18 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     return result
 
 
+@router.post("/{paper_id}/refresh-citations")
+async def refresh_citations_single(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Refresh citation count for a single paper via Semantic Scholar."""
+    from app.services.citation_refresh import refresh_citation_single
+    result = await refresh_citation_single(db, paper_id)
+    await db.commit()
+    return result
+
+
 @router.post("/{paper_id}/toggle-disabled")
 async def toggle_disabled(paper_id: int, db: AsyncSession = Depends(get_db)):
     """Toggle the disabled status of a paper."""
@@ -420,6 +526,20 @@ async def toggle_disabled(paper_id: int, db: AsyncSession = Depends(get_db)):
     paper.disabled = not (paper.disabled or False)
     await db.flush()
     return {"disabled": paper.disabled}
+
+
+
+
+@router.get("/{paper_id}/pdf-file")
+async def get_paper_pdf(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve the local PDF file for a paper."""
+    paper = await db.get(Paper, paper_id)
+    if not paper or not paper.pdf_local_path:
+        raise HTTPException(404, "PDF not found")
+    path = Path(paper.pdf_local_path)
+    if not path.exists():
+        raise HTTPException(404, "PDF file not found on disk")
+    return FileResponse(path, media_type="application/pdf", filename=f"{paper.title[:80]}.pdf")
 
 
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)

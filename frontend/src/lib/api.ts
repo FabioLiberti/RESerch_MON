@@ -259,6 +259,16 @@ export const api = {
   getAllStructured: () => fetchAPI<any>("/comparison/all"),
   getResearchGaps: () => fetchAPI<any>("/comparison/gaps"),
 
+  // Citations
+  refreshCitationsBatch: (paperIds?: number[]) =>
+    fetchAPI<any>("/papers/refresh-citations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paper_ids: paperIds || null }),
+    }),
+  refreshCitationsSingle: (paperId: number) =>
+    fetchAPI<any>(`/papers/${paperId}/refresh-citations`, { method: "POST" }),
+
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,
 };

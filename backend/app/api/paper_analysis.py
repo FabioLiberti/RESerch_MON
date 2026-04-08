@@ -25,7 +25,7 @@ router = APIRouter()
 
 class AnalysisRequest(BaseModel):
     paper_ids: list[int]
-    mode: str = "quick"  # "quick" or "deep"
+    mode: str = "quick"  # "quick", "deep", or "summary"
 
 
 class QueueItemResponse(BaseModel):
@@ -77,8 +77,8 @@ async def trigger_analysis(
             detail="No analysis engine available. Configure ANTHROPIC_API_KEY in .env or start Ollama.",
         )
 
-    if body.mode not in ("quick", "deep"):
-        raise HTTPException(status_code=400, detail="Mode must be 'quick' or 'deep'")
+    if body.mode not in ("quick", "deep", "summary"):
+        raise HTTPException(status_code=400, detail="Mode must be 'quick', 'deep', or 'summary'")
 
     # Auto-download PDFs if not already available (both modes benefit from full text)
     pdf_status = []
@@ -169,7 +169,7 @@ async def trigger_analysis(
 
                 logger.info(f"Claude Opus: paper {paper_id}, {chars} chars, {duration_s}s")
 
-                html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.6")
+                html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.6", mode=body.mode)
                 html_path = save_report(html, paper_id, mode=body.mode)
                 pdf_path = generate_pdf(html_path)
 
@@ -384,6 +384,205 @@ async def upload_pdf(
     }
 
 
+@router.get("/{paper_id}/summary-card")
+async def get_summary_card(
+    paper_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a structured summary card from existing structured analysis data (zero cost)."""
+    from app.models.structured_analysis import StructuredAnalysis
+    from app.models.paper import Paper, PaperAuthor, Author
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    # Get latest structured analysis
+    result = await db.execute(
+        select(StructuredAnalysis)
+        .where(StructuredAnalysis.paper_id == paper_id)
+        .order_by(StructuredAnalysis.created_at.desc())
+        .limit(1)
+    )
+    sa = result.scalar_one_or_none()
+    if not sa:
+        raise HTTPException(status_code=404, detail="No structured analysis available. Run Quick or Deep analysis first.")
+
+    # Get authors
+    authors_result = await db.execute(
+        select(Author.name)
+        .join(PaperAuthor, PaperAuthor.author_id == Author.id)
+        .where(PaperAuthor.paper_id == paper_id)
+        .order_by(PaperAuthor.position)
+    )
+    authors = [r[0] for r in authors_result.all()]
+
+    return {
+        "paper_id": paper_id,
+        "title": paper.title,
+        "doi": paper.doi,
+        "journal": paper.journal,
+        "publication_date": paper.publication_date,
+        "authors": authors,
+        "keywords": paper.keywords,
+        "problem_addressed": sa.problem_addressed,
+        "proposed_method": sa.proposed_method,
+        "fl_techniques": sa.fl_techniques,
+        "datasets": sa.datasets,
+        "baselines": sa.baselines,
+        "best_metric_name": sa.best_metric_name,
+        "best_metric_value": sa.best_metric_value,
+        "best_baseline_name": sa.best_baseline_name,
+        "best_baseline_value": sa.best_baseline_value,
+        "improvement_delta": sa.improvement_delta,
+        "privacy_mechanism": sa.privacy_mechanism,
+        "privacy_formal": sa.privacy_formal,
+        "reproducibility_score": sa.reproducibility_score,
+        "novelty_level": sa.novelty_level,
+        "relevance": sa.relevance,
+        "healthcare_applicable": sa.healthcare_applicable,
+        "healthcare_evidence": sa.healthcare_evidence,
+        "key_findings_summary": sa.key_findings_summary,
+        "limitations_declared": sa.limitations_declared,
+        "limitations_identified": sa.limitations_identified,
+    }
+
+
+@router.get("/{paper_id}/summary-card-pdf")
+async def get_summary_card_pdf(
+    paper_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate and return a 1-page PDF summary card from structured analysis data."""
+    from app.models.structured_analysis import StructuredAnalysis
+    from app.models.paper import Paper, PaperAuthor, Author
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    result = await db.execute(
+        select(StructuredAnalysis)
+        .where(StructuredAnalysis.paper_id == paper_id)
+        .order_by(StructuredAnalysis.created_at.desc())
+        .limit(1)
+    )
+    sa = result.scalar_one_or_none()
+    if not sa:
+        raise HTTPException(status_code=404, detail="No structured analysis available")
+
+    authors_result = await db.execute(
+        select(Author.name)
+        .join(PaperAuthor, PaperAuthor.author_id == Author.id)
+        .where(PaperAuthor.paper_id == paper_id)
+        .order_by(PaperAuthor.position)
+    )
+    authors = ", ".join([r[0] for r in authors_result.all()])
+
+    # Build HTML for 1-page summary card
+    lims = (sa.limitations_declared or []) + (sa.limitations_identified or [])
+    rep_stars = "★" * (sa.reproducibility_score or 0) + "☆" * (5 - (sa.reproducibility_score or 0)) if sa.reproducibility_score else "—"
+
+    def badge(text, color):
+        return f'<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:{color};color:#fff">{text}</span>'
+
+    def tag(text, color):
+        return f'<span style="display:inline-block;font-size:9px;padding:1px 6px;border-radius:3px;background:{color};color:#fff;margin:1px">{text}</span>'
+
+    novelty_color = {"paradigmatic": "#7e22ce", "moderate": "#1d4ed8", "incremental": "#4b5563"}.get(sa.novelty_level or "", "#4b5563")
+    relevance_color = {"Molto Alta": "#15803d", "Alta": "#1d4ed8", "Media": "#d97706", "Bassa": "#4b5563"}.get(sa.relevance or "", "#4b5563")
+
+    fl_tags = " ".join(tag(t, "#4338ca") for t in (sa.fl_techniques or []))
+    ds_tags = " ".join(tag(d, "#0f766e") for d in (sa.datasets or []))
+
+    metric_html = ""
+    if sa.best_metric_name:
+        metric_html = f'<strong>{sa.best_metric_name}:</strong> {sa.best_metric_value or "—"}'
+        if sa.improvement_delta is not None:
+            metric_html += f' <span style="color:#16a34a">(+{sa.improvement_delta})</span>'
+        if sa.best_baseline_name:
+            metric_html += f' <span style="color:#6b7280">vs {sa.best_baseline_name}</span>'
+
+    lims_html = "".join(f"<li>{l}</li>" for l in lims) if lims else "<li>—</li>"
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Summary Card — {paper.title[:80]}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: 'Inter', system-ui, sans-serif; max-width: 780px; margin: 0 auto; padding: 20px; color: #1a1a2e; font-size: 11px; line-height: 1.5; }}
+  .header {{ border-bottom: 2px solid #4338ca; padding-bottom: 10px; margin-bottom: 12px; }}
+  .title {{ font-size: 15px; font-weight: 700; color: #111; margin-bottom: 4px; }}
+  .meta {{ font-size: 9px; color: #6b7280; }}
+  .meta a {{ color: #4338ca; }}
+  .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }}
+  .box {{ background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; }}
+  .box-label {{ font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 3px; }}
+  .box-text {{ font-size: 10px; color: #1f2937; }}
+  .assess {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }}
+  .assess-item {{ text-align: center; background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 4px; }}
+  .assess-label {{ font-size: 8px; color: #6b7280; text-transform: uppercase; }}
+  .assess-value {{ font-size: 10px; font-weight: 600; margin-top: 2px; }}
+  .findings {{ background: #f0f0ff; border: 1px solid #e0e0f0; border-radius: 6px; padding: 8px; margin-bottom: 10px; }}
+  .lims {{ font-size: 10px; color: #4b5563; }}
+  .lims li {{ margin-bottom: 2px; }}
+  .footer {{ font-size: 8px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 6px; margin-top: 10px; }}
+</style></head><body>
+
+<div class="header">
+  <div class="title">{paper.title} {badge("SUMMARY CARD", "#d97706")}</div>
+  <div class="meta">
+    Paper ID: {paper_id}
+    {f' | DOI: <a href="https://doi.org/{paper.doi}">{paper.doi}</a>' if paper.doi else ''}
+    {f' | {paper.journal}' if paper.journal else ''}
+    | {paper.publication_date or 'N/A'}
+    {f' | {authors}' if authors else ''}
+  </div>
+</div>
+
+<div class="grid">
+  {f'<div class="box"><div class="box-label">Problem</div><div class="box-text">{sa.problem_addressed}</div></div>' if sa.problem_addressed else ''}
+  {f'<div class="box"><div class="box-label">Method</div><div class="box-text"><strong>{sa.proposed_method}</strong></div></div>' if sa.proposed_method else ''}
+</div>
+
+{f'<div style="margin-bottom:8px"><span style="font-size:9px;font-weight:600;color:#6b7280">FL TECHNIQUES</span> {fl_tags}</div>' if fl_tags else ''}
+{f'<div style="margin-bottom:8px"><span style="font-size:9px;font-weight:600;color:#6b7280">DATASETS</span> {ds_tags}</div>' if ds_tags else ''}
+
+{f'<div class="box" style="margin-bottom:10px"><div class="box-label">Performance</div><div class="box-text">{metric_html}</div></div>' if metric_html else ''}
+
+<div class="assess">
+  <div class="assess-item"><div class="assess-label">Novelty</div><div class="assess-value">{badge((sa.novelty_level or "—").upper(), novelty_color)}</div></div>
+  <div class="assess-item"><div class="assess-label">Relevance</div><div class="assess-value">{badge(sa.relevance or "—", relevance_color)}</div></div>
+  <div class="assess-item"><div class="assess-label">Healthcare</div><div class="assess-value">{badge("YES" if sa.healthcare_applicable else "NO", "#15803d" if sa.healthcare_applicable else "#4b5563")}</div></div>
+  <div class="assess-item"><div class="assess-label">Privacy</div><div class="assess-value" style="font-size:9px">{sa.privacy_mechanism or "none"}</div></div>
+  <div class="assess-item"><div class="assess-label">Reproducibility</div><div class="assess-value" style="color:#d97706">{rep_stars}</div></div>
+</div>
+
+{f'<div class="findings"><div class="box-label">Key Findings</div><div class="box-text">{sa.key_findings_summary}</div></div>' if sa.key_findings_summary else ''}
+
+<div><div class="box-label" style="margin-bottom:4px">Limitations</div><ul class="lims">{lims_html}</ul></div>
+
+<div class="footer">Generated by FL Research Monitor | Summary Card from structured analysis data</div>
+
+</body></html>"""
+
+    # Generate PDF
+    from app.services.paper_report_generator import generate_pdf, save_report
+    html_path = save_report(html, paper_id, mode="summary_card")
+
+    pdf_path = generate_pdf(html_path)
+    if not pdf_path or not pdf_path.exists():
+        return HTMLResponse(content=html)
+
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=f"summary_card_{paper_id}.pdf",
+    )
+
+
 @router.get("/{paper_id}/history")
 async def analysis_history(
     paper_id: int,
@@ -437,17 +636,23 @@ async def analysis_history(
 @router.get("/{paper_id}/html")
 async def get_analysis_html(
     paper_id: int,
+    queue_id: int | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get the most recent HTML analysis report for a paper."""
-    result = await db.execute(
-        select(AnalysisQueue).where(
-            AnalysisQueue.paper_id == paper_id,
-            AnalysisQueue.status == "done",
-        ).order_by(AnalysisQueue.completed_at.desc()).limit(1)
-    )
-    item = result.scalar_one_or_none()
+    """Get HTML analysis report for a paper. If queue_id is given, serve that specific entry."""
+    if queue_id:
+        item = await db.get(AnalysisQueue, queue_id)
+        if not item or item.paper_id != paper_id:
+            raise HTTPException(status_code=404, detail="Analysis report not found")
+    else:
+        result = await db.execute(
+            select(AnalysisQueue).where(
+                AnalysisQueue.paper_id == paper_id,
+                AnalysisQueue.status == "done",
+            ).order_by(AnalysisQueue.completed_at.desc()).limit(1)
+        )
+        item = result.scalar_one_or_none()
     if not item or not item.html_path:
         raise HTTPException(status_code=404, detail="Analysis report not found")
 
@@ -461,17 +666,23 @@ async def get_analysis_html(
 @router.get("/{paper_id}/pdf")
 async def get_analysis_pdf(
     paper_id: int,
+    queue_id: int | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Download the most recent PDF analysis report for a paper."""
-    result = await db.execute(
-        select(AnalysisQueue).where(
-            AnalysisQueue.paper_id == paper_id,
-            AnalysisQueue.status == "done",
-        ).order_by(AnalysisQueue.completed_at.desc()).limit(1)
-    )
-    item = result.scalar_one_or_none()
+    """Download PDF analysis report for a paper. If queue_id is given, serve that specific entry."""
+    if queue_id:
+        item = await db.get(AnalysisQueue, queue_id)
+        if not item or item.paper_id != paper_id:
+            raise HTTPException(status_code=404, detail="PDF report not available")
+    else:
+        result = await db.execute(
+            select(AnalysisQueue).where(
+                AnalysisQueue.paper_id == paper_id,
+                AnalysisQueue.status == "done",
+            ).order_by(AnalysisQueue.completed_at.desc()).limit(1)
+        )
+        item = result.scalar_one_or_none()
     if not item or not item.pdf_path:
         raise HTTPException(status_code=404, detail="PDF report not available")
 

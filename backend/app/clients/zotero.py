@@ -149,6 +149,34 @@ class ZoteroClient(BaseAPIClient):
 
         return None
 
+    async def delete_child_attachments(self, parent_item_key: str, filename_prefix: str) -> int:
+        """Delete child attachment items matching a filename prefix."""
+        if not self.is_configured():
+            return 0
+        try:
+            response = await self._request(
+                "GET",
+                f"{self.user_prefix}/items/{parent_item_key}/children",
+                headers=self._headers(),
+            )
+            children = response.json()
+            deleted = 0
+            for child in children:
+                data = child.get("data", {})
+                if data.get("itemType") == "attachment" and data.get("filename", "").lower().startswith(filename_prefix.lower()):
+                    version = child.get("version", 0)
+                    await self._request(
+                        "DELETE",
+                        f"{self.user_prefix}/items/{data['key']}",
+                        headers={**self._headers(), "If-Unmodified-Since-Version": str(version)},
+                    )
+                    logger.info(f"[zotero] Deleted old attachment: {data.get('filename')} ({data['key']})")
+                    deleted += 1
+            return deleted
+        except Exception as e:
+            logger.warning(f"[zotero] Error deleting attachments: {e}")
+            return 0
+
     async def upload_attachment(
         self,
         parent_item_key: str,
@@ -205,24 +233,60 @@ class ZoteroClient(BaseAPIClient):
             attachment_key = result["successful"]["0"]["key"]
 
             # Step 2: Get upload authorization
-            auth_headers = {
-                **self._headers(),
-                "Content-Type": "application/x-www-form-urlencoded",
-                "If-None-Match": "*",
-            }
-            auth_body = f"md5={md5}&filename={filename}&filesize={file_size}"
+            # Try If-None-Match first (new file), fallback to If-Match (re-upload)
+            import time as _time
+            mtime = int(_time.time() * 1000)
+            auth_body = f"md5={md5}&filename={filename}&filesize={file_size}&mtime={mtime}"
+            auth_result = None
 
-            response = await self._request(
-                "POST",
-                f"{self.user_prefix}/items/{attachment_key}/file",
-                headers=auth_headers,
-                content=auth_body.encode(),
-            )
-            auth_result = response.json()
+            for if_header in [("If-None-Match", "*"), ("If-Match", md5)]:
+                auth_headers = {
+                    **self._headers(),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    if_header[0]: if_header[1],
+                }
+                try:
+                    response = await self._request(
+                        "POST",
+                        f"{self.user_prefix}/items/{attachment_key}/file",
+                        headers=auth_headers,
+                        content=auth_body.encode(),
+                    )
+                    auth_result = response.json()
+                    break
+                except Exception as auth_err:
+                    logger.debug(f"[zotero] Auth with {if_header[0]} failed: {auth_err}")
+                    continue
+
+            if auth_result is None:
+                logger.error(f"[zotero] Upload auth failed for {filename}")
+                return None
 
             if "exists" in auth_result:
-                logger.info(f"[zotero] File already exists in Zotero: {filename}")
-                return attachment_key
+                # File content is in Zotero storage but not linked to this new item.
+                # Append a unique PDF comment to change md5 and force real upload.
+                import time as _t2
+                logger.info(f"[zotero] File exists in storage, forcing re-upload: {filename}")
+                file_content = file_content + f"\n% Generated: {_t2.time()}".encode()
+                file_size = len(file_content)
+                md5 = hashlib.md5(file_content).hexdigest()
+                mtime = int(_t2.time() * 1000)
+                auth_body = f"md5={md5}&filename={filename}&filesize={file_size}&mtime={mtime}"
+                try:
+                    response = await self._request(
+                        "POST",
+                        f"{self.user_prefix}/items/{attachment_key}/file",
+                        headers={
+                            **self._headers(),
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            "If-None-Match": "*",
+                        },
+                        content=auth_body.encode(),
+                    )
+                    auth_result = response.json()
+                except Exception as e:
+                    logger.warning(f"[zotero] Force re-upload auth failed: {e}")
+                    return attachment_key
 
             upload_url = auth_result.get("url")
             upload_key = auth_result.get("uploadKey")
@@ -254,18 +318,29 @@ class ZoteroClient(BaseAPIClient):
                 logger.error(f"[zotero] File upload failed: {upload_response.status_code}")
                 return None
 
-            # Step 4: Register upload
-            register_headers = {
-                **self._headers(),
-                "Content-Type": "application/x-www-form-urlencoded",
-                "If-None-Match": "*",
-            }
-            await self._request(
-                "POST",
-                f"{self.user_prefix}/items/{attachment_key}/file",
-                headers=register_headers,
-                content=f"upload={upload_key}".encode(),
-            )
+            # Step 4: Register upload with uploadKey
+            register_body = f"upload={upload_key}".encode()
+            registered = False
+            for if_header in [("If-None-Match", "*"), ("If-Match", md5)]:
+                try:
+                    await self._request(
+                        "POST",
+                        f"{self.user_prefix}/items/{attachment_key}/file",
+                        headers={
+                            **self._headers(),
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            if_header[0]: if_header[1],
+                        },
+                        content=register_body,
+                    )
+                    registered = True
+                    break
+                except Exception:
+                    continue
+
+            if not registered:
+                logger.error(f"[zotero] Failed to register upload for {filename}")
+                return None
 
             logger.info(f"[zotero] Uploaded attachment: {filename} → {attachment_key}")
             return attachment_key

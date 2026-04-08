@@ -220,7 +220,9 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
 <body>
 
 <div class="report-header">
-  <div class="report-title">{{ paper.title }}</div>
+  <div class="report-title">{{ paper.title }}
+    {% if mode %}<span style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:10px;vertical-align:middle;{% if mode == 'deep' %}background:#7e22ce;color:#fff{% elif mode == 'summary' %}background:#d97706;color:#fff{% else %}background:#1d4ed8;color:#fff{% endif %}">{{ mode.upper() }}</span>{% endif %}
+  </div>
   <div class="report-meta">
     {% if paper.doi %}
     <span class="meta-label">DOI</span>
@@ -341,7 +343,7 @@ async def get_paper_data(db: AsyncSession, paper_id: int) -> dict | None:
     }
 
 
-def render_paper_report(paper_data: dict, analysis_text: str, engine: str = "Claude Opus") -> str:
+def render_paper_report(paper_data: dict, analysis_text: str, engine: str = "Claude Opus", mode: str = "") -> str:
     """Render the HTML report for a single paper."""
     paper = paper_data["paper"]
     keywords = paper.keywords or []
@@ -358,6 +360,7 @@ def render_paper_report(paper_data: dict, analysis_text: str, engine: str = "Cla
         topics=paper_data["topics"],
         sources=paper_data["sources"],
         engine=engine,
+        mode=mode,
         keyword_tags=keyword_tags,
         keyword_categories=keyword_categories,
         analysis_html=analysis_html,

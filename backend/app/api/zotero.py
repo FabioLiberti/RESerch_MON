@@ -77,50 +77,68 @@ async def sync_analysis(
     if not paper.zotero_key:
         raise HTTPException(status_code=400, detail="Paper not synced to Zotero yet. Sync the paper first.")
 
-    # Check analysis exists
+    # Get most recent analysis per mode (quick + deep)
     result = await db.execute(
         select(AnalysisQueue).where(
             AnalysisQueue.paper_id == paper_id,
             AnalysisQueue.status == "done",
-        )
+        ).order_by(AnalysisQueue.completed_at.desc())
     )
-    analysis = result.scalar_one_or_none()
-    if not analysis or not analysis.pdf_path:
-        # Try HTML if no PDF
-        if not analysis or not analysis.html_path:
-            raise HTTPException(status_code=404, detail="No analysis report found for this paper")
+    all_analyses = result.scalars().all()
+
+    # Keep only latest per mode
+    seen_modes: set[str] = set()
+    analyses_to_sync: list = []
+    for a in all_analyses:
+        mode = a.analysis_mode or "quick"
+        if mode not in seen_modes:
+            seen_modes.add(mode)
+            analyses_to_sync.append(a)
+
+    if not analyses_to_sync:
+        raise HTTPException(status_code=404, detail="No analysis report found for this paper")
+
+    # Order: summary first, then quick, then deep — so Zotero doesn't rename the first as "PDF"
+    mode_order = {"summary": 0, "quick": 1, "deep": 2}
+    analyses_to_sync.sort(key=lambda a: mode_order.get(a.analysis_mode or "quick", 9))
 
     client = ZoteroClient()
     if not client.is_configured():
         raise HTTPException(status_code=503, detail="Zotero not configured")
 
     try:
-        # Determine analysis mode for filename
-        mode = getattr(analysis, "analysis_mode", "quick") or "quick"
+        # Delete old analysis attachments before uploading new ones
+        await client.delete_child_attachments(paper.zotero_key, f"analysis_")
 
-        # Prefer PDF, fallback to HTML
-        if analysis.pdf_path and Path(analysis.pdf_path).exists():
-            file_path = analysis.pdf_path
-            filename = f"Analysis_{mode}_{paper_id}.pdf"
-            content_type = "application/pdf"
-        elif analysis.html_path and Path(analysis.html_path).exists():
-            file_path = analysis.html_path
-            filename = f"Analysis_{mode}_{paper_id}.html"
-            content_type = "text/html"
-        else:
-            raise HTTPException(status_code=404, detail="Analysis report file not found on disk")
+        uploaded = []
+        for analysis in analyses_to_sync:
+            mode = analysis.analysis_mode or "quick"
 
-        attachment_key = await client.upload_attachment(
-            parent_item_key=paper.zotero_key,
-            file_path=file_path,
-            filename=filename,
-            content_type=content_type,
-        )
+            # Prefer PDF, fallback to HTML (lowercase filenames)
+            if analysis.pdf_path and Path(analysis.pdf_path).exists():
+                file_path = analysis.pdf_path
+                filename = f"analysis_{mode}_{paper_id}.pdf"
+                content_type = "application/pdf"
+            elif analysis.html_path and Path(analysis.html_path).exists():
+                file_path = analysis.html_path
+                filename = f"analysis_{mode}_{paper_id}.html"
+                content_type = "text/html"
+            else:
+                continue
 
-        if attachment_key:
-            return {"status": "uploaded", "attachment_key": attachment_key, "filename": filename}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to upload to Zotero")
+            attachment_key = await client.upload_attachment(
+                parent_item_key=paper.zotero_key,
+                file_path=file_path,
+                filename=filename,
+                content_type=content_type,
+            )
+            if attachment_key:
+                uploaded.append(filename)
+
+        if not uploaded:
+            return {"status": "already_synced", "filenames": [], "count": 0, "message": "Analysis reports already present in Zotero"}
+
+        return {"status": "uploaded", "filenames": uploaded, "count": len(uploaded)}
 
     finally:
         await client.close()

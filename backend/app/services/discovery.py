@@ -168,6 +168,17 @@ class DiscoveryService:
                     except Exception as e:
                         logger.warning(f"PDF download error: {e}")
 
+                # Fetch citation count from S2 if source didn't provide it
+                if paper.citation_count == 0 and paper.doi:
+                    try:
+                        from app.services.citation_refresh import fetch_s2_citation_count
+                        s2_count = await fetch_s2_citation_count(paper.doi)
+                        if s2_count and s2_count > 0:
+                            paper.citation_count = s2_count
+                            logger.debug(f"S2 citation fallback: paper {paper.id} -> {s2_count}")
+                    except Exception:
+                        pass
+
                 # Classify into topics
                 await self.topic_classifier.classify_paper(
                     db, paper.id, paper.title, paper.abstract

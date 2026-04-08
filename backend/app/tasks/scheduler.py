@@ -57,6 +57,27 @@ async def daily_discovery_job():
     logger.info(f"=== Daily Discovery Job Complete ({elapsed:.1f}s) ===")
 
 
+async def citation_refresh_job():
+    """Refresh citation counts for all papers via Semantic Scholar."""
+    logger.info("=== Citation Refresh Job Started ===")
+    start = datetime.utcnow()
+    try:
+        from app.services.citation_refresh import refresh_citations_batch
+
+        async with async_session() as db:
+            result = await refresh_citations_batch(db)
+            await db.commit()
+            logger.info(
+                f"Citations: {result['total']} checked, {result['updated']} updated, "
+                f"{result.get('errors', 0)} errors"
+            )
+    except Exception as e:
+        logger.error(f"Citation refresh error: {e}", exc_info=True)
+
+    elapsed = (datetime.utcnow() - start).total_seconds()
+    logger.info(f"=== Citation Refresh Job Complete ({elapsed:.1f}s) ===")
+
+
 def setup_scheduler():
     """Configure and return the scheduler."""
     # Daily at 06:00 UTC
@@ -68,5 +89,14 @@ def setup_scheduler():
         id="daily_discovery",
         replace_existing=True,
     )
-    logger.info("Scheduler configured: daily discovery at 06:00 UTC")
+    # Citation refresh at 07:00 UTC (after discovery completes)
+    scheduler.add_job(
+        citation_refresh_job,
+        "cron",
+        hour=7,
+        minute=0,
+        id="citation_refresh",
+        replace_existing=True,
+    )
+    logger.info("Scheduler configured: daily discovery at 06:00 UTC, citation refresh at 07:00 UTC")
     return scheduler
