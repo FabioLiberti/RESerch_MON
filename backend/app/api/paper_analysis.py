@@ -190,6 +190,45 @@ async def trigger_analysis(
                 processed += 1
                 logger.info(f"Analysis entry saved to DB for paper {paper_id}")
 
+                # Extract structured data (async, cheap via Haiku)
+                try:
+                    from app.services.structured_extractor import extract_structured_data
+                    from app.models.structured_analysis import StructuredAnalysis
+
+                    structured = await extract_structured_data(analysis_text)
+                    if structured:
+                        sa = StructuredAnalysis(
+                            paper_id=paper_id,
+                            analysis_queue_id=q.id,
+                            problem_addressed=structured.get("problem_addressed"),
+                            proposed_method=structured.get("proposed_method"),
+                            best_metric_name=structured.get("best_metric_name"),
+                            best_metric_value=structured.get("best_metric_value"),
+                            best_baseline_name=structured.get("best_baseline_name"),
+                            best_baseline_value=structured.get("best_baseline_value"),
+                            improvement_delta=structured.get("improvement_delta"),
+                            privacy_mechanism=structured.get("privacy_mechanism"),
+                            privacy_formal=structured.get("privacy_formal"),
+                            reproducibility_score=structured.get("reproducibility_score"),
+                            novelty_level=structured.get("novelty_level"),
+                            relevance=structured.get("relevance"),
+                            healthcare_applicable=structured.get("healthcare_applicable"),
+                            healthcare_evidence=structured.get("healthcare_evidence"),
+                            key_findings_summary=structured.get("key_findings_summary"),
+                        )
+                        sa.fl_techniques = structured.get("fl_techniques", [])
+                        sa.datasets = structured.get("datasets", [])
+                        sa.baselines = structured.get("baselines", [])
+                        sa.limitations_declared = structured.get("limitations_declared", [])
+                        sa.limitations_identified = structured.get("limitations_identified", [])
+                        sa.extra = structured.get("extra", {})
+                        db.add(sa)
+                        await db.flush()
+                        await db.commit()
+                        logger.info(f"Structured data extracted for paper {paper_id}")
+                except Exception as e:
+                    logger.warning(f"Structured extraction failed for paper {paper_id}: {e}")
+
                 response["details"].append({
                     "paper_id": paper_id,
                     "title": paper.title[:80],

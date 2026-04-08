@@ -15,6 +15,7 @@ from app.api.smart_search import router as smart_search_router
 from app.api.network import router as network_router
 from app.api.labels import router as labels_router
 from app.api.bibliography import router as bibliography_router
+from app.api.comparison import router as comparison_router
 from app.api.zotero import router as zotero_router
 
 api_router = APIRouter(prefix="/api/v1")
@@ -37,4 +38,5 @@ api_router.include_router(smart_search_router, prefix="/smart-search", tags=["sm
 api_router.include_router(network_router, prefix="/network", tags=["network"], dependencies=[Depends(get_current_user)])
 api_router.include_router(labels_router, prefix="/labels", tags=["labels"], dependencies=[Depends(get_current_user)])
 api_router.include_router(bibliography_router, prefix="/bibliography", tags=["bibliography"], dependencies=[Depends(get_current_user)])
+api_router.include_router(comparison_router, prefix="/comparison", tags=["comparison"], dependencies=[Depends(get_current_user)])
 api_router.include_router(zotero_router, prefix="/zotero", tags=["zotero"], dependencies=[Depends(get_current_user)])

@@ -252,6 +252,12 @@ export const api = {
   syncAnalysisToZotero: (paperId: number) =>
     fetchAPI<any>(`/zotero/sync-analysis/${paperId}`, { method: "POST" }),
 
+  // Comparison
+  getComparisonData: (paperIds: number[]) =>
+    fetchAPI<any>(`/comparison/papers?paper_ids=${paperIds.join(",")}`),
+  getAllStructured: () => fetchAPI<any>("/comparison/all"),
+  getResearchGaps: () => fetchAPI<any>("/comparison/gaps"),
+
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,
 };
