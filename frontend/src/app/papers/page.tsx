@@ -452,6 +452,20 @@ export default function PapersPage() {
                           ))}
                         </div>
                       )}
+                      {paper.analyses && paper.analyses.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {paper.analyses.map((a, i) => (
+                            <span
+                              key={i}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                a.mode === "deep" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
+                              }`}
+                            >
+                              {a.mode === "deep" ? "DEEP" : "QUICK"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {paper.keywords && paper.keywords.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {paper.keywords.slice(0, 4).map((kw) => (

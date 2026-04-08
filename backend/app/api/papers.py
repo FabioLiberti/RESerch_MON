@@ -25,7 +25,7 @@ from app.schemas.paper import (
 router = APIRouter()
 
 
-def _paper_to_summary(paper: Paper, labels: list[dict] | None = None) -> PaperSummary:
+def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None) -> PaperSummary:
     return PaperSummary(
         id=paper.id,
         doi=paper.doi,
@@ -40,6 +40,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None) -> PaperSu
         topics=[pt.topic.name for pt in paper.topics if pt.topic],
         keywords=paper.keywords,
         labels=labels or [],
+        analyses=analyses or [],
         created_at=paper.created_at,
     )
 
@@ -176,8 +177,19 @@ async def list_papers(
         for pid, lid, lname, lcolor in labels_result.all():
             paper_labels_map.setdefault(pid, []).append({"id": lid, "name": lname, "color": lcolor})
 
+    # Fetch analyses for all papers
+    from app.models.analysis import AnalysisQueue
+    analyses_result = await db.execute(
+        select(AnalysisQueue.paper_id, AnalysisQueue.analysis_mode, AnalysisQueue.status)
+        .where(AnalysisQueue.paper_id.in_(paper_ids), AnalysisQueue.status == "done")
+    ) if paper_ids else None
+    paper_analyses_map: dict[int, list[dict]] = {}
+    if analyses_result:
+        for pid, mode, status in analyses_result.all():
+            paper_analyses_map.setdefault(pid, []).append({"mode": mode or "quick", "status": status})
+
     return PaperListResponse(
-        items=[_paper_to_summary(p, paper_labels_map.get(p.id, [])) for p in papers],
+        items=[_paper_to_summary(p, paper_labels_map.get(p.id, []), paper_analyses_map.get(p.id, [])) for p in papers],
         total=total,
         page=page,
         per_page=per_page,

@@ -44,6 +44,7 @@ class PaperSummary(BaseModel):
     topics: list[str]
     keywords: list[str]
     labels: list[dict] = []
+    analyses: list[dict] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -12,6 +12,7 @@ export interface Paper {
   topics: string[];
   keywords: string[];
   labels: { id: number; name: string; color: string }[];
+  analyses: { mode: string; status: string }[];
   created_at: string;
 }
 
