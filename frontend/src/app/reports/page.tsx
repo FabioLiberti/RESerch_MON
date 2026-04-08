@@ -229,7 +229,7 @@ export default function ReportsPage() {
                     <span className="font-medium text-sm line-clamp-2">{item.paper_title}</span>
                     <div className="flex gap-1 shrink-0">
                       {item.pdf_path && (
-                        <button
+                        <span
                           onClick={(e) => {
                             e.stopPropagation();
                             const token = localStorage.getItem("fl-token");
@@ -244,10 +244,10 @@ export default function ReportsPage() {
                               URL.revokeObjectURL(url);
                             });
                           }}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-red-700 text-white hover:bg-red-600"
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-red-700 text-white hover:bg-red-600 cursor-pointer"
                         >
                           PDF
-                        </button>
+                        </span>
                       )}
                     </div>
                   </div>
