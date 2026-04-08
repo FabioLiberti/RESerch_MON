@@ -193,7 +193,10 @@ async def trigger_analysis(
                     completed_at=end_time,
                 )
                 db.add(q)
+                await db.flush()
+                await db.commit()
                 processed += 1
+                logger.info(f"Analysis entry saved to DB for paper {paper_id}")
 
                 response["details"].append({
                     "paper_id": paper_id,
