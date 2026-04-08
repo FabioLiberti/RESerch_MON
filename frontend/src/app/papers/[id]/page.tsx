@@ -64,6 +64,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               Validated
             </span>
           )}
+          {paper.has_pdf && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-700 text-white font-medium">
+              PDF
+            </span>
+          )}
           {paper.zotero_key && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-700 text-white font-medium">
               On Zotero
