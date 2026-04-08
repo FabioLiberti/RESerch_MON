@@ -556,20 +556,26 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     setStartTime(Date.now());
     try {
       const res = await api.triggerAnalysis([paperId], analysisMode);
-      // Check PDF status for deep mode
-      if (analysisMode === "deep" && res.pdf_status) {
+      // Check PDF status
+      if (res.pdf_status) {
         const pdfInfo = res.pdf_status.find((p: any) => p.id === paperId);
         if (pdfInfo?.status === "no_pdf_url") {
-          setStatus("error");
-          setUploadMsg("No PDF URL available. Upload the PDF manually.");
-          setStartTime(null);
-          return;
+          if (analysisMode === "deep") {
+            setStatus("error");
+            setUploadMsg("No PDF URL available. Upload the PDF manually.");
+            setStartTime(null);
+            return;
+          }
+          setUploadMsg("No PDF available — analyzing from abstract only. Upload PDF for full analysis.");
         }
         if (pdfInfo?.status === "download_failed") {
-          setStatus("error");
-          setUploadMsg("PDF download failed. Upload the PDF manually.");
-          setStartTime(null);
-          return;
+          if (analysisMode === "deep") {
+            setStatus("error");
+            setUploadMsg("PDF download failed. Upload the PDF manually.");
+            setStartTime(null);
+            return;
+          }
+          setUploadMsg("PDF download failed — analyzing from abstract only. Upload PDF for full analysis.");
         }
       }
       const detail = res.details?.[0];
