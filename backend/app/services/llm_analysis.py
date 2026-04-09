@@ -195,6 +195,73 @@ REGOLE CRITICHE:
 
 
 # ---------------------------------------------------------------------------
+# EXTENDED ABSTRACT PROMPT (max 2 pages, ~1200 words)
+# ---------------------------------------------------------------------------
+
+EXTENDED_ABSTRACT_PROMPT = SYSTEM_PROMPT + """
+
+## Modalita': Extended Abstract (2 pagine)
+Produci un Extended Abstract accademico del paper, strutturato come un contributo per conferenza scientifica.
+Lunghezza target: 1000-1300 parole. Deve stare in massimo 2 pagine stampate.
+Lingua: ITALIANO (titoli sezioni in inglese).
+Tono: accademico formale, terza persona.
+
+---
+TITLE: {title}
+JOURNAL: {journal}
+DATE: {date}
+DOI: {doi}
+TYPE: {paper_type}
+KEYWORDS: {keywords}
+
+{text_section}
+---
+
+Produci l'Extended Abstract con questa struttura ESATTA:
+
+```
+{title}
+
+Paper ID: {paper_id} | Date: {date} | Analysis: {analysis_date}
+
+## Abstract
+[1 paragrafo di massimo 150 parole. Descrive problema, approccio, risultati principali e contributo in modo denso e completo.]
+
+## Keywords
+[Keywords del paper separate da punto e virgola, su una sola riga]
+
+## Research Context
+[Contesto della ricerca: problema affrontato, gap nella letteratura, posizionamento del lavoro. Max 200 parole.]
+
+## Purpose
+[Obiettivo del paper, research questions o ipotesi, contributo atteso. Max 150 parole.]
+
+## Methodology
+[Approccio metodologico: tipo di studio, dati utilizzati, tecniche, metriche di valutazione. Max 200 parole.]
+
+## Results
+[Risultati principali con dati quantitativi quando disponibili. Organizzare per punti chiave. Max 250 parole.]
+
+## Limitations
+[Limitazioni riconosciute dagli autori e limitazioni identificate. Max 100 parole.]
+
+## Implications
+[Implicazioni pratiche, manageriali o per policy-makers. Max 150 parole.]
+
+## Originality
+[Contributo originale del paper alla letteratura, cosa lo distingue dai lavori precedenti. Max 100 parole.]
+```
+
+REGOLE CRITICHE:
+- MASSIMO 1300 parole totali
+- Ogni sezione deve rispettare il limite indicato
+- Tono accademico formale, terza persona
+- Includere dati quantitativi nei Results quando presenti nel paper
+- NO meta-commenti, NO etichette [Sezione X], testo fluido
+"""
+
+
+# ---------------------------------------------------------------------------
 # DEEP ANALYSIS PROMPT
 # ---------------------------------------------------------------------------
 
@@ -410,6 +477,9 @@ async def generate_paper_analysis(
     elif mode == "summary":
         template = SUMMARY_PROMPT
         max_tokens = 1500
+    elif mode == "extended":
+        template = EXTENDED_ABSTRACT_PROMPT
+        max_tokens = 3000
     else:
         template = QUICK_ANALYSIS_PROMPT
         max_tokens = 4096

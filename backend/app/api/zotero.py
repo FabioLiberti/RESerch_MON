@@ -134,6 +134,10 @@ async def sync_analysis(
             )
             if attachment_key:
                 uploaded.append(filename)
+                analysis.zotero_synced = True
+
+        await db.flush()
+        await db.commit()
 
         if not uploaded:
             return {"status": "already_synced", "filenames": [], "count": 0, "message": "Analysis reports already present in Zotero"}

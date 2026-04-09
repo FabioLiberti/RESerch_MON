@@ -25,7 +25,7 @@ router = APIRouter()
 
 class AnalysisRequest(BaseModel):
     paper_ids: list[int]
-    mode: str = "quick"  # "quick", "deep", or "summary"
+    mode: str = "quick"  # "quick", "deep", "summary", or "extended"
 
 
 class QueueItemResponse(BaseModel):
@@ -77,8 +77,8 @@ async def trigger_analysis(
             detail="No analysis engine available. Configure ANTHROPIC_API_KEY in .env or start Ollama.",
         )
 
-    if body.mode not in ("quick", "deep", "summary"):
-        raise HTTPException(status_code=400, detail="Mode must be 'quick', 'deep', or 'summary'")
+    if body.mode not in ("quick", "deep", "summary", "extended"):
+        raise HTTPException(status_code=400, detail="Mode must be 'quick', 'deep', 'summary', or 'extended'")
 
     # Auto-download PDFs if not already available (both modes benefit from full text)
     pdf_status = []
@@ -175,9 +175,9 @@ async def trigger_analysis(
 
                 html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.6", mode=body.mode)
                 html_path = save_report(html, paper_id, mode=body.mode, version=version)
-                pdf_path = generate_pdf(html_path)
                 md_path = save_markdown(analysis_text, paper_id, body.mode, paper_data, version=version)
                 tex_path = save_latex(analysis_text, paper_id, body.mode, paper_data, engine="Claude Opus 4.6", version=version)
+                pdf_path = generate_pdf(html_path, tex_path=tex_path)
 
                 # Save as new entry (keep history)
                 q = AnalysisQueue(
@@ -699,6 +699,7 @@ async def analysis_history(
             "md_path": q.md_path,
             "tex_path": q.tex_path,
             "version": q.version or 1,
+            "zotero_synced": bool(q.zotero_synced) if q.zotero_synced is not None else False,
         })
     return result_list
 

@@ -207,16 +207,24 @@ async def list_papers(
         for pid, lid, lname, lcolor in labels_result.all():
             paper_labels_map.setdefault(pid, []).append({"id": lid, "name": lname, "color": lcolor})
 
-    # Fetch analyses for all papers
+    # Fetch analyses for all papers (ordered by newest first to determine CURRENT per mode)
     from app.models.analysis import AnalysisQueue
     analyses_result = await db.execute(
-        select(AnalysisQueue.paper_id, AnalysisQueue.analysis_mode, AnalysisQueue.status)
+        select(AnalysisQueue.paper_id, AnalysisQueue.analysis_mode, AnalysisQueue.status, AnalysisQueue.zotero_synced)
         .where(AnalysisQueue.paper_id.in_(paper_ids), AnalysisQueue.status == "done")
+        .order_by(AnalysisQueue.completed_at.desc())
     ) if paper_ids else None
     paper_analyses_map: dict[int, list[dict]] = {}
     if analyses_result:
-        for pid, mode, status in analyses_result.all():
-            paper_analyses_map.setdefault(pid, []).append({"mode": mode or "quick", "status": status})
+        # Keep only the most recent (CURRENT) entry per paper+mode
+        seen_modes: dict[int, set[str]] = {}
+        for pid, mode, status, zsynced in analyses_result.all():
+            m = mode or "quick"
+            if pid not in seen_modes:
+                seen_modes[pid] = set()
+            if m not in seen_modes[pid]:
+                seen_modes[pid].add(m)
+                paper_analyses_map.setdefault(pid, []).append({"mode": m, "status": status, "zotero_synced": bool(zsynced)})
 
     # Fetch notes for all papers
     from app.models.label import PaperNote

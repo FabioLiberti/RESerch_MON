@@ -378,6 +378,7 @@ export default function PapersPage() {
               <option value="quick">Quick (~5 pages)</option>
               <option value="deep">Deep (~7+ pages)</option>
               <option value="summary">Summary (1 page)</option>
+              <option value="extended">Extended Abstract (2 pages)</option>
             </select>
             <Link
               href={`/comparison?ids=${Array.from(selectedIds).join(",")}`}
@@ -529,14 +530,15 @@ export default function PapersPage() {
                       )}
                       {paper.analyses && paper.analyses.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {[...new Set(paper.analyses.filter(a => a.status === "done").map(a => a.mode))].map((mode) => (
+                          {paper.analyses.map((a) => (
                             <span
-                              key={mode}
-                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
-                                mode === "deep" ? "bg-purple-700 text-white" : mode === "summary" ? "bg-amber-600 text-white" : "bg-blue-700 text-white"
+                              key={a.mode}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5 ${
+                                a.mode === "deep" ? "bg-purple-700 text-white" : a.mode === "summary" ? "bg-amber-600 text-white" : a.mode === "extended" ? "bg-red-700 text-white" : "bg-blue-700 text-white"
                               }`}
                             >
-                              {(mode || "quick").toUpperCase()}
+                              {a.mode === "extended" ? "EXT.ABS" : (a.mode || "quick").toUpperCase()}
+                              {a.zotero_synced && <span title="Synced to Zotero">✓Z</span>}
                             </span>
                           ))}
                         </div>

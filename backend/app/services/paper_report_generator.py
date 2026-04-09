@@ -108,21 +108,72 @@ def markdown_to_html(md_text: str) -> str:
         extensions=["tables", "fenced_code", "nl2br"],
     )
 
-    # Restore block math as rendered divs
+    # Restore block math (keep LaTeX for MathJax rendering)
     for i, formula in enumerate(math_blocks):
         html = html.replace(
             f"MATHBLOCK_{i}_ENDMATH",
-            f'<div class="math-block">\\[{formula}\\]</div>'
+            f'<div class="math-block">$${formula}$$</div>'
         )
 
-    # Restore inline math
+    # Restore inline math (keep LaTeX for MathJax rendering)
     for i, formula in enumerate(math_inlines):
         html = html.replace(
             f"MATHINLINE_{i}_ENDMATH",
-            f'<span class="math-inline">\\({formula}\\)</span>'
+            f'<span class="math-inline">${formula}$</span>'
         )
 
     return html
+
+
+def _latex_to_html_math(formula: str, block: bool = False) -> str:
+    """Convert LaTeX math to readable HTML without requiring JavaScript."""
+    f = formula.strip()
+
+    # Common LaTeX → HTML replacements
+    replacements = [
+        (r'\\frac\{([^}]+)\}\{([^}]+)\}', r'(\1)/(\2)'),
+        (r'\\sum_\{([^}]+)\}\^\{([^}]+)\}', r'Σ<sub>\1</sub><sup>\2</sup>'),
+        (r'\\sum', 'Σ'),
+        (r'\\prod', 'Π'),
+        (r'\\int', '∫'),
+        (r'\\infty', '∞'),
+        (r'\\alpha', 'α'), (r'\\beta', 'β'), (r'\\gamma', 'γ'),
+        (r'\\delta', 'δ'), (r'\\epsilon', 'ε'), (r'\\theta', 'θ'),
+        (r'\\lambda', 'λ'), (r'\\mu', 'μ'), (r'\\sigma', 'σ'),
+        (r'\\pi', 'π'), (r'\\phi', 'φ'), (r'\\omega', 'ω'),
+        (r'\\Delta', 'Δ'), (r'\\Sigma', 'Σ'), (r'\\Omega', 'Ω'),
+        (r'\\nabla', '∇'), (r'\\partial', '∂'),
+        (r'\\leq', '≤'), (r'\\geq', '≥'), (r'\\neq', '≠'),
+        (r'\\approx', '≈'), (r'\\times', '×'), (r'\\cdot', '·'),
+        (r'\\in', '∈'), (r'\\notin', '∉'), (r'\\subset', '⊂'),
+        (r'\\rightarrow', '→'), (r'\\leftarrow', '←'), (r'\\Rightarrow', '⇒'),
+        (r'\\forall', '∀'), (r'\\exists', '∃'),
+        (r'\\sqrt\{([^}]+)\}', r'√(\1)'),
+        (r'\\mathbb\{([^}]+)\}', r'\1'),
+        (r'\\mathcal\{([^}]+)\}', r'\1'),
+        (r'\\mathrm\{([^}]+)\}', r'\1'),
+        (r'\\text\{([^}]+)\}', r'\1'),
+        (r'\\textbf\{([^}]+)\}', r'<strong>\1</strong>'),
+        (r'\\ell', 'ℓ'),
+        (r'\^(\w)', r'<sup>\1</sup>'),
+        (r'\^\{([^}]+)\}', r'<sup>\1</sup>'),
+        (r'_(\w)', r'<sub>\1</sub>'),
+        (r'_\{([^}]+)\}', r'<sub>\1</sub>'),
+        (r'\\,', ' '),
+        (r'\\;', ' '),
+        (r'\\quad', '  '),
+        (r'\\\\', '<br>'),
+    ]
+
+    for pattern, repl in replacements:
+        f = re.sub(pattern, repl, f)
+
+    # Remove remaining backslash commands
+    f = re.sub(r'\\[a-zA-Z]+', '', f)
+    # Clean up braces
+    f = f.replace('{', '').replace('}', '')
+
+    return f
 
 
 PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
@@ -132,10 +183,10 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Analysis Report — {{ paper.title[:80] }}</title>
 <script>
-  window.MathJax = {
-    tex: { inlineMath: [['\\\\(','\\\\)'], ['$','$']], displayMath: [['\\\\[','\\\\]'], ['$$','$$']] },
-    options: { skipHtmlTags: ['script','noscript','style','textarea'] }
-  };
+window.MathJax = {
+  tex: { inlineMath: [['$','$'], ['\\\\(','\\\\)']], displayMath: [['$$','$$'], ['\\\\[','\\\\]']] },
+  options: { skipHtmlTags: ['script','noscript','style','textarea'] }
+};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
 <style>
@@ -144,7 +195,7 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background: #0a0a0f; color: #e8e8f0;
     max-width: 800px; margin: 0 auto; padding: 32px 24px;
-    line-height: 1.6;
+    line-height: 1.6; overflow-wrap: anywhere; word-break: break-word;
   }
   a { color: #6366f1; text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -195,6 +246,7 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
   .analysis-content {
     background: #12121a; border: 1px solid #2a2a3e;
     border-radius: 12px; padding: 24px; margin-bottom: 16px;
+    overflow-wrap: anywhere; word-break: break-word;
   }
   .analysis-content h3 {
     font-size: 15px; color: #6366f1; margin: 24px 0 10px;
@@ -257,7 +309,7 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
 
 <div class="report-header">
   <div class="report-title">{{ paper.title }}
-    {% if mode %}<span style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:10px;vertical-align:middle;{% if mode == 'deep' %}background:#7e22ce;color:#fff{% elif mode == 'summary' %}background:#d97706;color:#fff{% else %}background:#1d4ed8;color:#fff{% endif %}">{{ mode.upper() }}</span>{% endif %}
+    {% if mode %}<span style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:10px;vertical-align:middle;{% if mode == 'deep' %}background:#7e22ce;color:#fff{% elif mode == 'summary' %}background:#d97706;color:#fff{% elif mode == 'extended' %}background:#b91c1c;color:#fff{% else %}background:#1d4ed8;color:#fff{% endif %}">{% if mode == 'extended' %}EXT.ABS{% else %}{{ mode.upper() }}{% endif %}</span>{% endif %}
   </div>
   <div class="report-meta">
     {% if paper.doi %}
@@ -379,13 +431,65 @@ async def get_paper_data(db: AsyncSession, paper_id: int) -> dict | None:
     }
 
 
+def _clean_stray_latex(text: str) -> str:
+    """Clean LaTeX remnants in plain text that aren't wrapped in $...$."""
+    # Replace \| with | (norm notation)
+    text = text.replace('\\|', '|')
+    # Replace \hat{x} → x̂, \bar{x} → x̄, \tilde{x} → x̃
+    text = re.sub(r'\\hat\{(\w)\}', r'\1̂', text)
+    text = re.sub(r'\\bar\{(\w)\}', r'\1̄', text)
+    text = re.sub(r'\\tilde\{(\w)\}', r'\1̃', text)
+    # Common Greek letters in plain text
+    greek = {
+        '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ',
+        '\\epsilon': 'ε', '\\theta': 'θ', '\\lambda': 'λ', '\\mu': 'μ',
+        '\\sigma': 'σ', '\\pi': 'π', '\\phi': 'φ', '\\omega': 'ω',
+        '\\Delta': 'Δ', '\\Sigma': 'Σ', '\\Omega': 'Ω',
+    }
+    for latex, uni in greek.items():
+        text = text.replace(latex, uni)
+    # Common operators
+    ops = {
+        '\\cdot': '·', '\\times': '×', '\\leq': '≤', '\\geq': '≥',
+        '\\neq': '≠', '\\approx': '≈', '\\infty': '∞', '\\sum': 'Σ',
+        '\\prod': 'Π', '\\int': '∫', '\\partial': '∂', '\\nabla': '∇',
+        '\\rightarrow': '→', '\\leftarrow': '←', '\\Rightarrow': '⇒',
+        '\\forall': '∀', '\\exists': '∃', '\\in': '∈',
+        '\\ell': 'ℓ', '\\quad': ' ', '\\,': '', '\\;': '',
+    }
+    for latex, uni in ops.items():
+        text = text.replace(latex, uni)
+    # \frac{a}{b} → (a)/(b) in plain text
+    text = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'(\1)/(\2)', text)
+    # \sqrt{x} → √(x)
+    text = re.sub(r'\\sqrt\{([^}]+)\}', r'√(\1)', text)
+    # \text{...}, \mathrm{...}, \mathbb{...} → just the content
+    text = re.sub(r'\\(?:text|mathrm|mathbb|mathcal)\{([^}]+)\}', r'\1', text)
+    # Superscripts and subscripts in plain text
+    text = re.sub(r'\^\{([^}]+)\}', r'⁽\1⁾', text)
+    text = re.sub(r'_\{([^}]+)\}', r'₍\1₎', text)
+    # Remove remaining unknown \commands but keep the text after
+    text = re.sub(r'\\[a-zA-Z]+(?:\{([^}]*)\})?', r'\1', text)
+    # Clean stray braces
+    text = text.replace('{', '').replace('}', '')
+    return text
+
+
 def render_paper_report(paper_data: dict, analysis_text: str, engine: str = "Claude Opus", mode: str = "") -> str:
     """Render the HTML report for a single paper."""
     paper = paper_data["paper"]
     keywords = paper.keywords or []
 
     keyword_tags, keyword_categories = build_keyword_data(keywords)
-    analysis_html = markdown_to_html(analysis_text)
+    # Strip fenced code blocks that Claude sometimes wraps the output in
+    clean_text = analysis_text
+    if clean_text.strip().startswith("```"):
+        clean_text = re.sub(r'^```\w*\n?', '', clean_text.strip())
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+    # Clean stray LaTeX in plain text (not wrapped in $...$)
+    clean_text = _clean_stray_latex(clean_text)
+    analysis_html = markdown_to_html(clean_text)
 
     env = Environment(loader=BaseLoader(), autoescape=True)
     template = env.from_string(PAPER_REPORT_TEMPLATE)
@@ -668,6 +772,8 @@ def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, e
 \\definecolor{{primary}}{{HTML}}{{4338CA}}
 \\hypersetup{{colorlinks=true,linkcolor=primary,urlcolor=primary,citecolor=primary}}
 
+\\setcounter{{secnumdepth}}{{0}}
+
 \\pagestyle{{fancy}}
 \\fancyhf{{}}
 \\fancyhead[L]{{\\small\\textcolor{{gray}}{{Analysis {mode.upper()} v{version} — Paper ID: {paper_id}}}}}
@@ -718,19 +824,58 @@ PDF_OVERRIDE_CSS = """
 """
 
 
-def generate_pdf(html_path: Path) -> Path | None:
-    """Generate PDF from HTML report with light-theme colors for readability."""
+def generate_pdf(html_path: Path, tex_path: Path | None = None) -> Path | None:
+    """Generate PDF. Uses pdflatex from .tex if available, falls back to weasyprint from .html."""
+    pdf_path = html_path.with_suffix(".pdf")
+
+    # Try pdflatex first (best formula rendering)
+    if tex_path and tex_path.exists():
+        try:
+            import subprocess
+            abs_tex = Path(tex_path).resolve()
+            abs_dir = abs_tex.parent
+            result = subprocess.run(
+                ["pdflatex", "-interaction=nonstopmode", str(abs_tex.name)],
+                capture_output=True, text=True, timeout=60,
+                cwd=str(abs_dir),
+            )
+            tex_pdf = abs_tex.with_suffix(".pdf")
+            if tex_pdf.exists() and tex_pdf.stat().st_size > 0:
+                # Copy to expected path if different
+                abs_pdf = Path(pdf_path).resolve()
+                if tex_pdf != abs_pdf:
+                    import shutil
+                    shutil.copy2(str(tex_pdf), str(abs_pdf))
+                # Clean up LaTeX aux files
+                for ext in [".aux", ".log", ".out", ".toc"]:
+                    aux = abs_tex.with_suffix(ext)
+                    if aux.exists():
+                        aux.unlink()
+                logger.info(f"PDF generated via pdflatex: {pdf_path}")
+                return pdf_path
+            else:
+                logger.warning(f"pdflatex did not produce PDF. Return code: {result.returncode}")
+                # Log first few errors
+                for line in result.stdout.split('\n'):
+                    if line.startswith('!'):
+                        logger.warning(f"  pdflatex: {line}")
+        except FileNotFoundError:
+            logger.warning("pdflatex not found, falling back to weasyprint")
+        except subprocess.TimeoutExpired:
+            logger.warning("pdflatex timed out, falling back to weasyprint")
+        except Exception as e:
+            logger.warning(f"pdflatex failed: {e}, falling back to weasyprint")
+
+    # Fallback: weasyprint from HTML
     import os
-    # Ensure homebrew libraries are findable (macOS)
     if "DYLD_FALLBACK_LIBRARY_PATH" not in os.environ:
         os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = "/opt/homebrew/lib"
     try:
         from weasyprint import HTML, CSS
-        pdf_path = html_path.with_suffix(".pdf")
         html_doc = HTML(filename=str(html_path))
         css_override = CSS(string=PDF_OVERRIDE_CSS)
         html_doc.write_pdf(str(pdf_path), stylesheets=[css_override])
-        logger.info(f"PDF generated: {pdf_path}")
+        logger.info(f"PDF generated via weasyprint: {pdf_path}")
         return pdf_path
     except ImportError:
         logger.warning("weasyprint not installed, skipping PDF generation")

@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Float
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Float
 from sqlalchemy.orm import relationship
 
 from app.models.paper import Base
@@ -141,6 +141,7 @@ class AnalysisQueue(Base):
     md_path = Column(Text, nullable=True)
     tex_path = Column(Text, nullable=True)
     version = Column(Integer, default=1)
+    zotero_synced = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

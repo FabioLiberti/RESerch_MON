@@ -31,7 +31,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="max-w-4xl space-y-6 overflow-hidden">
       {/* Back */}
       <Link href="/papers" className="text-sm text-[var(--primary)] hover:underline">
         &larr; Back to papers
@@ -577,7 +577,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     }
   }, [hasReport, status]);
 
-  const [analysisMode, setAnalysisMode] = useState<"quick" | "deep" | "summary">("quick");
+  const [analysisMode, setAnalysisMode] = useState<"quick" | "deep" | "summary" | "extended">("quick");
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -679,7 +679,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = `analysis_paper_${paperId}.pdf`;
+                a.download = `analysis_${paperId}.pdf`;
                 a.click();
                 URL.revokeObjectURL(url);
               });
@@ -700,25 +700,26 @@ function AnalysisButton({ paperId }: { paperId: number }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {analysisMode === "deep" ? "Deep" : "Quick"} Analysis via Claude Opus 4.6... {startTime && <ElapsedTimer startTime={startTime} />}
+              {analysisMode.toUpperCase()} Analysis via Claude Opus 4.6... {startTime && <ElapsedTimer startTime={startTime} />}
             </>
           ) : (
             "Rigenera Analisi"
           )}
         </button>
         {analysisResult && (
-          <div className="w-full mt-2 px-4 py-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-sm text-gray-300 font-medium">
+          <div className="w-full mt-2 px-4 py-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-sm text-gray-800 font-medium">
             {analysisResult}
           </div>
         )}
         <select
           value={analysisMode}
-          onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
+          onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep" | "summary" | "extended")}
           className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
         >
           <option value="quick">Quick (~5 pages)</option>
           <option value="deep">Deep (~7+ pages)</option>
           <option value="summary">Summary (1 page)</option>
+          <option value="extended">Extended Abstract (2 pages)</option>
         </select>
         {/* Upload PDF */}
         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs cursor-pointer hover:bg-[var(--muted)] transition-colors">
@@ -782,7 +783,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
     )}
     <select
       value={analysisMode}
-      onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep")}
+      onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep" | "summary" | "extended")}
       className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
     >
       <option value="quick">Quick (abstract)</option>
@@ -828,6 +829,7 @@ interface AnalysisRun {
   md_path: string | null;
   tex_path: string | null;
   version: number;
+  zotero_synced: boolean;
 }
 
 // --- Summary Card (option A: from structured data, zero cost) ---
@@ -887,7 +889,7 @@ function SummaryCard({ paperId }: { paperId: number }) {
   const lims = [...(data.limitations_declared || []), ...(data.limitations_identified || [])];
 
   return (
-    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-5 space-y-4">
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-5 space-y-4 overflow-hidden" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -921,15 +923,15 @@ function SummaryCard({ paperId }: { paperId: number }) {
       {/* Problem & Method */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {data.problem_addressed && (
-          <div className="rounded-lg bg-[var(--secondary)] p-3">
+          <div className="rounded-lg bg-[var(--secondary)] p-3 min-w-0">
             <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Problem</span>
-            <p className="text-xs mt-1">{data.problem_addressed}</p>
+            <p className="text-xs mt-1 break-words">{data.problem_addressed}</p>
           </div>
         )}
         {data.proposed_method && (
-          <div className="rounded-lg bg-[var(--secondary)] p-3">
+          <div className="rounded-lg bg-[var(--secondary)] p-3 min-w-0">
             <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Method</span>
-            <p className="text-xs mt-1 font-medium">{data.proposed_method}</p>
+            <p className="text-xs mt-1 font-medium break-words">{data.proposed_method}</p>
           </div>
         )}
       </div>
@@ -976,7 +978,7 @@ function SummaryCard({ paperId }: { paperId: number }) {
       )}
 
       {/* Assessment grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 overflow-hidden">
         <div className="text-center rounded-lg bg-[var(--secondary)] p-2">
           <span className="text-[10px] text-[var(--muted-foreground)] block">Novelty</span>
           {data.novelty_level ? (
@@ -1025,7 +1027,7 @@ function SummaryCard({ paperId }: { paperId: number }) {
       {data.key_findings_summary && (
         <div className="rounded-lg bg-[var(--secondary)] p-3">
           <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase">Key Findings</span>
-          <p className="text-xs mt-1">{data.key_findings_summary}</p>
+          <p className="text-xs mt-1 break-words">{data.key_findings_summary}</p>
         </div>
       )}
 
@@ -1075,25 +1077,24 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
           <details key={run.id} className={cn("rounded-lg bg-[var(--secondary)]", isSuperseded && "opacity-50")}>
             <summary className="flex items-center justify-between p-3 cursor-pointer">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{history.length - idx} (ID:{paperId}) v{run.version || 1}</span>
+                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">
+                  #{history.length - idx} (ID:{paperId}) v{run.version || 1}
+                  {run.zotero_synced && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-700 text-white font-medium" title="Synced to Zotero">✓Z</span>}
+                </span>
                 {isSuperseded ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-gray-600 text-white">SUPERSEDED</span>
                 ) : run.status === "done" ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-400 text-gray-800">CURRENT</span>
                 ) : null}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                  run.mode === "deep" ? "bg-purple-700 text-white" : run.mode === "summary" ? "bg-amber-600 text-white" : "bg-blue-700 text-white"
+                  run.mode === "deep" ? "bg-purple-700 text-white" : run.mode === "summary" ? "bg-amber-600 text-white" : run.mode === "extended" ? "bg-red-700 text-white" : "bg-blue-700 text-white"
                 }`}>
-                  {run.mode.toUpperCase()}
+                  {run.mode === "extended" ? "EXT.ABS" : run.mode.toUpperCase()}
                 </span>
                 <span className="text-xs font-medium">{engineLabel(run.engine)}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  run.status === "done" ? "bg-emerald-700 text-white" :
-                  run.status === "failed" ? "bg-red-700 text-white" :
-                  "bg-amber-700 text-white"
-                }`}>
-                  {run.status}
-                </span>
+                {run.status === "failed" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-700 text-white">FAILED</span>
+                )}
                 {run.duration_s !== null && (
                   <span className="text-[10px] text-[var(--muted-foreground)]">
                     {run.duration_s < 60 ? `${run.duration_s}s` : `${Math.floor(run.duration_s / 60)}m ${run.duration_s % 60}s`}
@@ -1106,17 +1107,14 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     onClick={(e) => {
                       e.preventDefault();
                       const token = localStorage.getItem("fl-token");
-                      const url = isSuperseded
-                        ? `/api/v1/analysis/${paperId}/html?queue_id=${run.id}`
-                        : `/api/v1/analysis/${paperId}/html`;
-                      fetch(url, {
+                      fetch(`/api/v1/analysis/${paperId}/html?queue_id=${run.id}`, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       }).then(r => r.text()).then(html => {
-                        const w = window.open();
-                        if (w) { w.document.write(html); w.document.close(); }
+                        const blob = new Blob([html], { type: "text/html" });
+                        window.open(URL.createObjectURL(blob), '_blank');
                       });
                     }}
-                    className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-600"
+                    className="text-[10px] px-2 py-1 rounded bg-gray-300 text-gray-800 hover:bg-gray-400 font-bold"
                   >
                     View
                   </button>
@@ -1126,16 +1124,14 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     onClick={(e) => {
                       e.preventDefault();
                       const token = localStorage.getItem("fl-token");
-                      const url = isSuperseded
-                        ? `/api/v1/analysis/${paperId}/pdf?queue_id=${run.id}`
-                        : `/api/v1/analysis/${paperId}/pdf`;
+                      const url = `/api/v1/analysis/${paperId}/pdf?queue_id=${run.id}`;
                       fetch(url, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       }).then(r => r.blob()).then(blob => {
                         const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = blobUrl;
-                        a.download = `analysis_${run.mode}_${paperId}.pdf`;
+                        a.download = `analysis_${run.mode}_${paperId}_v${run.version || 1}.pdf`;
                         a.click();
                         URL.revokeObjectURL(blobUrl);
                       });
@@ -1150,9 +1146,7 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     onClick={(e) => {
                       e.preventDefault();
                       const token = localStorage.getItem("fl-token");
-                      const url = isSuperseded
-                        ? `/api/v1/analysis/${paperId}/md?queue_id=${run.id}`
-                        : `/api/v1/analysis/${paperId}/md`;
+                      const url = `/api/v1/analysis/${paperId}/md?queue_id=${run.id}`;
                       fetch(url, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       }).then(r => r.blob()).then(blob => {
@@ -1174,9 +1168,7 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     onClick={(e) => {
                       e.preventDefault();
                       const token = localStorage.getItem("fl-token");
-                      const url = isSuperseded
-                        ? `/api/v1/analysis/${paperId}/tex?queue_id=${run.id}`
-                        : `/api/v1/analysis/${paperId}/tex`;
+                      const url = `/api/v1/analysis/${paperId}/tex?queue_id=${run.id}`;
                       fetch(url, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       }).then(r => r.blob()).then(blob => {
