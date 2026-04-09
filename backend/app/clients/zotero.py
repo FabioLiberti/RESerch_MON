@@ -149,6 +149,27 @@ class ZoteroClient(BaseAPIClient):
 
         return None
 
+    async def delete_item(self, item_key: str) -> bool:
+        """Delete a Zotero item (paper + all its children)."""
+        if not self.is_configured():
+            return False
+        try:
+            # Get item version first
+            response = await self._request(
+                "GET", f"{self.user_prefix}/items/{item_key}", headers=self._headers()
+            )
+            version = response.json().get("version", 0)
+            await self._request(
+                "DELETE",
+                f"{self.user_prefix}/items/{item_key}",
+                headers={**self._headers(), "If-Unmodified-Since-Version": str(version)},
+            )
+            logger.info(f"[zotero] Deleted item: {item_key}")
+            return True
+        except Exception as e:
+            logger.error(f"[zotero] Error deleting item {item_key}: {e}")
+            return False
+
     async def delete_child_attachments(self, parent_item_key: str, filename_prefix: str) -> int:
         """Delete child attachment items matching a filename prefix."""
         if not self.is_configured():

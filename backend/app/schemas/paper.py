@@ -47,6 +47,7 @@ class PaperSummary(BaseModel):
     analyses: list[dict] = []
     has_note: bool = False
     disabled: bool = False
+    on_zotero: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

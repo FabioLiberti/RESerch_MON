@@ -368,15 +368,199 @@ def render_paper_report(paper_data: dict, analysis_text: str, engine: str = "Cla
     )
 
 
-def save_report(html: str, paper_id: int, mode: str = "quick") -> Path:
-    """Save HTML report to disk and return the path."""
+def _get_next_version(paper_id: int, mode: str) -> int:
+    """Get next version number for a paper+mode combination."""
+    reports_dir = Path(settings.reports_path) / "analysis"
+    if not reports_dir.exists():
+        return 1
+    existing = list(reports_dir.glob(f"analysis_{mode}_{paper_id}_v*.html"))
+    if not existing:
+        return 1
+    versions = []
+    for p in existing:
+        # Extract version from filename: analysis_quick_461_v3.html
+        try:
+            v = int(p.stem.rsplit("_v", 1)[1])
+            versions.append(v)
+        except (ValueError, IndexError):
+            continue
+    return max(versions, default=0) + 1
+
+
+def save_report(html: str, paper_id: int, mode: str = "quick", version: int | None = None) -> Path:
+    """Save HTML report to disk with versioned naming. Returns HTML path."""
     reports_dir = Path(settings.reports_path) / "analysis"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    path = reports_dir / f"paper_{paper_id}_{mode}_{timestamp}.html"
+    if version is None:
+        version = _get_next_version(paper_id, mode)
+
+    basename = f"analysis_{mode}_{paper_id}_v{version}"
+    path = reports_dir / f"{basename}.html"
     path.write_text(html, encoding="utf-8")
     logger.info(f"Report saved: {path}")
+    return path
+
+
+def save_markdown(analysis_text: str, paper_id: int, mode: str, paper_data: dict, version: int | None = None) -> Path:
+    """Save analysis as Markdown file with versioned naming."""
+    reports_dir = Path(settings.reports_path) / "analysis"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    if version is None:
+        version = _get_next_version(paper_id, mode)
+
+    basename = f"analysis_{mode}_{paper_id}_v{version}"
+    path = reports_dir / f"{basename}.md"
+
+    paper = paper_data["paper"]
+    header = f"""---
+title: "{paper.title}"
+paper_id: {paper_id}
+mode: {mode}
+version: {version}
+doi: {paper.doi or "N/A"}
+journal: {paper.journal or "N/A"}
+date: {paper.publication_date or "N/A"}
+generated: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
+---
+
+"""
+    path.write_text(header + analysis_text, encoding="utf-8")
+    logger.info(f"Markdown saved: {path}")
+    return path
+
+
+def _markdown_to_latex(text: str) -> str:
+    """Convert Markdown analysis text to LaTeX body content."""
+    lines = text.split("\n")
+    result = []
+    in_list = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Headers
+        if stripped.startswith("### "):
+            if in_list:
+                result.append("\\end{itemize}")
+                in_list = False
+            result.append(f"\\subsubsection{{{stripped[4:]}}}")
+            continue
+        if stripped.startswith("## "):
+            if in_list:
+                result.append("\\end{itemize}")
+                in_list = False
+            result.append(f"\\subsection{{{stripped[3:]}}}")
+            continue
+        if stripped.startswith("# "):
+            if in_list:
+                result.append("\\end{itemize}")
+                in_list = False
+            result.append(f"\\section{{{stripped[2:]}}}")
+            continue
+
+        # List items
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            if not in_list:
+                result.append("\\begin{itemize}")
+                in_list = True
+            item_text = stripped[2:]
+            item_text = _latex_inline(item_text)
+            result.append(f"  \\item {item_text}")
+            continue
+
+        # Empty line
+        if not stripped:
+            if in_list:
+                result.append("\\end{itemize}")
+                in_list = False
+            result.append("")
+            continue
+
+        # Regular paragraph
+        if in_list:
+            result.append("\\end{itemize}")
+            in_list = False
+        result.append(_latex_inline(stripped))
+
+    if in_list:
+        result.append("\\end{itemize}")
+
+    return "\n".join(result)
+
+
+def _latex_inline(text: str) -> str:
+    """Convert inline Markdown formatting to LaTeX."""
+    import re
+    # Escape LaTeX special chars (but not $ for formulas, not \ for existing commands)
+    for char in ['&', '%', '#', '_']:
+        text = text.replace(char, f"\\{char}")
+    # Bold: **text** → \textbf{text}
+    text = re.sub(r'\*\*(.+?)\*\*', r'\\textbf{\1}', text)
+    # Italic: *text* → \textit{text}
+    text = re.sub(r'\*(.+?)\*', r'\\textit{\1}', text)
+    # Inline code: `text` → \texttt{text}
+    text = re.sub(r'`(.+?)`', r'\\texttt{\1}', text)
+    return text
+
+
+def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, engine: str = "Claude Opus 4.6", version: int | None = None) -> Path:
+    """Save analysis as LaTeX file with versioned naming."""
+    reports_dir = Path(settings.reports_path) / "analysis"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    if version is None:
+        version = _get_next_version(paper_id, mode)
+
+    basename = f"analysis_{mode}_{paper_id}_v{version}"
+    path = reports_dir / f"{basename}.tex"
+
+    paper = paper_data["paper"]
+    authors = paper_data.get("authors", "")
+    body = _markdown_to_latex(analysis_text)
+
+    # Escape title for LaTeX
+    title_escaped = paper.title.replace('&', '\\&').replace('%', '\\%').replace('#', '\\#').replace('_', '\\_')
+
+    tex = f"""\\documentclass[11pt,a4paper]{{article}}
+\\usepackage[utf8]{{inputenc}}
+\\usepackage[T1]{{fontenc}}
+\\usepackage[italian]{{babel}}
+\\usepackage{{geometry}}
+\\geometry{{margin=2.5cm}}
+\\usepackage{{hyperref}}
+\\usepackage{{amsmath,amssymb}}
+\\usepackage{{enumitem}}
+\\usepackage{{xcolor}}
+\\usepackage{{fancyhdr}}
+
+\\definecolor{{primary}}{{HTML}}{{4338CA}}
+\\hypersetup{{colorlinks=true,linkcolor=primary,urlcolor=primary,citecolor=primary}}
+
+\\pagestyle{{fancy}}
+\\fancyhf{{}}
+\\fancyhead[L]{{\\small\\textcolor{{gray}}{{Analysis {mode.upper()} v{version} — Paper ID: {paper_id}}}}}
+\\fancyhead[R]{{\\small\\textcolor{{gray}}{{FL Research Monitor}}}}
+\\fancyfoot[C]{{\\thepage}}
+
+\\title{{{title_escaped}\\\\[0.3em]
+\\large\\textcolor{{primary}}{{Analysis {mode.upper()} — v{version}}}}}
+\\author{{{authors or ""}}}
+\\date{{{paper.publication_date or "N/A"} \\\\[0.2em]
+\\small DOI: \\href{{https://doi.org/{paper.doi or ""}}}{{{paper.doi or "N/A"}}} \\\\
+\\small Journal: {(paper.journal or "N/A").replace("&", "\\&")} \\\\
+\\small Generated: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")} — Engine: {engine}}}
+
+\\begin{{document}}
+\\maketitle
+
+{body}
+
+\\end{{document}}
+"""
+    path.write_text(tex, encoding="utf-8")
+    logger.info(f"LaTeX saved: {path}")
     return path
 
 

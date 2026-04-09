@@ -30,7 +30,7 @@ async def get_comparison_data(
         return []
 
     result = await db.execute(
-        select(StructuredAnalysis, Paper.title, Paper.doi, Paper.publication_date)
+        select(StructuredAnalysis, Paper.title, Paper.doi, Paper.publication_date, Paper.keywords_json)
         .join(Paper, StructuredAnalysis.paper_id == Paper.id)
         .where(StructuredAnalysis.paper_id.in_(ids))
         .order_by(StructuredAnalysis.created_at.desc())
@@ -50,10 +50,13 @@ async def get_comparison_data(
     seen = set()
     items = []
     for row in result.all():
-        sa, title, doi, pub_date = row
+        sa, title, doi, pub_date, kw_json = row
         if sa.paper_id in seen:
             continue
         seen.add(sa.paper_id)
+
+        import json as _json
+        keywords = _json.loads(kw_json) if kw_json else []
 
         items.append({
             "paper_id": sa.paper_id,
@@ -61,6 +64,7 @@ async def get_comparison_data(
             "doi": doi,
             "publication_date": pub_date,
             "labels": paper_labels.get(sa.paper_id, []),
+            "keywords": keywords,
             "problem_addressed": sa.problem_addressed,
             "proposed_method": sa.proposed_method,
             "fl_techniques": sa.fl_techniques,

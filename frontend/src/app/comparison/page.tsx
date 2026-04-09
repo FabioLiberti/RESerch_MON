@@ -13,6 +13,7 @@ interface ComparisonItem {
   doi: string | null;
   publication_date: string | null;
   labels: { name: string; color: string }[];
+  keywords: string[];
   problem_addressed: string | null;
   proposed_method: string | null;
   fl_techniques: string[];
@@ -68,6 +69,18 @@ const ROWS: { key: string; label: string; render: (item: ComparisonItem, allItem
     key: "problem",
     label: "Problem Addressed",
     render: (item) => <span className="text-xs">{item.problem_addressed || "—"}</span>,
+  },
+  {
+    key: "keywords",
+    label: "Keywords",
+    render: (item) =>
+      item.keywords && item.keywords.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {item.keywords.map((kw) => (
+            <span key={kw} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-white">{kw}</span>
+          ))}
+        </div>
+      ) : <span className="text-xs text-[var(--muted-foreground)]">—</span>,
   },
   {
     key: "method",
@@ -308,6 +321,7 @@ export default function ComparisonPage() {
         { label: "DOI", getValue: (i) => i.doi || "" },
         { label: "Publication Date", getValue: (i) => i.publication_date || "" },
         { label: "Labels", getValue: (i) => (i.labels || []).map((l) => l.name).join(", ") },
+        { label: "Keywords", getValue: (i) => (i.keywords || []).join(", ") },
         { label: "Problem Addressed", getValue: (i) => i.problem_addressed || "" },
         { label: "Proposed Method", getValue: (i) => i.proposed_method || "" },
         { label: "FL Techniques", getValue: (i) => i.fl_techniques.join(", ") },

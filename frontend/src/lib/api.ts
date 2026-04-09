@@ -252,6 +252,8 @@ export const api = {
     fetchAPI<any>("/zotero/sync-all", { method: "POST" }),
   syncAnalysisToZotero: (paperId: number) =>
     fetchAPI<any>(`/zotero/sync-analysis/${paperId}`, { method: "POST" }),
+  removeFromZotero: (paperId: number) =>
+    fetchAPI<any>(`/zotero/remove/${paperId}`, { method: "DELETE" }),
 
   // Comparison
   getComparisonData: (paperIds: number[]) =>

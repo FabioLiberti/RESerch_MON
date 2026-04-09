@@ -84,7 +84,7 @@ function SidebarTabs() {
 }
 
 function LabelsSection() {
-  const { data: labels } = useSWR<{ id: number; name: string; color: string }[]>(
+  const { data: labels } = useSWR<{ id: number; name: string; color: string; paper_count?: number }[]>(
     "/api/v1/labels", authFetcher
   );
 
@@ -98,7 +98,7 @@ function LabelsSection() {
 
   return (
     <div>
-      {labels.map((label) => (
+      {[...labels].sort((a, b) => a.name.localeCompare(b.name)).map((label) => (
         <Link
           key={label.id}
           href={`/papers?label=${encodeURIComponent(label.name)}`}
@@ -106,6 +106,9 @@ function LabelsSection() {
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
           <span className="flex-1 truncate">{label.name}</span>
+          {label.paper_count != null && label.paper_count > 0 && (
+            <span className="text-[10px] text-[var(--muted-foreground)]">{label.paper_count}</span>
+          )}
         </Link>
       ))}
     </div>

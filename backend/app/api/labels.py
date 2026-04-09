@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -44,13 +44,21 @@ class NoteResponse(BaseModel):
 
 # --- Label CRUD ---
 
-@router.get("", response_model=list[LabelResponse])
+@router.get("")
 async def list_labels(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Label).order_by(Label.name))
-    return list(result.scalars().all())
+    result = await db.execute(
+        select(Label, func.count(PaperLabel.id).label("paper_count"))
+        .outerjoin(PaperLabel, PaperLabel.label_id == Label.id)
+        .group_by(Label.id)
+        .order_by(Label.name)
+    )
+    return [
+        {"id": label.id, "name": label.name, "color": label.color, "paper_count": count}
+        for label, count in result.all()
+    ]
 
 
 @router.post("", response_model=LabelResponse, status_code=201)

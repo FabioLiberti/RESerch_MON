@@ -46,6 +46,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         analyses=analyses or [],
         has_note=has_note,
         disabled=paper.disabled or False,
+        on_zotero=paper.zotero_key is not None,
         created_at=paper.created_at,
     )
 
@@ -113,6 +114,7 @@ async def list_papers(
     date_from: str | None = None,
     date_to: str | None = None,
     has_pdf: bool | None = None,
+    on_zotero: bool | None = None,
     search: str | None = None,
     keyword: str | None = None,
     author: str | None = None,
@@ -137,6 +139,8 @@ async def list_papers(
         query = query.where(Paper.publication_date <= date_to)
     if has_pdf is True:
         query = query.where(Paper.pdf_local_path.isnot(None))
+    if on_zotero is True:
+        query = query.where(Paper.zotero_key.isnot(None))
     if search:
         like_term = f"%{search}%"
         query = query.where(Paper.title.ilike(like_term) | Paper.abstract.ilike(like_term))
@@ -225,18 +229,25 @@ async def get_all_keywords(db: AsyncSession = Depends(get_db)):
     )
     rows = result.scalars().all()
 
-    counter: Counter = Counter()
+    counts: dict[str, int] = {}  # lowercase -> total count
+    forms: dict[str, Counter] = {}  # lowercase -> Counter(original_form)
     for kw_json in rows:
         try:
             kws = json.loads(kw_json) if kw_json else []
             for kw in kws:
-                counter[kw] += 1
+                key = kw.strip().lower()
+                if not key:
+                    continue
+                counts[key] = counts.get(key, 0) + 1
+                if key not in forms:
+                    forms[key] = Counter()
+                forms[key][kw.strip()] += 1
         except json.JSONDecodeError:
             continue
 
     return [
-        {"keyword": kw, "count": count}
-        for kw, count in counter.most_common()
+        {"keyword": forms[key].most_common(1)[0][0], "count": count}
+        for key, count in sorted(counts.items(), key=lambda x: -x[1])
     ]
 
 

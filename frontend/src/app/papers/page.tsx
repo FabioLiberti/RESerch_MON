@@ -32,6 +32,8 @@ export default function PapersPage() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [keywordFilter, setKeywordFilter] = useState("");
   const [labelFilter, setLabelFilter] = useState("");
+  const [pdfFilter, setPdfFilter] = useState("");
+  const [zoteroFilter, setZoteroFilter] = useState("");
 
   // Sync URL params with state
   useEffect(() => {
@@ -104,6 +106,8 @@ export default function PapersPage() {
   if (topicFilter) params.topic = topicFilter;
   if (keywordFilter) params.keyword = keywordFilter;
   if (labelFilter) params.label = labelFilter;
+  if (pdfFilter === "yes") params.has_pdf = "true";
+  if (zoteroFilter === "yes") params.on_zotero = "true";
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -287,6 +291,22 @@ export default function PapersPage() {
           </select>
         )}
         <select
+          value={pdfFilter}
+          onChange={(e) => { setPdfFilter(e.target.value); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+        >
+          <option value="">PDF: All</option>
+          <option value="yes">With PDF</option>
+        </select>
+        <select
+          value={zoteroFilter}
+          onChange={(e) => { setZoteroFilter(e.target.value); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+        >
+          <option value="">Zotero: All</option>
+          <option value="yes">On Zotero</option>
+        </select>
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -300,10 +320,10 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -521,8 +541,13 @@ export default function PapersPage() {
                           ))}
                         </div>
                       )}
-                      {(paper.has_note || paper.disabled) && (
+                      {(paper.on_zotero || paper.has_note || paper.disabled) && (
                         <div className="flex gap-1 mt-1">
+                          {paper.on_zotero && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-700 text-white" title="On Zotero">
+                              ZOTERO
+                            </span>
+                          )}
                           {paper.has_note && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-700 text-white" title="Has note">
                               NOTE

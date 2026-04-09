@@ -142,3 +142,33 @@ async def sync_analysis(
 
     finally:
         await client.close()
+
+
+@router.delete("/remove/{paper_id}")
+async def remove_from_zotero(
+    paper_id: int,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a paper and its attachments from Zotero, clear zotero_key in DB."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if not paper.zotero_key:
+        raise HTTPException(status_code=400, detail="Paper is not on Zotero")
+
+    client = ZoteroClient()
+    if not client.is_configured():
+        raise HTTPException(status_code=503, detail="Zotero not configured")
+
+    try:
+        deleted = await client.delete_item(paper.zotero_key)
+        if deleted:
+            paper.zotero_key = None
+            await db.flush()
+            await db.commit()
+            return {"status": "removed", "paper_id": paper_id}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete from Zotero")
+    finally:
+        await client.close()

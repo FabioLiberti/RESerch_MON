@@ -411,7 +411,7 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
   };
 
   const assignedIds = new Set((paperLabels || []).map((l) => l.id));
-  const availableLabels = (allLabels || []).filter((l) => !assignedIds.has(l.id));
+  const availableLabels = (allLabels || []).filter((l) => !assignedIds.has(l.id)).sort((a, b) => a.name.localeCompare(b.name));
 
   const PRESET_COLORS = ["#6366f1", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#3b82f6", "#ec4899", "#14b8a6"];
 
@@ -825,6 +825,9 @@ interface AnalysisRun {
   duration_s: number | null;
   html_path: string | null;
   pdf_path: string | null;
+  md_path: string | null;
+  tex_path: string | null;
+  version: number;
 }
 
 // --- Summary Card (option A: from structured data, zero cost) ---
@@ -1072,7 +1075,7 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
           <details key={run.id} className={cn("rounded-lg bg-[var(--secondary)]", isSuperseded && "opacity-50")}>
             <summary className="flex items-center justify-between p-3 cursor-pointer">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{history.length - idx} (ID:{paperId})</span>
+                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">#{history.length - idx} (ID:{paperId}) v{run.version || 1}</span>
                 {isSuperseded ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-gray-600 text-white">SUPERSEDED</span>
                 ) : run.status === "done" ? (
@@ -1140,6 +1143,54 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     className="text-[10px] px-2 py-1 rounded bg-red-700 text-white hover:bg-red-600"
                   >
                     PDF
+                  </button>
+                )}
+                {run.md_path && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const token = localStorage.getItem("fl-token");
+                      const url = isSuperseded
+                        ? `/api/v1/analysis/${paperId}/md?queue_id=${run.id}`
+                        : `/api/v1/analysis/${paperId}/md`;
+                      fetch(url, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      }).then(r => r.blob()).then(blob => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = blobUrl;
+                        a.download = `analysis_${run.mode}_${paperId}_v${run.version || 1}.md`;
+                        a.click();
+                        URL.revokeObjectURL(blobUrl);
+                      });
+                    }}
+                    className="text-[10px] px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600"
+                  >
+                    MD
+                  </button>
+                )}
+                {run.tex_path && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const token = localStorage.getItem("fl-token");
+                      const url = isSuperseded
+                        ? `/api/v1/analysis/${paperId}/tex?queue_id=${run.id}`
+                        : `/api/v1/analysis/${paperId}/tex`;
+                      fetch(url, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      }).then(r => r.blob()).then(blob => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = blobUrl;
+                        a.download = `analysis_${run.mode}_${paperId}_v${run.version || 1}.tex`;
+                        a.click();
+                        URL.revokeObjectURL(blobUrl);
+                      });
+                    }}
+                    className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600"
+                  >
+                    TEX
                   </button>
                 )}
               </div>
@@ -1254,8 +1305,7 @@ function EnrichButton({ paperId }: { paperId: number }) {
 function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZoteroKey: boolean }) {
   const [status, setStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
-
-  // Always show button — text changes based on state
+  const [removing, setRemoving] = useState(false);
 
   const sync = async () => {
     setStatus("syncing");
@@ -1276,11 +1326,25 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
     }
   };
 
+  const remove = async () => {
+    if (!confirm("Remove this paper from Zotero? This will delete the Zotero item and all its attachments.")) return;
+    setRemoving(true);
+    setMsg(null);
+    try {
+      await api.removeFromZotero(paperId);
+      setMsg("Removed from Zotero");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e: any) {
+      setMsg(e.message || "Remove failed");
+    }
+    setRemoving(false);
+  };
+
   return (
     <div className="flex items-center gap-2">
       <button
         onClick={sync}
-        disabled={status === "syncing" || status === "done"}
+        disabled={status === "syncing" || status === "done" || removing}
         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 text-white text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
       >
         {status === "syncing" ? (
@@ -1299,8 +1363,17 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
           "Sync to Zotero"
         )}
       </button>
+      {hasZoteroKey && (
+        <button
+          onClick={remove}
+          disabled={removing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-800 text-white text-xs font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+        >
+          {removing ? "Removing..." : "Remove from Zotero"}
+        </button>
+      )}
       {msg && (
-        <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>{msg}</span>
+        <span className={`text-xs ${msg.includes("Removed") || msg.includes("Synced") ? "text-emerald-400" : "text-red-400"}`}>{msg}</span>
       )}
     </div>
   );

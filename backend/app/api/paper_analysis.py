@@ -129,7 +129,7 @@ async def trigger_analysis(
     # With Claude API: run inline (fast, ~5-10s per paper)
     if is_claude_configured():
         from app.services.llm_analysis import generate_paper_analysis
-        from app.services.paper_report_generator import get_paper_data, render_paper_report, save_report, generate_pdf
+        from app.services.paper_report_generator import get_paper_data, render_paper_report, save_report, generate_pdf, save_markdown, save_latex, _get_next_version
         from app.models.analysis import AnalysisQueue
         from datetime import datetime
 
@@ -169,9 +169,14 @@ async def trigger_analysis(
 
                 logger.info(f"Claude Opus: paper {paper_id}, {chars} chars, {duration_s}s")
 
+                # Determine version
+                version = _get_next_version(paper_id, body.mode)
+
                 html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.6", mode=body.mode)
-                html_path = save_report(html, paper_id, mode=body.mode)
+                html_path = save_report(html, paper_id, mode=body.mode, version=version)
                 pdf_path = generate_pdf(html_path)
+                md_path = save_markdown(analysis_text, paper_id, body.mode, paper_data, version=version)
+                tex_path = save_latex(analysis_text, paper_id, body.mode, paper_data, engine="Claude Opus 4.6", version=version)
 
                 # Save as new entry (keep history)
                 q = AnalysisQueue(
@@ -180,6 +185,9 @@ async def trigger_analysis(
                     status="done",
                     html_path=str(html_path),
                     pdf_path=str(pdf_path) if pdf_path else None,
+                    md_path=str(md_path),
+                    tex_path=str(tex_path),
+                    version=version,
                     error_message=f"engine:claude-opus-4-6|chars:{chars}|duration:{duration_s}s",
                     started_at=start_time,
                     completed_at=end_time,
@@ -629,6 +637,9 @@ async def analysis_history(
             "duration_s": int((q.completed_at - q.started_at).total_seconds()) if q.started_at and q.completed_at else None,
             "html_path": q.html_path,
             "pdf_path": q.pdf_path,
+            "md_path": q.md_path,
+            "tex_path": q.tex_path,
+            "version": q.version or 1,
         })
     return result_list
 
@@ -693,5 +704,61 @@ async def get_analysis_pdf(
     return FileResponse(
         path=str(path),
         media_type="application/pdf",
-        filename=f"analysis_paper_{paper_id}.pdf",
+        filename=path.name,
     )
+
+
+@router.get("/{paper_id}/md")
+async def get_analysis_md(
+    paper_id: int,
+    queue_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download Markdown analysis file."""
+    if queue_id:
+        item = await db.get(AnalysisQueue, queue_id)
+        if not item or item.paper_id != paper_id:
+            raise HTTPException(status_code=404, detail="Markdown file not available")
+    else:
+        result = await db.execute(
+            select(AnalysisQueue).where(
+                AnalysisQueue.paper_id == paper_id,
+                AnalysisQueue.status == "done",
+            ).order_by(AnalysisQueue.completed_at.desc()).limit(1)
+        )
+        item = result.scalar_one_or_none()
+    if not item or not item.md_path:
+        raise HTTPException(status_code=404, detail="Markdown file not available")
+    path = Path(item.md_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Markdown file not found on disk")
+    return FileResponse(path=str(path), media_type="text/markdown", filename=path.name)
+
+
+@router.get("/{paper_id}/tex")
+async def get_analysis_tex(
+    paper_id: int,
+    queue_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download LaTeX analysis file."""
+    if queue_id:
+        item = await db.get(AnalysisQueue, queue_id)
+        if not item or item.paper_id != paper_id:
+            raise HTTPException(status_code=404, detail="LaTeX file not available")
+    else:
+        result = await db.execute(
+            select(AnalysisQueue).where(
+                AnalysisQueue.paper_id == paper_id,
+                AnalysisQueue.status == "done",
+            ).order_by(AnalysisQueue.completed_at.desc()).limit(1)
+        )
+        item = result.scalar_one_or_none()
+    if not item or not item.tex_path:
+        raise HTTPException(status_code=404, detail="LaTeX file not available")
+    path = Path(item.tex_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="LaTeX file not found on disk")
+    return FileResponse(path=str(path), media_type="application/x-tex", filename=path.name)

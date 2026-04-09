@@ -15,6 +15,7 @@ export interface Paper {
   analyses: { mode: string; status: string }[];
   has_note: boolean;
   disabled: boolean;
+  on_zotero: boolean;
   created_at: string;
 }
 
