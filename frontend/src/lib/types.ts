@@ -29,6 +29,7 @@ export interface PaperDetail extends Paper {
   volume: string | null;
   pages: string | null;
   pdf_url: string | null;
+  pdf_pages: number | null;
   external_ids: Record<string, string | null>;
   validated: boolean;
   zotero_key: string | null;

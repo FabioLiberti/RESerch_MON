@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 # Unicode-aware whitespace class (includes \u2002, \u2003, \xa0, etc.)
 _S = r'[\s\u2002\u2003\u00a0\x07]'
 # Terminators: blank line, section headings (I., II., 1, 1., 2, INTRODUCTION, Abstract, etc.)
-_TERM = rf'(?:\n{_S}*\n|\n{_S}*(?:[IVX]+\.?{_S}+\S|\d+\.?{_S}+\S|INTRODUCTION|ABSTRACT|Copyright|©|\u00a9|\*{_S}*\S))'
+_TERM = rf'(?:\.\n[A-Z]|\n{_S}*\n|\n{_S}*(?:[IVX]+\.?{_S}+\S|\d+\.?{_S}+\S|INTRODUCTION|ABSTRACT|Copyright|©|\u00a9|\*{_S}*\S))'
 
 # Patterns for keyword sections in papers
 KEYWORD_PATTERNS = [

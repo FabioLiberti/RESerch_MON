@@ -28,6 +28,25 @@ from app.schemas.paper import (
 router = APIRouter()
 
 
+def _count_pdf_pages(pdf_path: str | None) -> int | None:
+    """Count pages in a PDF file. Returns None if no PDF."""
+    if not pdf_path:
+        return None
+    try:
+        import fitz
+        p = Path(pdf_path)
+        if not p.is_absolute() and not p.exists():
+            # Try relative to project root
+            from app.config import settings
+            p = Path(settings.base_dir) / pdf_path if hasattr(settings, 'base_dir') else p
+        doc = fitz.open(str(p))
+        count = len(doc)
+        doc.close()
+        return count
+    except Exception:
+        return None
+
+
 def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None, has_note: bool = False) -> PaperSummary:
     return PaperSummary(
         id=paper.id,
@@ -65,6 +84,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         open_access=paper.open_access,
         pdf_url=paper.pdf_url,
         has_pdf=paper.pdf_local_path is not None,
+        pdf_pages=_count_pdf_pages(paper.pdf_local_path),
         citation_count=paper.citation_count,
         external_ids=paper.external_ids,
         validated=paper.validated,

@@ -135,6 +135,7 @@ async def trigger_analysis(
 
         logger.info(f"Starting CLAUDE analysis for {len(body.paper_ids)} papers, mode={body.mode}")
 
+        response = {"status": "completed", "added": 0, "skipped": 0, "message": "", "engine": "claude", "details": []}
         processed = 0
         for paper_id in body.paper_ids:
             start_time = datetime.utcnow()
@@ -252,15 +253,10 @@ async def trigger_analysis(
         await db.flush()
         await db.commit()
 
-        response = {
-            "status": "completed",
-            "added": processed,
-            "skipped": len(body.paper_ids) - processed,
-            "message": f"{processed} papers analyzed via Claude Opus",
-            "engine": "claude",
-            "details": [],
-        }
-        if body.mode == "deep":
+        response["added"] = processed
+        response["skipped"] = len(body.paper_ids) - processed
+        response["message"] = f"{processed} papers analyzed via Claude Opus"
+        if pdf_status:
             response["pdf_status"] = pdf_status
         return response
 
@@ -278,6 +274,69 @@ async def trigger_analysis(
     if body.mode == "deep":
         response["pdf_status"] = pdf_status
     return response
+
+
+@router.get("/costs")
+async def analysis_costs(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get estimated API costs from all completed analyses."""
+    result = await db.execute(
+        select(AnalysisQueue)
+        .where(AnalysisQueue.status == "done")
+        .order_by(AnalysisQueue.completed_at.desc())
+    )
+    items = result.scalars().all()
+
+    total_cost = 0.0
+    by_mode: dict[str, dict] = {}
+    recent: list[dict] = []
+
+    for q in items:
+        meta = {}
+        if q.error_message:
+            for part in q.error_message.split("|"):
+                if ":" in part:
+                    k, v = part.split(":", 1)
+                    meta[k] = v
+
+        engine = meta.get("engine", "")
+        chars = int(meta["chars"]) if "chars" in meta else 0
+        cost = 0.0
+        if chars and "opus" in engine.lower():
+            est_output = chars // 4
+            cost = (2000 * 15 + est_output * 75) / 1_000_000
+        elif chars and "sonnet" in engine.lower():
+            est_output = chars // 4
+            cost = (2000 * 3 + est_output * 15) / 1_000_000
+        elif chars and "haiku" in engine.lower():
+            est_output = chars // 4
+            cost = (2000 * 0.25 + est_output * 1.25) / 1_000_000
+
+        total_cost += cost
+        mode = q.analysis_mode or "quick"
+        if mode not in by_mode:
+            by_mode[mode] = {"count": 0, "cost": 0.0, "chars": 0}
+        by_mode[mode]["count"] += 1
+        by_mode[mode]["cost"] += cost
+        by_mode[mode]["chars"] += chars
+
+        if len(recent) < 20:
+            recent.append({
+                "paper_id": q.paper_id,
+                "mode": mode,
+                "chars": chars,
+                "cost": round(cost, 4),
+                "completed_at": q.completed_at.isoformat() if q.completed_at else None,
+            })
+
+    return {
+        "total_analyses": len(items),
+        "total_estimated_cost": round(total_cost, 4),
+        "by_mode": {k: {**v, "cost": round(v["cost"], 4)} for k, v in by_mode.items()},
+        "recent": recent,
+    }
 
 
 @router.get("/status")

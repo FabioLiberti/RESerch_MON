@@ -66,6 +66,7 @@ class PaperDetail(BaseModel):
     open_access: bool
     pdf_url: str | None = None
     has_pdf: bool
+    pdf_pages: int | None = None
     citation_count: int
     external_ids: dict
     validated: bool

@@ -88,6 +88,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* API Costs & Billing */}
+      {isAdmin && <ApiCostsSection />}
+
       {/* Topics Management */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
         <div className="flex items-center justify-between mb-4">
@@ -477,6 +480,89 @@ function ChangePasswordSection() {
           {saving ? "Updating..." : "Update Password"}
         </button>
       </div>
+    </div>
+  );
+}
+
+
+// --- API Costs Section ---
+
+interface CostsData {
+  total_analyses: number;
+  total_estimated_cost: number;
+  by_mode: Record<string, { count: number; cost: number; chars: number }>;
+  recent: { paper_id: number; mode: string; chars: number; cost: number; completed_at: string | null }[];
+}
+
+function ApiCostsSection() {
+  const { data } = useSWR<CostsData>("/api/v1/analysis/costs", authFetcher);
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-medium">Anthropic API Usage</h3>
+        <a
+          href="https://console.anthropic.com/settings/billing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white hover:opacity-90"
+        >
+          Anthropic Console &rarr;
+        </a>
+      </div>
+
+      {!data ? (
+        <div className="h-20 bg-[var(--muted)] rounded-lg animate-pulse" />
+      ) : (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg bg-[var(--secondary)] p-3 text-center">
+              <div className="text-2xl font-bold">{data.total_analyses}</div>
+              <div className="text-[10px] text-[var(--muted-foreground)]">Total Analyses</div>
+            </div>
+            <div className="rounded-lg bg-[var(--secondary)] p-3 text-center">
+              <div className="text-2xl font-bold text-amber-400">${data.total_estimated_cost.toFixed(2)}</div>
+              <div className="text-[10px] text-[var(--muted-foreground)]">Est. Total Cost</div>
+            </div>
+            {Object.entries(data.by_mode).map(([mode, info]) => (
+              <div key={mode} className="rounded-lg bg-[var(--secondary)] p-3 text-center">
+                <div className="text-xl font-bold">{info.count}</div>
+                <div className="text-[10px] text-[var(--muted-foreground)]">
+                  {mode.toUpperCase()} (${info.cost.toFixed(2)})
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recent analyses */}
+          {data.recent.length > 0 && (
+            <div>
+              <h4 className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Recent Analyses</h4>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {data.recent.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-[var(--secondary)]">
+                    <span className="text-[var(--muted-foreground)]">Paper {r.paper_id}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                      r.mode === "deep" ? "bg-purple-700 text-white" : r.mode === "summary" ? "bg-amber-600 text-white" : "bg-blue-700 text-white"
+                    }`}>{r.mode.toUpperCase()}</span>
+                    <span className="text-[var(--muted-foreground)]">{r.chars?.toLocaleString() || 0} chars</span>
+                    <span className="font-mono text-amber-400">${r.cost.toFixed(4)}</span>
+                    <span className="text-[var(--muted-foreground)]">
+                      {r.completed_at ? new Date(r.completed_at).toLocaleDateString("it-IT") : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-[var(--muted-foreground)]">
+            Costs are estimated from token usage. Actual billing may differ slightly.
+            Check <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer" className="text-[var(--primary)] hover:underline">Anthropic Console</a> for exact charges.
+          </p>
+        </>
+      )}
     </div>
   );
 }

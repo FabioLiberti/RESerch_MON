@@ -66,7 +66,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           )}
           {paper.has_pdf && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-700 text-white font-medium">
-              PDF
+              PDF{paper.pdf_pages ? ` (${paper.pdf_pages} pp)` : ""}
             </span>
           )}
           {paper.zotero_key && (
@@ -88,9 +88,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
           <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Authors</h3>
           <div className="flex flex-wrap gap-2">
-            {paper.authors.map((a) => (
+            {paper.authors.map((a, i) => (
               <span
-                key={a.id}
+                key={`${a.id}-${i}`}
                 className="text-sm px-2 py-1 rounded-lg bg-[var(--secondary)]"
                 title={a.affiliation || undefined}
               >
@@ -707,7 +707,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           )}
         </button>
         {analysisResult && (
-          <div className="w-full mt-2 px-4 py-2.5 rounded-lg bg-emerald-800 border border-emerald-600 text-sm text-white font-medium">
+          <div className="w-full mt-2 px-4 py-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-sm text-gray-300 font-medium">
             {analysisResult}
           </div>
         )}

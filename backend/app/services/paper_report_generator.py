@@ -79,38 +79,50 @@ def categorize_keyword(keyword: str) -> tuple[str, str, str]:
 
 
 def markdown_to_html(md_text: str) -> str:
-    """Convert markdown analysis text to HTML."""
+    """Convert markdown analysis text to HTML with tables and math support."""
     if not md_text:
         return ""
 
-    html = md_text
+    import markdown
 
-    # Headers: ## Title or **Title**
-    html = re.sub(r"^#{1,3}\s*\d*\.?\s*\*{0,2}(.+?)\*{0,2}\s*$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
-    html = re.sub(r"^\*\*(\d+\.\s*.+?)\*\*\s*$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+    # Protect LaTeX math from markdown processing
+    # Block math: $$...$$ → placeholder
+    math_blocks: list[str] = []
+    def _save_block_math(m: re.Match) -> str:
+        math_blocks.append(m.group(1))
+        return f"MATHBLOCK_{len(math_blocks) - 1}_ENDMATH"
 
-    # Bold
-    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
-    # Italic
-    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+    text = re.sub(r'\$\$(.+?)\$\$', _save_block_math, md_text, flags=re.DOTALL)
 
-    # List items
-    html = re.sub(r"^\s*[-*]\s+", r"<li>", html, flags=re.MULTILINE)
-    html = re.sub(r"^\s*\d+\.\s+", r"<li>", html, flags=re.MULTILINE)
+    # Inline math: $...$ → placeholder (but not $$)
+    math_inlines: list[str] = []
+    def _save_inline_math(m: re.Match) -> str:
+        math_inlines.append(m.group(1))
+        return f"MATHINLINE_{len(math_inlines) - 1}_ENDMATH"
 
-    # Paragraphs
-    lines = html.split("\n")
-    result = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            result.append("")
-        elif stripped.startswith("<h3>") or stripped.startswith("<li>"):
-            result.append(stripped)
-        else:
-            result.append(f"<p>{stripped}</p>")
+    text = re.sub(r'(?<!\$)\$([^\$\n]+?)\$(?!\$)', _save_inline_math, text)
 
-    return "\n".join(result)
+    # Convert markdown to HTML using python-markdown with extensions
+    html = markdown.markdown(
+        text,
+        extensions=["tables", "fenced_code", "nl2br"],
+    )
+
+    # Restore block math as rendered divs
+    for i, formula in enumerate(math_blocks):
+        html = html.replace(
+            f"MATHBLOCK_{i}_ENDMATH",
+            f'<div class="math-block">\\[{formula}\\]</div>'
+        )
+
+    # Restore inline math
+    for i, formula in enumerate(math_inlines):
+        html = html.replace(
+            f"MATHINLINE_{i}_ENDMATH",
+            f'<span class="math-inline">\\({formula}\\)</span>'
+        )
+
+    return html
 
 
 PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
@@ -119,6 +131,13 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Analysis Report — {{ paper.title[:80] }}</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\\\(','\\\\)'], ['$','$']], displayMath: [['\\\\[','\\\\]'], ['$$','$$']] },
+    options: { skipHtmlTags: ['script','noscript','style','textarea'] }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -193,6 +212,23 @@ PAPER_REPORT_TEMPLATE = """<!DOCTYPE html>
   }
   .analysis-content strong { color: #e8e8f0; }
   .analysis-content em { color: #a0a0b8; }
+
+  /* Tables */
+  .analysis-content table {
+    width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;
+  }
+  .analysis-content th {
+    background: #1e1e38; color: #c0c0d8; padding: 8px 12px;
+    border: 1px solid #2a2a3e; text-align: left; font-weight: 600;
+  }
+  .analysis-content td {
+    padding: 8px 12px; border: 1px solid #2a2a3e; color: #d0d0e0;
+  }
+  .analysis-content tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+  /* Math */
+  .math-block { margin: 16px 0; text-align: center; overflow-x: auto; }
+  .math-inline { }
 
   /* Relevance badge */
   .relevance-alta { color: #22c55e; }
@@ -432,32 +468,72 @@ generated: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 
 
 def _markdown_to_latex(text: str) -> str:
-    """Convert Markdown analysis text to LaTeX body content."""
+    """Convert Markdown analysis text to LaTeX body content, with tables and math."""
+    # Protect math from escaping: extract $...$ and $$...$$ first
+    math_blocks: list[str] = []
+    math_inlines: list[str] = []
+
+    def _save_block(m: re.Match) -> str:
+        math_blocks.append(m.group(1))
+        return f"%%MATHBLOCK{len(math_blocks) - 1}%%"
+
+    def _save_inline(m: re.Match) -> str:
+        math_inlines.append(m.group(1))
+        return f"%%MATHINLINE{len(math_inlines) - 1}%%"
+
+    text = re.sub(r'\$\$(.+?)\$\$', _save_block, text, flags=re.DOTALL)
+    text = re.sub(r'(?<!\$)\$([^\$\n]+?)\$(?!\$)', _save_inline, text)
+
     lines = text.split("\n")
     result = []
     in_list = False
+    in_table = False
+    table_lines: list[str] = []
 
     for line in lines:
         stripped = line.strip()
+
+        # Detect table rows (pipes)
+        is_table_row = stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 3
+        is_separator = is_table_row and re.match(r'^\|[\s\-:|]+\|$', stripped)
+
+        if is_table_row:
+            if in_list:
+                result.append("\\end{itemize}")
+                in_list = False
+            if not in_table:
+                in_table = True
+                table_lines = []
+            if not is_separator:
+                table_lines.append(stripped)
+            continue
+        elif in_table:
+            # End of table — render it
+            result.append(_render_latex_table(table_lines))
+            in_table = False
+            table_lines = []
 
         # Headers
         if stripped.startswith("### "):
             if in_list:
                 result.append("\\end{itemize}")
                 in_list = False
-            result.append(f"\\subsubsection{{{stripped[4:]}}}")
+            header_text = _latex_inline(stripped[4:])
+            result.append(f"\\subsubsection{{{header_text}}}")
             continue
         if stripped.startswith("## "):
             if in_list:
                 result.append("\\end{itemize}")
                 in_list = False
-            result.append(f"\\subsection{{{stripped[3:]}}}")
+            header_text = _latex_inline(stripped[3:])
+            result.append(f"\\subsection{{{header_text}}}")
             continue
         if stripped.startswith("# "):
             if in_list:
                 result.append("\\end{itemize}")
                 in_list = False
-            result.append(f"\\section{{{stripped[2:]}}}")
+            header_text = _latex_inline(stripped[2:])
+            result.append(f"\\section{{{header_text}}}")
             continue
 
         # List items
@@ -465,8 +541,7 @@ def _markdown_to_latex(text: str) -> str:
             if not in_list:
                 result.append("\\begin{itemize}")
                 in_list = True
-            item_text = stripped[2:]
-            item_text = _latex_inline(item_text)
+            item_text = _latex_inline(stripped[2:])
             result.append(f"  \\item {item_text}")
             continue
 
@@ -486,22 +561,72 @@ def _markdown_to_latex(text: str) -> str:
 
     if in_list:
         result.append("\\end{itemize}")
+    if in_table:
+        result.append(_render_latex_table(table_lines))
 
-    return "\n".join(result)
+    output = "\n".join(result)
+
+    # Restore math
+    for i, formula in enumerate(math_blocks):
+        output = output.replace(f"%%MATHBLOCK{i}%%", f"\n\\[\n{formula}\n\\]\n")
+    for i, formula in enumerate(math_inlines):
+        output = output.replace(f"%%MATHINLINE{i}%%", f"${formula}$")
+
+    return output
+
+
+def _render_latex_table(table_lines: list[str]) -> str:
+    """Convert parsed Markdown table lines to LaTeX tabular."""
+    if not table_lines:
+        return ""
+
+    # Parse cells
+    rows = []
+    for line in table_lines:
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        rows.append(cells)
+
+    if not rows:
+        return ""
+
+    num_cols = max(len(r) for r in rows)
+    col_spec = "|".join(["l"] * num_cols)
+
+    tex = "\\begin{table}[h]\n\\centering\n"
+    tex += f"\\begin{{tabular}}{{|{col_spec}|}}\n\\hline\n"
+
+    for i, row in enumerate(rows):
+        # Pad row to num_cols
+        while len(row) < num_cols:
+            row.append("")
+        escaped = [_latex_inline(cell) for cell in row]
+        tex += " & ".join(escaped)
+        tex += " \\\\\n\\hline\n"
+
+    tex += "\\end{tabular}\n\\end{table}"
+    return tex
 
 
 def _latex_inline(text: str) -> str:
-    """Convert inline Markdown formatting to LaTeX."""
-    import re
-    # Escape LaTeX special chars (but not $ for formulas, not \ for existing commands)
-    for char in ['&', '%', '#', '_']:
-        text = text.replace(char, f"\\{char}")
-    # Bold: **text** → \textbf{text}
-    text = re.sub(r'\*\*(.+?)\*\*', r'\\textbf{\1}', text)
-    # Italic: *text* → \textit{text}
-    text = re.sub(r'\*(.+?)\*', r'\\textit{\1}', text)
-    # Inline code: `text` → \texttt{text}
-    text = re.sub(r'`(.+?)`', r'\\texttt{\1}', text)
+    """Convert inline Markdown formatting to LaTeX, preserving math placeholders."""
+    # Don't escape inside math placeholders
+    parts = re.split(r'(%%MATH(?:BLOCK|INLINE)\d+%%)', text)
+    result_parts = []
+    for part in parts:
+        if part.startswith("%%MATH"):
+            result_parts.append(part)
+        else:
+            # Escape LaTeX special chars (but not $ for formulas, not \ for existing commands)
+            for char in ['&', '%', '#', '_']:
+                part = part.replace(char, f"\\{char}")
+            # Bold: **text** → \textbf{text}
+            part = re.sub(r'\*\*(.+?)\*\*', r'\\textbf{\1}', part)
+            # Italic: *text* → \textit{text}
+            part = re.sub(r'\*(.+?)\*', r'\\textit{\1}', part)
+            # Inline code: `text` → \texttt{text}
+            part = re.sub(r'`(.+?)`', r'\\texttt{\1}', part)
+            result_parts.append(part)
+    text = "".join(result_parts)
     return text
 
 
@@ -587,6 +712,9 @@ PDF_OVERRIDE_CSS = """
     .keyword-category { border-color: #e5e7eb !important; }
     .category-label { color: #374151 !important; }
     a { color: #4338ca !important; }
+    .analysis-content th { background: #f3f4f6 !important; color: #1f2937 !important; border-color: #d1d5db !important; }
+    .analysis-content td { color: #1f2937 !important; border-color: #d1d5db !important; }
+    .analysis-content tr:nth-child(even) td { background: #f9fafb !important; }
 """
 
 
