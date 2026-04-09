@@ -36,6 +36,7 @@ class Paper(Base):
     zotero_key = Column(String(100), nullable=True)
     validated = Column(Boolean, default=False)
     disabled = Column(Boolean, default=False)
+    rating = Column(Integer, nullable=True)  # 1-5 stars
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

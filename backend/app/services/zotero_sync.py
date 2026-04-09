@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.clients.zotero import ZoteroClient
 from app.models.paper import Paper, PaperAuthor
-from app.models.label import Label, PaperLabel
+from app.models.label import Label, PaperLabel, PaperNote
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +84,28 @@ class ZoteroSyncService:
             if pa.author
         ]
 
+        # Build tags from keywords + labels
+        tags = list(paper.keywords or [])
+        for label in labels:
+            if label.name not in tags:
+                tags.append(label.name)
+
+        # Get note
+        note_result = await db.execute(
+            select(PaperNote).where(PaperNote.paper_id == paper_id)
+        )
+        note = note_result.scalar_one_or_none()
+
         if paper.zotero_key:
-            # Paper already in Zotero — add to new label collections if needed
+            # Paper already in Zotero — update collections, tags, and notes
             for key in collection_keys:
                 await self.client.add_paper_to_collection(paper.zotero_key, key)
+            # Update tags
+            await self.client.update_tags(paper.zotero_key, tags)
+            # Sync note (delete old notes, add new if exists)
+            if note and note.text and note.text.strip():
+                await self.client.delete_child_notes(paper.zotero_key)
+                await self.client.add_note(paper.zotero_key, f"<p>{note.text}</p>")
             logger.debug(f"Paper {paper_id} updated in Zotero: {paper.zotero_key}")
             return True
 
@@ -102,12 +120,16 @@ class ZoteroSyncService:
             date=paper.publication_date,
             url=paper.pdf_url,
             paper_type=paper.paper_type,
+            tags=tags,
         )
 
         if zotero_key:
             paper.zotero_key = zotero_key
             await db.flush()
-            logger.info(f"Paper {paper_id} synced to Zotero ({zotero_key}) in {len(collection_keys)} collections")
+            # Add note if exists
+            if note and note.text and note.text.strip():
+                await self.client.add_note(zotero_key, f"<p>{note.text}</p>")
+            logger.info(f"Paper {paper_id} synced to Zotero ({zotero_key}) in {len(collection_keys)} collections, {len(tags)} tags")
             return True
 
         return False

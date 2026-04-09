@@ -66,6 +66,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         has_note=has_note,
         disabled=paper.disabled or False,
         on_zotero=paper.zotero_key is not None,
+        rating=paper.rating,
         created_at=paper.created_at,
     )
 
@@ -90,6 +91,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         validated=paper.validated,
         zotero_key=paper.zotero_key,
         disabled=paper.disabled or False,
+        rating=paper.rating,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -127,7 +129,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
 async def list_papers(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("created_at", pattern="^(created_at|publication_date|citation_count|title)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|publication_date|citation_count|title|rating)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     topic: str | None = None,
     source: str | None = None,
@@ -135,11 +137,15 @@ async def list_papers(
     date_to: str | None = None,
     has_pdf: bool | None = None,
     on_zotero: bool | None = None,
+    min_rating: int | None = None,
+    q: str | None = None,  # Unified search: title, abstract, DOI, author
     search: str | None = None,
     keyword: str | None = None,
     author: str | None = None,
     doi: str | None = None,
     label: str | None = None,
+    fl_technique: str | None = None,
+    dataset: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -161,6 +167,20 @@ async def list_papers(
         query = query.where(Paper.pdf_local_path.isnot(None))
     if on_zotero is True:
         query = query.where(Paper.zotero_key.isnot(None))
+    if min_rating is not None:
+        query = query.where(Paper.rating >= min_rating)
+    if q:
+        # Unified search across title, abstract, DOI, and author name
+        like_q = f"%{q}%"
+        from sqlalchemy import or_
+        query = query.outerjoin(PaperAuthor, PaperAuthor.paper_id == Paper.id).outerjoin(
+            Author, Author.id == PaperAuthor.author_id
+        ).where(or_(
+            Paper.title.ilike(like_q),
+            Paper.abstract.ilike(like_q),
+            Paper.doi.ilike(like_q),
+            Author.name.ilike(like_q),
+        ))
     if search:
         like_term = f"%{search}%"
         query = query.where(Paper.title.ilike(like_term) | Paper.abstract.ilike(like_term))
@@ -178,6 +198,20 @@ async def list_papers(
         query = query.join(PaperLabel, PaperLabel.paper_id == Paper.id).join(
             Label, Label.id == PaperLabel.label_id
         ).where(Label.name == label)
+    if fl_technique:
+        from app.models.structured_analysis import StructuredAnalysis
+        query = query.where(Paper.id.in_(
+            select(StructuredAnalysis.paper_id).where(
+                StructuredAnalysis.fl_techniques_json.ilike(f'%"{fl_technique}"%')
+            )
+        ))
+    if dataset:
+        from app.models.structured_analysis import StructuredAnalysis as SA2
+        query = query.where(Paper.id.in_(
+            select(SA2.paper_id).where(
+                SA2.datasets_json.ilike(f'%"{dataset}"%')
+            )
+        ))
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -279,6 +313,46 @@ async def get_all_keywords(db: AsyncSession = Depends(get_db)):
     ]
 
 
+@router.get("/fl-techniques/all")
+async def get_all_fl_techniques(db: AsyncSession = Depends(get_db)):
+    """Get all unique FL techniques with paper counts."""
+    import json
+    from collections import Counter
+    from app.models.structured_analysis import StructuredAnalysis
+
+    result = await db.execute(
+        select(StructuredAnalysis.fl_techniques_json).where(StructuredAnalysis.fl_techniques_json != "[]")
+    )
+    counter: Counter = Counter()
+    for (json_str,) in result.all():
+        try:
+            for t in json.loads(json_str or "[]"):
+                counter[t] += 1
+        except json.JSONDecodeError:
+            continue
+    return [{"name": name, "count": count} for name, count in counter.most_common()]
+
+
+@router.get("/datasets/all")
+async def get_all_datasets(db: AsyncSession = Depends(get_db)):
+    """Get all unique datasets with paper counts."""
+    import json
+    from collections import Counter
+    from app.models.structured_analysis import StructuredAnalysis
+
+    result = await db.execute(
+        select(StructuredAnalysis.datasets_json).where(StructuredAnalysis.datasets_json != "[]")
+    )
+    counter: Counter = Counter()
+    for (json_str,) in result.all():
+        try:
+            for d in json.loads(json_str or "[]"):
+                counter[d] += 1
+        except json.JSONDecodeError:
+            continue
+    return [{"name": name, "count": count} for name, count in counter.most_common()]
+
+
 @router.get("/keywords/categorized")
 async def get_categorized_keywords(db: AsyncSession = Depends(get_db)):
     """Get unique keywords grouped by category (Author Keywords, S2 Fields, etc.)."""
@@ -320,6 +394,90 @@ async def get_categorized_keywords(db: AsyncSession = Depends(get_db)):
             items.append({"keyword": best_form, "count": count})
         result[cat] = items
     return result
+
+
+class ImportByDoiRequest(BaseModel):
+    doi: str
+
+
+@router.post("/import-by-doi")
+async def import_paper_by_doi(
+    body: ImportByDoiRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Import a paper by DOI — creates it and enriches from S2/CrossRef."""
+    from app.models.paper import Paper
+
+    doi = body.doi.strip().lower()
+    if doi.startswith("http"):
+        doi = doi.split("doi.org/")[-1]
+
+    # Check if already in DB
+    existing = await db.execute(select(Paper).where(func.lower(Paper.doi) == doi))
+    ex = existing.scalar_one_or_none()
+    if ex:
+        return {"status": "exists", "paper_id": ex.id, "title": ex.title}
+
+    # Try S2 first
+    title = None
+    try:
+        from app.clients.semantic_scholar import SemanticScholarClient
+        s2 = SemanticScholarClient()
+        result = await s2.fetch_metadata(f"DOI:{doi}")
+        await s2.close()
+        if result and result.title:
+            paper = Paper(
+                doi=doi, title=result.title, abstract=result.abstract,
+                publication_date=result.publication_date, journal=result.journal,
+                paper_type=result.paper_type, open_access=result.open_access,
+                pdf_url=result.pdf_url, citation_count=result.citation_count, validated=True,
+            )
+            paper.keywords = result.keywords or []
+            paper.keyword_categories = result.keyword_categories or {}
+            paper.external_ids = result.external_ids or {}
+            db.add(paper)
+            await db.flush()
+            title = result.title
+
+            # Add authors
+            for i, a in enumerate(result.authors or []):
+                name = a.get("name", "")
+                if not name:
+                    continue
+                auth_result = await db.execute(select(Author).where(Author.name == name))
+                author = auth_result.scalar_one_or_none()
+                if not author:
+                    author = Author(name=name, affiliation=a.get("affiliation"), orcid=a.get("orcid"))
+                    db.add(author)
+                    await db.flush()
+                db.add(PaperAuthor(paper_id=paper.id, author_id=author.id, position=i))
+
+            await db.flush()
+            await db.commit()
+            return {"status": "imported", "paper_id": paper.id, "title": paper.title, "source": "semantic_scholar"}
+    except Exception:
+        pass
+
+    # Fallback: CrossRef
+    try:
+        from app.clients.crossref import resolve_doi
+        cr = await resolve_doi(doi)
+        if cr and cr.get("title"):
+            paper = Paper(
+                doi=doi, title=cr["title"], abstract=cr.get("abstract"),
+                publication_date=cr.get("publication_date"), journal=cr.get("journal"),
+                paper_type=cr.get("paper_type", "journal_article"),
+                open_access=cr.get("open_access", False),
+                citation_count=cr.get("citation_count", 0), validated=True,
+            )
+            db.add(paper)
+            await db.flush()
+            await db.commit()
+            return {"status": "imported", "paper_id": paper.id, "title": paper.title, "source": "crossref"}
+    except Exception:
+        pass
+
+    return {"status": "not_found", "message": f"Could not find paper with DOI: {doi}"}
 
 
 class CitationRefreshRequest(BaseModel):
@@ -537,10 +695,43 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     from app.services.topic_classifier import TopicClassifier
     await TopicClassifier().classify_paper(db, paper.id, paper.title, paper.abstract)
 
+    # 5. Fetch citation references from S2 if not already cached
+    refs_fetched = 0
+    if paper.doi or (paper.external_ids or {}).get("s2_id"):
+        try:
+            from app.models.analysis import CitationLink
+            cached = await db.execute(
+                select(CitationLink.id).where(CitationLink.paper_id == paper_id, CitationLink.direction == "references").limit(1)
+            )
+            if not cached.scalar_one_or_none():
+                from app.clients.semantic_scholar import SemanticScholarClient
+                s2_ref = SemanticScholarClient()
+                s2_id = (paper.external_ids or {}).get("s2_id")
+                lookup = s2_id if s2_id else f"DOI:{paper.doi}"
+                refs = await s2_ref.fetch_references(lookup, limit=100)
+                # Build DOI lookup for matching
+                all_dois = await db.execute(select(Paper.id, Paper.doi).where(Paper.doi.isnot(None)))
+                doi_map = {r[1].lower(): r[0] for r in all_dois.all() if r[1]}
+                for ref in refs:
+                    link = CitationLink(
+                        paper_id=paper_id, direction="references",
+                        cited_doi=ref.get("doi"), cited_s2_id=ref.get("s2_id"),
+                        cited_title=ref.get("title"), cited_citations=ref.get("citations", 0),
+                    )
+                    if ref.get("doi") and ref["doi"].lower() in doi_map:
+                        link.cited_paper_id = doi_map[ref["doi"].lower()]
+                    db.add(link)
+                refs_fetched = len(refs)
+                await s2_ref.close()
+        except Exception:
+            pass
+
     await db.flush()
     result = {"status": "enriched", "source": enriched_from, "title": paper.title}
     if pdf_keywords_extracted:
         result["pdf_keywords"] = True
+    if refs_fetched:
+        result["references_fetched"] = refs_fetched
     return result
 
 
@@ -554,6 +745,18 @@ async def refresh_citations_single(
     result = await refresh_citation_single(db, paper_id)
     await db.commit()
     return result
+
+
+@router.post("/{paper_id}/rate")
+async def rate_paper(paper_id: int, rating: int = Query(..., ge=0, le=5), db: AsyncSession = Depends(get_db)):
+    """Set paper rating (1-5 stars, 0 to clear)."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    paper.rating = rating if rating > 0 else None
+    await db.flush()
+    await db.commit()
+    return {"rating": paper.rating}
 
 
 @router.post("/{paper_id}/toggle-disabled")

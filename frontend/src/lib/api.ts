@@ -270,6 +270,14 @@ export const api = {
     }),
   refreshCitationsSingle: (paperId: number) =>
     fetchAPI<any>(`/papers/${paperId}/refresh-citations`, { method: "POST" }),
+  ratePaper: (paperId: number, rating: number) =>
+    fetchAPI<any>(`/papers/${paperId}/rate?rating=${rating}`, { method: "POST" }),
+  importByDoi: (doi: string) =>
+    fetchAPI<any>("/papers/import-by-doi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doi }),
+    }),
 
   // Exports
   getExportUrl: (format: "json" | "xlsx") => `${API_BASE}/exports/${format}`,

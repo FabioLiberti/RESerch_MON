@@ -147,3 +147,22 @@ class AnalysisQueue(Base):
     completed_at = Column(DateTime, nullable=True)
 
     paper = relationship("Paper")
+
+
+class CitationLink(Base):
+    """Cache of citation relationships between papers (from Semantic Scholar)."""
+    __tablename__ = "citation_links"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # Paper in our DB that cites or is cited
+    paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), nullable=False)
+    # Direction: 'references' = paper_id cites cited_paper, 'citations' = cited_paper cites paper_id
+    direction = Column(String(20), nullable=False)  # 'references' or 'citations'
+    # The other paper — may or may not be in our DB
+    cited_doi = Column(String(255), nullable=True)
+    cited_s2_id = Column(String(50), nullable=True)
+    cited_title = Column(Text, nullable=True)
+    cited_citations = Column(Integer, default=0)
+    # If the cited paper is also in our DB
+    cited_paper_id = Column(Integer, ForeignKey("papers.id", ondelete="SET NULL"), nullable=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow)

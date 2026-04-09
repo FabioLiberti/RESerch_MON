@@ -215,6 +215,10 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               </dd>
             </div>
             <div className="flex justify-between">
+              <dt className="text-[var(--muted-foreground)]">Rating</dt>
+              <dd><RatingWidget paperId={paperId} initialRating={paper.rating} /></dd>
+            </div>
+            <div className="flex justify-between">
               <dt className="text-[var(--muted-foreground)]">Open Access</dt>
               <dd>{paper.open_access ? "Yes" : "No"}</dd>
             </div>
@@ -277,6 +281,17 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             View PDF (external)
           </a>
         ) : null}
+
+        {/* Citation Network */}
+        <Link
+          href={`/network?tab=citations&paper_id=${paperId}`}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-medium hover:bg-indigo-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          Citation Network
+        </Link>
 
         {/* Source-specific links */}
         {paper.external_ids?.arxiv_id && (
@@ -786,8 +801,10 @@ function AnalysisButton({ paperId }: { paperId: number }) {
       onChange={(e) => setAnalysisMode(e.target.value as "quick" | "deep" | "summary" | "extended")}
       className="px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs"
     >
-      <option value="quick">Quick (abstract)</option>
-      <option value="deep">Deep (full PDF)</option>
+      <option value="quick">Quick (~5 pages)</option>
+      <option value="deep">Deep (~7+ pages)</option>
+      <option value="summary">Summary (1 page)</option>
+      <option value="extended">Extended Abstract (2 pages)</option>
     </select>
     {/* Upload PDF button */}
     <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs cursor-pointer hover:bg-[var(--muted)] transition-colors">
@@ -1305,9 +1322,9 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
     try {
       const res = await api.syncToZotero([paperId]);
       if (res.synced > 0) {
-        setStatus("done");
-        setMsg("Synced to Zotero");
-        setTimeout(() => window.location.reload(), 1500);
+        setStatus("idle");
+        setMsg("Synced to Zotero (tags + notes)");
+        mutate(`/api/v1/papers/${paperId}`);
       } else {
         setStatus("error");
         setMsg("Sync failed");
@@ -1336,7 +1353,7 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
     <div className="flex items-center gap-2">
       <button
         onClick={sync}
-        disabled={status === "syncing" || status === "done" || removing}
+        disabled={status === "syncing" || removing}
         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 text-white text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
       >
         {status === "syncing" ? (
@@ -1465,6 +1482,36 @@ function RefreshCitationButton({ paperId }: { paperId: number }) {
       </button>
       {result && <span className="text-[10px] text-emerald-400">{result}</span>}
     </span>
+  );
+}
+
+
+function RatingWidget({ paperId, initialRating }: { paperId: number; initialRating: number | null }) {
+  const [rating, setRating] = useState(initialRating || 0);
+  const [hover, setHover] = useState(0);
+
+  const setRate = async (value: number) => {
+    const newRating = value === rating ? 0 : value; // Click same star to clear
+    setRating(newRating);
+    await api.ratePaper(paperId, newRating);
+    mutate(`/api/v1/papers/${paperId}`);
+  };
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          onClick={() => setRate(star)}
+          onMouseEnter={() => setHover(star)}
+          onMouseLeave={() => setHover(0)}
+          className="text-lg leading-none transition-colors"
+          title={star === rating ? "Click to clear" : `${star} star${star > 1 ? "s" : ""}`}
+        >
+          <span className={star <= (hover || rating) ? "text-amber-400" : "text-gray-600"}>★</span>
+        </button>
+      ))}
+    </div>
   );
 }
 

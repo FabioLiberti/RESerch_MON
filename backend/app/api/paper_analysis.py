@@ -199,44 +199,65 @@ async def trigger_analysis(
                 processed += 1
                 logger.info(f"Analysis entry saved to DB for paper {paper_id}")
 
-                # Extract structured data (async, cheap via Haiku)
-                try:
-                    from app.services.structured_extractor import extract_structured_data
-                    from app.models.structured_analysis import StructuredAnalysis
+                # Extract structured data — only if this mode is >= existing best
+                _MODE_RANK = {"summary": 1, "extended": 2, "quick": 3, "deep": 4}
+                current_rank = _MODE_RANK.get(body.mode, 0)
 
-                    structured = await extract_structured_data(analysis_text)
-                    if structured:
-                        sa = StructuredAnalysis(
-                            paper_id=paper_id,
-                            analysis_queue_id=q.id,
-                            problem_addressed=structured.get("problem_addressed"),
-                            proposed_method=structured.get("proposed_method"),
-                            best_metric_name=structured.get("best_metric_name"),
-                            best_metric_value=structured.get("best_metric_value"),
-                            best_baseline_name=structured.get("best_baseline_name"),
-                            best_baseline_value=structured.get("best_baseline_value"),
-                            improvement_delta=structured.get("improvement_delta"),
-                            privacy_mechanism=structured.get("privacy_mechanism"),
-                            privacy_formal=structured.get("privacy_formal"),
-                            reproducibility_score=structured.get("reproducibility_score"),
-                            novelty_level=structured.get("novelty_level"),
-                            relevance=structured.get("relevance"),
-                            healthcare_applicable=structured.get("healthcare_applicable"),
-                            healthcare_evidence=structured.get("healthcare_evidence"),
-                            key_findings_summary=structured.get("key_findings_summary"),
-                        )
-                        sa.fl_techniques = structured.get("fl_techniques", [])
-                        sa.datasets = structured.get("datasets", [])
-                        sa.baselines = structured.get("baselines", [])
-                        sa.limitations_declared = structured.get("limitations_declared", [])
-                        sa.limitations_identified = structured.get("limitations_identified", [])
-                        sa.extra = structured.get("extra", {})
-                        db.add(sa)
-                        await db.flush()
-                        await db.commit()
-                        logger.info(f"Structured data extracted for paper {paper_id}")
-                except Exception as e:
-                    logger.warning(f"Structured extraction failed for paper {paper_id}: {e}")
+                # Check if a higher-rank extraction already exists
+                from app.models.structured_analysis import StructuredAnalysis
+                _existing = await db.execute(
+                    select(StructuredAnalysis.analysis_queue_id)
+                    .join(AnalysisQueue, StructuredAnalysis.analysis_queue_id == AnalysisQueue.id)
+                    .where(StructuredAnalysis.paper_id == paper_id)
+                    .order_by(StructuredAnalysis.created_at.desc())
+                    .limit(1)
+                )
+                _existing_sa = _existing.scalar_one_or_none()
+                _existing_rank = 0
+                if _existing_sa:
+                    _eq = await db.get(AnalysisQueue, _existing_sa)
+                    if _eq:
+                        _existing_rank = _MODE_RANK.get(_eq.analysis_mode or "", 0)
+
+                if current_rank >= _existing_rank:
+                    try:
+                        from app.services.structured_extractor import extract_structured_data
+
+                        structured = await extract_structured_data(analysis_text)
+                        if structured:
+                            sa = StructuredAnalysis(
+                                paper_id=paper_id,
+                                analysis_queue_id=q.id,
+                                problem_addressed=structured.get("problem_addressed"),
+                                proposed_method=structured.get("proposed_method"),
+                                best_metric_name=structured.get("best_metric_name"),
+                                best_metric_value=structured.get("best_metric_value"),
+                                best_baseline_name=structured.get("best_baseline_name"),
+                                best_baseline_value=structured.get("best_baseline_value"),
+                                improvement_delta=structured.get("improvement_delta"),
+                                privacy_mechanism=structured.get("privacy_mechanism"),
+                                privacy_formal=structured.get("privacy_formal"),
+                                reproducibility_score=structured.get("reproducibility_score"),
+                                novelty_level=structured.get("novelty_level"),
+                                relevance=structured.get("relevance"),
+                                healthcare_applicable=structured.get("healthcare_applicable"),
+                                healthcare_evidence=structured.get("healthcare_evidence"),
+                                key_findings_summary=structured.get("key_findings_summary"),
+                            )
+                            sa.fl_techniques = structured.get("fl_techniques", [])
+                            sa.datasets = structured.get("datasets", [])
+                            sa.baselines = structured.get("baselines", [])
+                            sa.limitations_declared = structured.get("limitations_declared", [])
+                            sa.limitations_identified = structured.get("limitations_identified", [])
+                            sa.extra = structured.get("extra", {})
+                            db.add(sa)
+                            await db.flush()
+                            await db.commit()
+                            logger.info(f"Structured data extracted from {body.mode} analysis for paper {paper_id}")
+                    except Exception as e:
+                        logger.warning(f"Structured extraction failed for paper {paper_id}: {e}")
+                else:
+                    logger.debug(f"Skipping structured extraction: {body.mode}(rank={current_rank}) < existing(rank={_existing_rank})")
 
                 response["details"].append({
                     "paper_id": paper_id,
@@ -465,16 +486,26 @@ async def get_summary_card(
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
-    # Get latest structured analysis
+    # Get structured analysis from Deep analysis (richest data source)
     result = await db.execute(
         select(StructuredAnalysis)
-        .where(StructuredAnalysis.paper_id == paper_id)
+        .join(AnalysisQueue, StructuredAnalysis.analysis_queue_id == AnalysisQueue.id)
+        .where(StructuredAnalysis.paper_id == paper_id, AnalysisQueue.analysis_mode == "deep")
         .order_by(StructuredAnalysis.created_at.desc())
         .limit(1)
     )
     sa = result.scalar_one_or_none()
+    # Fallback: any structured analysis if no Deep exists yet
     if not sa:
-        raise HTTPException(status_code=404, detail="No structured analysis available. Run Quick or Deep analysis first.")
+        result = await db.execute(
+            select(StructuredAnalysis)
+            .where(StructuredAnalysis.paper_id == paper_id)
+            .order_by(StructuredAnalysis.created_at.desc())
+            .limit(1)
+        )
+        sa = result.scalar_one_or_none()
+    if not sa:
+        raise HTTPException(status_code=404, detail="No structured analysis available. Run Deep analysis first.")
 
     # Get authors
     authors_result = await db.execute(
@@ -530,13 +561,23 @@ async def get_summary_card_pdf(
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
+    # Get structured analysis from Deep (preferred) or any available
     result = await db.execute(
         select(StructuredAnalysis)
-        .where(StructuredAnalysis.paper_id == paper_id)
+        .join(AnalysisQueue, StructuredAnalysis.analysis_queue_id == AnalysisQueue.id)
+        .where(StructuredAnalysis.paper_id == paper_id, AnalysisQueue.analysis_mode == "deep")
         .order_by(StructuredAnalysis.created_at.desc())
         .limit(1)
     )
     sa = result.scalar_one_or_none()
+    if not sa:
+        result = await db.execute(
+            select(StructuredAnalysis)
+            .where(StructuredAnalysis.paper_id == paper_id)
+            .order_by(StructuredAnalysis.created_at.desc())
+            .limit(1)
+        )
+        sa = result.scalar_one_or_none()
     if not sa:
         raise HTTPException(status_code=404, detail="No structured analysis available")
 

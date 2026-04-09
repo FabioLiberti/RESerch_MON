@@ -34,6 +34,9 @@ export default function PapersPage() {
   const [labelFilter, setLabelFilter] = useState("");
   const [pdfFilter, setPdfFilter] = useState("");
   const [zoteroFilter, setZoteroFilter] = useState("");
+  const [ratingFilter, setRatingFilter] = useState("");
+  const [flTechFilter, setFlTechFilter] = useState("");
+  const [datasetFilter, setDatasetFilter] = useState("");
 
   // Sync URL params with state
   useEffect(() => {
@@ -93,6 +96,8 @@ export default function PapersPage() {
 
   const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", authFetcher);
   const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>("/api/v1/labels", authFetcher);
+  const { data: allFlTechniques } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/fl-techniques/all", authFetcher);
+  const { data: allDatasets } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/datasets/all", authFetcher);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -108,6 +113,9 @@ export default function PapersPage() {
   if (labelFilter) params.label = labelFilter;
   if (pdfFilter === "yes") params.has_pdf = "true";
   if (zoteroFilter === "yes") params.on_zotero = "true";
+  if (ratingFilter) params.min_rating = ratingFilter;
+  if (flTechFilter) params.fl_technique = flTechFilter;
+  if (datasetFilter) params.dataset = datasetFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -307,6 +315,42 @@ export default function PapersPage() {
           <option value="yes">On Zotero</option>
         </select>
         <select
+          value={ratingFilter}
+          onChange={(e) => { setRatingFilter(e.target.value); setPage(1); }}
+          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+        >
+          <option value="">Rating: All</option>
+          <option value="1">★ 1+</option>
+          <option value="2">★★ 2+</option>
+          <option value="3">★★★ 3+</option>
+          <option value="4">★★★★ 4+</option>
+          <option value="5">★★★★★ 5</option>
+        </select>
+        {(allFlTechniques || []).length > 0 && (
+          <select
+            value={flTechFilter}
+            onChange={(e) => { setFlTechFilter(e.target.value); setPage(1); }}
+            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-48"
+          >
+            <option value="">FL Technique: All</option>
+            {(allFlTechniques || []).map((t) => (
+              <option key={t.name} value={t.name}>{t.name} ({t.count})</option>
+            ))}
+          </select>
+        )}
+        {(allDatasets || []).length > 0 && (
+          <select
+            value={datasetFilter}
+            onChange={(e) => { setDatasetFilter(e.target.value); setPage(1); }}
+            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-48"
+          >
+            <option value="">Dataset: All</option>
+            {(allDatasets || []).map((d) => (
+              <option key={d.name} value={d.name}>{d.name} ({d.count})</option>
+            ))}
+          </select>
+        )}
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -317,13 +361,15 @@ export default function PapersPage() {
           <option value="publication_date:asc">Pub date (oldest)</option>
           <option value="citation_count:desc">Most cited</option>
           <option value="citation_count:asc">Least cited</option>
+          <option value="rating:desc">Best rated</option>
+          <option value="rating:asc">Worst rated</option>
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || ratingFilter || flTechFilter || datasetFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -543,8 +589,13 @@ export default function PapersPage() {
                           ))}
                         </div>
                       )}
-                      {(paper.on_zotero || paper.has_note || paper.disabled) && (
-                        <div className="flex gap-1 mt-1">
+                      {(paper.rating || paper.on_zotero || paper.has_note || paper.disabled) && (
+                        <div className="flex items-center gap-1 mt-1">
+                          {paper.rating && paper.rating > 0 && (
+                            <span className="text-[10px] text-amber-400" title={`Rating: ${paper.rating}/5`}>
+                              {"★".repeat(paper.rating)}{"☆".repeat(5 - paper.rating)}
+                            </span>
+                          )}
                           {paper.on_zotero && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-700 text-white" title="On Zotero">
                               ZOTERO

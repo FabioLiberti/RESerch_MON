@@ -156,17 +156,165 @@ async def co_authors_network(
 
 @router.get("/citations")
 async def citations_network(
+    paper_id: int = Query(..., description="Center paper ID for ego-centric citation graph"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Citation network — requires Semantic Scholar data (future).
-    Currently returns placeholder structure."""
+    """Ego-centric citation network for a single paper.
+    Fetches references + citations from S2 (cached), shows all linked papers."""
+    from app.models.analysis import CitationLink
+    from app.config import settings
+    import asyncio
+    import json as _json
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        return {"nodes": [], "links": [], "stats": {"total_nodes": 0, "total_links": 0, "type": "citations"}}
+
+    if not paper.doi and not (paper.external_ids or {}).get("s2_id"):
+        return {
+            "nodes": [], "links": [],
+            "stats": {"total_nodes": 0, "total_links": 0, "type": "citations"},
+            "message": "Paper has no DOI or S2 ID — cannot fetch citations.",
+        }
+
+    # Build DOI/S2 lookup for all papers in DB
+    all_papers_result = await db.execute(
+        select(Paper.id, Paper.doi, Paper.external_ids_json, Paper.title, Paper.citation_count)
+    )
+    doi_to_paper: dict[str, dict] = {}
+    s2_to_paper: dict[str, dict] = {}
+    for pid, doi, ext_json, title, cites in all_papers_result.all():
+        ext = _json.loads(ext_json) if ext_json else {}
+        info = {"id": pid, "doi": doi, "title": title, "citations": cites}
+        if doi:
+            doi_to_paper[doi.lower()] = info
+        if ext.get("s2_id"):
+            s2_to_paper[ext["s2_id"]] = info
+
+    # Check which directions are already cached
+    cached_dirs = await db.execute(
+        select(CitationLink.direction).where(CitationLink.paper_id == paper_id).distinct()
+    )
+    cached_directions = set(r[0] for r in cached_dirs.all())
+    need_refs = "references" not in cached_directions
+    need_cits = "citations" not in cached_directions
+
+    # Fetch missing directions from S2
+    if need_refs or need_cits:
+        from app.clients.semantic_scholar import SemanticScholarClient
+        s2 = SemanticScholarClient()
+        try:
+            s2_id = (paper.external_ids or {}).get("s2_id")
+            lookup = s2_id if s2_id else f"DOI:{paper.doi}"
+
+            if need_refs:
+                refs = await s2.fetch_references(lookup, limit=100)
+                for ref in refs:
+                    link = CitationLink(
+                        paper_id=paper_id, direction="references",
+                        cited_doi=ref.get("doi"), cited_s2_id=ref.get("s2_id"),
+                        cited_title=ref.get("title"), cited_citations=ref.get("citations", 0),
+                    )
+                    if ref.get("doi") and ref["doi"].lower() in doi_to_paper:
+                        link.cited_paper_id = doi_to_paper[ref["doi"].lower()]["id"]
+                    elif ref.get("s2_id") and ref["s2_id"] in s2_to_paper:
+                        link.cited_paper_id = s2_to_paper[ref["s2_id"]]["id"]
+                    db.add(link)
+                logger.info(f"Fetched {len(refs)} references for paper {paper_id}")
+                await asyncio.sleep(0.5)
+
+            if need_cits:
+                cits = await s2.fetch_citations(lookup, limit=100)
+                for cit in cits:
+                    link = CitationLink(
+                        paper_id=paper_id, direction="citations",
+                        cited_doi=cit.get("doi"), cited_s2_id=cit.get("s2_id"),
+                        cited_title=cit.get("title"), cited_citations=cit.get("citations", 0),
+                    )
+                    if cit.get("doi") and cit["doi"].lower() in doi_to_paper:
+                        link.cited_paper_id = doi_to_paper[cit["doi"].lower()]["id"]
+                    elif cit.get("s2_id") and cit["s2_id"] in s2_to_paper:
+                        link.cited_paper_id = s2_to_paper[cit["s2_id"]]["id"]
+                    db.add(link)
+                logger.info(f"Fetched {len(cits)} citations for paper {paper_id}")
+
+            await db.flush()
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Citation fetch error for paper {paper_id}: {e}")
+        finally:
+            await s2.close()
+
+    # Build network from cache
+    links_result = await db.execute(
+        select(CitationLink).where(CitationLink.paper_id == paper_id)
+    )
+    citation_links = links_result.scalars().all()
+
+    # Get source for center paper
+    src_result = await db.execute(
+        select(PaperSource.source_name).where(PaperSource.paper_id == paper_id)
+    )
+    center_sources = [r[0] for r in src_result.all()]
+
+    # Build nodes and links
+    nodes_map: dict[str, dict] = {}
+    graph_links = []
+
+    # Center node
+    center_nid = f"db_{paper_id}"
+    nodes_map[center_nid] = {
+        "id": center_nid, "paper_id": paper_id, "title": paper.title[:80],
+        "citations": paper.citation_count, "doi": paper.doi,
+        "source": center_sources[0] if center_sources else "unknown",
+        "in_db": True, "is_center": True,
+    }
+
+    refs_count = 0
+    cits_count = 0
+
+    for cl in citation_links:
+        # Target node
+        if cl.cited_paper_id:
+            target_nid = f"db_{cl.cited_paper_id}"
+            if target_nid not in nodes_map:
+                info = doi_to_paper.get((cl.cited_doi or "").lower()) or s2_to_paper.get(cl.cited_s2_id or "")
+                nodes_map[target_nid] = {
+                    "id": target_nid, "paper_id": cl.cited_paper_id,
+                    "title": (info["title"] if info else cl.cited_title or "")[:80],
+                    "citations": info["citations"] if info else cl.cited_citations,
+                    "doi": cl.cited_doi, "source": "database", "in_db": True, "is_center": False,
+                }
+        else:
+            target_nid = f"ext_{cl.cited_s2_id or cl.cited_doi or cl.id}"
+            if target_nid not in nodes_map:
+                nodes_map[target_nid] = {
+                    "id": target_nid, "paper_id": None,
+                    "title": (cl.cited_title or "Unknown")[:80],
+                    "citations": cl.cited_citations, "doi": cl.cited_doi,
+                    "source": "external", "in_db": False, "is_center": False,
+                }
+
+        if cl.direction == "references":
+            graph_links.append({"source": center_nid, "target": target_nid, "type": "cites"})
+            refs_count += 1
+        else:
+            graph_links.append({"source": target_nid, "target": center_nid, "type": "cites"})
+            cits_count += 1
+
+    nodes = list(nodes_map.values())
+    in_db_count = sum(1 for n in nodes if n["in_db"])
+
     return {
-        "nodes": [],
-        "links": [],
+        "nodes": nodes,
+        "links": graph_links,
         "stats": {
-            "total_nodes": 0,
-            "total_links": 0,
+            "total_nodes": len(nodes),
+            "total_links": len(graph_links),
+            "references": refs_count,
+            "cited_by": cits_count,
+            "in_db": in_db_count,
+            "external": len(nodes) - in_db_count,
             "type": "citations",
         },
-        "message": "Citation data requires Semantic Scholar API key. Configure SEMANTIC_SCHOLAR_API_KEY in .env to enable.",
     }

@@ -87,6 +87,7 @@ class ZoteroClient(BaseAPIClient):
         date: str | None = None,
         url: str | None = None,
         paper_type: str = "journalArticle",
+        tags: list[str] | None = None,
     ) -> str | None:
         """Add a paper to one or more Zotero collections. Returns item key or None."""
         if not self.is_configured():
@@ -121,6 +122,10 @@ class ZoteroClient(BaseAPIClient):
             "url": url or (f"https://doi.org/{doi}" if doi else ""),
             "collections": collection_keys,
         }
+        # Tags
+        if tags:
+            item_data["tags"] = [{"tag": t} for t in tags]
+
         # Journal field name depends on item type
         if zotero_type == "conferencePaper":
             item_data["proceedingsTitle"] = journal or ""
@@ -148,6 +153,78 @@ class ZoteroClient(BaseAPIClient):
             logger.error(f"[zotero] Error adding paper: {e}")
 
         return None
+
+    async def add_note(self, parent_item_key: str, note_html: str) -> str | None:
+        """Add a note to a Zotero item. Returns note key or None."""
+        if not self.is_configured():
+            return None
+        try:
+            note_data = {
+                "itemType": "note",
+                "parentItem": parent_item_key,
+                "note": note_html,
+            }
+            response = await self._request(
+                "POST", f"{self.user_prefix}/items",
+                headers=self._headers(), json=[note_data],
+            )
+            result = response.json()
+            if result.get("successful", {}).get("0"):
+                key = result["successful"]["0"]["key"]
+                logger.info(f"[zotero] Added note to {parent_item_key}: {key}")
+                return key
+        except Exception as e:
+            logger.error(f"[zotero] Error adding note: {e}")
+        return None
+
+    async def update_tags(self, item_key: str, tags: list[str]) -> bool:
+        """Update tags on an existing Zotero item."""
+        if not self.is_configured():
+            return False
+        try:
+            # Get current item version
+            response = await self._request(
+                "GET", f"{self.user_prefix}/items/{item_key}",
+                headers=self._headers(),
+            )
+            item = response.json()
+            version = item.get("version", 0)
+
+            # Update with new tags
+            await self._request(
+                "PATCH", f"{self.user_prefix}/items/{item_key}",
+                headers={**self._headers(), "If-Unmodified-Since-Version": str(version)},
+                json={"tags": [{"tag": t} for t in tags]},
+            )
+            logger.info(f"[zotero] Updated tags on {item_key}: {len(tags)} tags")
+            return True
+        except Exception as e:
+            logger.error(f"[zotero] Error updating tags: {e}")
+            return False
+
+    async def delete_child_notes(self, parent_item_key: str) -> int:
+        """Delete all note children of a Zotero item."""
+        if not self.is_configured():
+            return 0
+        try:
+            response = await self._request(
+                "GET", f"{self.user_prefix}/items/{parent_item_key}/children",
+                headers=self._headers(),
+            )
+            deleted = 0
+            for child in response.json():
+                data = child.get("data", {})
+                if data.get("itemType") == "note":
+                    version = child.get("version", 0)
+                    await self._request(
+                        "DELETE", f"{self.user_prefix}/items/{data['key']}",
+                        headers={**self._headers(), "If-Unmodified-Since-Version": str(version)},
+                    )
+                    deleted += 1
+            return deleted
+        except Exception as e:
+            logger.warning(f"[zotero] Error deleting notes: {e}")
+            return 0
 
     async def delete_item(self, item_key: str) -> bool:
         """Delete a Zotero item (paper + all its children)."""

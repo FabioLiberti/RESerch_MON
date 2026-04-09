@@ -178,3 +178,53 @@ class SemanticScholarClient(BaseAPIClient):
         """Check if a paper exists in Semantic Scholar."""
         result = await self.fetch_metadata(paper_id)
         return result is not None
+
+    async def fetch_references(self, paper_id: str, limit: int = 100) -> list[dict]:
+        """Fetch papers that this paper cites (references)."""
+        try:
+            response = await self._request(
+                "GET",
+                f"/paper/{paper_id}/references",
+                params={"fields": "paperId,externalIds,title,citationCount", "limit": str(limit)},
+                headers=self._headers(),
+            )
+            data = response.json().get("data", [])
+            results = []
+            for item in data:
+                cited = item.get("citedPaper", {})
+                if cited and cited.get("paperId"):
+                    results.append({
+                        "s2_id": cited["paperId"],
+                        "doi": (cited.get("externalIds") or {}).get("DOI"),
+                        "title": cited.get("title"),
+                        "citations": cited.get("citationCount", 0),
+                    })
+            return results
+        except Exception as e:
+            logger.warning(f"[semantic_scholar] References fetch error for {paper_id}: {e}")
+            return []
+
+    async def fetch_citations(self, paper_id: str, limit: int = 100) -> list[dict]:
+        """Fetch papers that cite this paper."""
+        try:
+            response = await self._request(
+                "GET",
+                f"/paper/{paper_id}/citations",
+                params={"fields": "paperId,externalIds,title,citationCount", "limit": str(limit)},
+                headers=self._headers(),
+            )
+            data = response.json().get("data", [])
+            results = []
+            for item in data:
+                citing = item.get("citingPaper", {})
+                if citing and citing.get("paperId"):
+                    results.append({
+                        "s2_id": citing["paperId"],
+                        "doi": (citing.get("externalIds") or {}).get("DOI"),
+                        "title": citing.get("title"),
+                        "citations": citing.get("citationCount", 0),
+                    })
+            return results
+        except Exception as e:
+            logger.warning(f"[semantic_scholar] Citations fetch error for {paper_id}: {e}")
+            return []

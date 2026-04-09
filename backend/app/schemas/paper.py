@@ -48,6 +48,7 @@ class PaperSummary(BaseModel):
     has_note: bool = False
     disabled: bool = False
     on_zotero: bool = False
+    rating: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -72,6 +73,7 @@ class PaperDetail(BaseModel):
     validated: bool
     zotero_key: str | None = None
     disabled: bool = False
+    rating: int | None = None
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

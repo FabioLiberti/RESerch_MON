@@ -5,18 +5,22 @@ import * as d3 from "d3";
 import { SOURCE_COLORS } from "@/lib/utils";
 
 interface NetworkNode extends d3.SimulationNodeDatum {
-  id: number;
+  id: number | string;
+  paper_id?: number | null;
   title: string;
   source: string;
   citations: number;
   doi: string | null;
+  in_db?: boolean;
+  is_center?: boolean;
 }
 
 interface NetworkLink {
-  source: number;
-  target: number;
-  weight: number;
-  shared: string[];
+  source: number | string;
+  target: number | string;
+  weight?: number;
+  shared?: string[];
+  type?: string;
 }
 
 interface NetworkGraphProps {
@@ -24,9 +28,10 @@ interface NetworkGraphProps {
   links: NetworkLink[];
   type: "co-keywords" | "co-authors" | "citations";
   onNodeClick?: (id: number) => void;
+  onImport?: (doi: string) => void;
 }
 
-export default function NetworkGraph({ nodes, links, type, onNodeClick }: NetworkGraphProps) {
+export default function NetworkGraph({ nodes, links, type, onNodeClick, onImport }: NetworkGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -51,7 +56,8 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
     const simNodes: NetworkNode[] = nodes.map((n) => ({ ...n }));
     const simLinks = links.map((l) => ({ ...l }));
 
-    const maxWeight = Math.max(1, ...simLinks.map((l) => l.weight));
+    const maxWeight = Math.max(1, ...simLinks.map((l) => l.weight || 1));
+    const isCitations = type === "citations";
 
     const simulation = d3
       .forceSimulation(simNodes)
@@ -60,11 +66,26 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
         d3
           .forceLink(simLinks)
           .id((d: any) => d.id)
-          .distance((d: any) => Math.max(40, 100 - d.weight * 10))
+          .distance((d: any) => Math.max(40, 100 - (d.weight || 1) * 10))
       )
-      .force("charge", d3.forceManyBody().strength(-150))
+      .force("charge", d3.forceManyBody().strength(isCitations ? -80 : -150))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(20));
+      .force("collision", d3.forceCollide().radius(isCitations ? 12 : 20));
+
+    // Arrow markers for citation direction
+    if (isCitations) {
+      const defs = g.append("defs");
+      defs.append("marker")
+        .attr("id", "arrow-cites")
+        .attr("viewBox", "0 -5 10 10").attr("refX", 15).attr("refY", 0)
+        .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+        .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#6366f1");
+      defs.append("marker")
+        .attr("id", "arrow-cited")
+        .attr("viewBox", "0 -5 10 10").attr("refX", 15).attr("refY", 0)
+        .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+        .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#22c55e");
+    }
 
     // Links
     const link = g
@@ -72,9 +93,13 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
       .selectAll("line")
       .data(simLinks)
       .join("line")
-      .attr("stroke", "var(--border)")
-      .attr("stroke-opacity", (d: any) => 0.2 + (d.weight / maxWeight) * 0.6)
-      .attr("stroke-width", (d: any) => Math.max(1, Math.min(5, d.weight)));
+      .attr("stroke", (d: any) => {
+        if (!isCitations) return "var(--border)";
+        return d.type === "cites" ? "#6366f180" : "#22c55e80";
+      })
+      .attr("stroke-opacity", (d: any) => isCitations ? 0.5 : 0.2 + ((d.weight || 1) / maxWeight) * 0.6)
+      .attr("stroke-width", (d: any) => isCitations ? 1 : Math.max(1, Math.min(5, d.weight || 1)))
+      .attr("marker-end", (d: any) => isCitations ? "url(#arrow-cites)" : null);
 
     // Nodes
     const node = g
@@ -82,10 +107,22 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
       .selectAll("circle")
       .data(simNodes)
       .join("circle")
-      .attr("r", (d) => Math.max(5, Math.min(22, 5 + (d.citations || 0) * 0.4)))
-      .attr("fill", (d) => SOURCE_COLORS[d.source] || "#6b7280")
-      .attr("stroke", "var(--background)")
-      .attr("stroke-width", 1.5)
+      .attr("r", (d) => {
+        if (isCitations && (d as any).is_center) return 18;
+        if (isCitations && !(d as any).in_db) return 4;
+        if (isCitations && (d as any).in_db) return 8;
+        return Math.max(5, Math.min(22, 5 + (d.citations || 0) * 0.4));
+      })
+      .attr("fill", (d) => {
+        if (isCitations && !(d as any).in_db) return "#4b5563"; // gray for external
+        if (isCitations && (d as any).is_center) return "#f59e0b"; // amber for center
+        return SOURCE_COLORS[d.source] || "#6b7280";
+      })
+      .attr("stroke", (d) => {
+        if (isCitations && (d as any).in_db && !(d as any).is_center) return "#22c55e"; // green ring for in_db
+        return "var(--background)";
+      })
+      .attr("stroke-width", (d) => (isCitations && (d as any).in_db && !(d as any).is_center) ? 2.5 : 1.5)
       .attr("cursor", "pointer")
       .call(
         d3
@@ -106,9 +143,16 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
           })
       );
 
-    // Click to navigate
+    // Click to navigate or expand
     if (onNodeClick) {
-      node.on("click", (_event, d) => onNodeClick(d.id));
+      node.on("click", (_event, d) => {
+        const pid = (d as any).paper_id;
+        if (pid && typeof pid === "number" && pid > 0) {
+          onNodeClick(pid);
+        } else if (typeof d.id === "number") {
+          onNodeClick(d.id as number);
+        }
+      });
     }
 
     // Tooltip
@@ -122,11 +166,13 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
       .style("padding", "10px 14px")
       .style("font-size", "11px")
       .style("color", "var(--foreground)")
-      .style("pointer-events", "none")
+      .style("pointer-events", "auto")
       .style("opacity", 0)
       .style("z-index", "1000")
       .style("max-width", "320px")
-      .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)");
+      .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)")
+      .style("user-select", "text")
+      .on("mouseleave", () => tooltip.style("opacity", 0));
 
     node
       .on("mouseover", (event, d) => {
@@ -136,17 +182,31 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
         );
         const sharedInfo = connected
           .slice(0, 3)
-          .map((l) => l.shared.join(", "))
+          .map((l) => (l.shared || []).join(", "))
           .filter(Boolean);
 
         let html = `<strong>${d.title}</strong><br/>`;
-        html += `<span style="color:${SOURCE_COLORS[d.source] || "#6b7280"}">${d.source}</span>`;
-        html += ` &middot; ${d.citations} citations`;
-        if (connected.length > 0) {
-          html += `<br/><span style="color:var(--muted-foreground)">${connected.length} connections</span>`;
-          if (sharedInfo.length > 0) {
-            const label = type === "co-authors" ? "Authors" : "Keywords";
-            html += `<br/><span style="color:var(--muted-foreground)">${label}: ${sharedInfo.join("; ")}</span>`;
+        const inDb = (d as any).in_db;
+        const isCenter = (d as any).is_center;
+        if (isCitations) {
+          const paperId = (d as any).paper_id;
+          html += inDb
+            ? `<span style="color:#22c55e">● In database</span>`
+            : `<span style="color:#6b7280">○ External</span>`;
+          if (isCenter) html += ` <span style="color:#f59e0b">★ Center</span>`;
+          html += ` &middot; ${d.citations} citations`;
+          if (inDb && paperId) html += `<br/><a href="/papers/${paperId}" style="color:#22c55e;font-size:10px">Open paper detail</a>`;
+          if (d.doi) html += `${inDb ? ' &middot; ' : '<br/>'}<a href="https://doi.org/${d.doi}" target="_blank" style="color:#6366f1;font-size:10px">${d.doi}</a>`;
+          html += `<br/><span style="color:var(--muted-foreground)">${connected.length} links</span>`;
+        } else {
+          html += `<span style="color:${SOURCE_COLORS[d.source] || "#6b7280"}">${d.source}</span>`;
+          html += ` &middot; ${d.citations} citations`;
+          if (connected.length > 0) {
+            html += `<br/><span style="color:var(--muted-foreground)">${connected.length} connections</span>`;
+            if (sharedInfo.length > 0) {
+              const label = type === "co-authors" ? "Authors" : "Keywords";
+              html += `<br/><span style="color:var(--muted-foreground)">${label}: ${sharedInfo.join("; ")}</span>`;
+            }
           }
         }
 
@@ -169,9 +229,15 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick }: Networ
         );
       })
       .on("mouseout", () => {
-        tooltip.style("opacity", 0);
+        // Delay hide so user can hover tooltip to click links
+        setTimeout(() => {
+          const el = tooltip.node();
+          if (el && !el.matches(":hover")) {
+            tooltip.style("opacity", 0);
+          }
+        }, 300);
         node.attr("opacity", 1);
-        link.attr("opacity", (d: any) => 0.2 + (d.weight / maxWeight) * 0.6);
+        link.attr("opacity", (d: any) => 0.2 + ((d.weight || 1) / maxWeight) * 0.6);
       });
 
     // Labels for high-citation papers
