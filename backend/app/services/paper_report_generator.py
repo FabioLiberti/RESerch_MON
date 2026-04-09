@@ -520,8 +520,13 @@ def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, e
     authors = paper_data.get("authors", "")
     body = _markdown_to_latex(analysis_text)
 
-    # Escape title for LaTeX
-    title_escaped = paper.title.replace('&', '\\&').replace('%', '\\%').replace('#', '\\#').replace('_', '\\_')
+    # Escape strings for LaTeX (must be outside f-string for Python 3.11)
+    def _esc(s: str) -> str:
+        return s.replace('&', '\\&').replace('%', '\\%').replace('#', '\\#').replace('_', '\\_')
+
+    title_escaped = _esc(paper.title)
+    journal_escaped = _esc(paper.journal or "N/A")
+    authors_escaped = _esc(authors or "")
 
     tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[utf8]{{inputenc}}
@@ -546,10 +551,10 @@ def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, e
 
 \\title{{{title_escaped}\\\\[0.3em]
 \\large\\textcolor{{primary}}{{Analysis {mode.upper()} — v{version}}}}}
-\\author{{{authors or ""}}}
+\\author{{{authors_escaped}}}
 \\date{{{paper.publication_date or "N/A"} \\\\[0.2em]
 \\small DOI: \\href{{https://doi.org/{paper.doi or ""}}}{{{paper.doi or "N/A"}}} \\\\
-\\small Journal: {(paper.journal or "N/A").replace("&", "\\&")} \\\\
+\\small Journal: {journal_escaped} \\\\
 \\small Generated: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")} — Engine: {engine}}}
 
 \\begin{{document}}
