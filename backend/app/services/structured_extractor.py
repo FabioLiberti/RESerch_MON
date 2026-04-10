@@ -15,6 +15,19 @@ REGOLE:
 - Per campi array, usa [] se non ci sono dati.
 - I numeri devono essere esatti come nel report.
 
+REGOLE SPECIALI per "method_tags":
+- Scomponi il "proposed_method" in 1-4 tag corti standardizzati (max 4 parole ciascuno).
+- Usa terminologia accademica standard in italiano o inglese (preferisci inglese per termini consolidati).
+- Esempi di buoni tag:
+  * "Studio correlazionale trasversale con questionari standardizzati" -> ["cross-sectional study", "standardized questionnaire"]
+  * "Architettura FL a tre livelli con Deep RL" -> ["federated learning", "deep reinforcement learning", "three-tier architecture"]
+  * "Review narrativa multi-autore" -> ["narrative review", "expert panel"]
+  * "Scoping review secondo Arksey & O'Malley" -> ["scoping review"]
+  * "Tassonomia del Personalized FL" -> ["taxonomy", "personalized federated learning"]
+  * "HCB-CF (Human-Centric Based Collaborative Filtering)" -> ["collaborative filtering", "recommender system"]
+- I tag devono essere RIUTILIZZABILI tra paper diversi (cosi' funzionano come filtri).
+- Evita tag troppo specifici o lunghi.
+
 REPORT:
 {analysis_text}
 
@@ -25,6 +38,7 @@ Rispondi SOLO con un JSON valido (nessun testo prima o dopo) con questa struttur
 {{
   "problem_addressed": "descrizione del problema in 1-2 frasi",
   "proposed_method": "nome del metodo proposto",
+  "method_tags": ["tag1 normalizzato", "tag2 normalizzato"],
   "fl_techniques": ["tecnica1", "tecnica2"],
   "datasets": ["dataset1", "dataset2"],
   "baselines": ["baseline1", "baseline2"],
@@ -69,8 +83,8 @@ async def extract_structured_data(analysis_text: str) -> dict | None:
     try:
         import anthropic
 
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        message = client.messages.create(
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        message = await client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],

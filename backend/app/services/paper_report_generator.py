@@ -757,39 +757,43 @@ def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, e
     journal_escaped = _esc(paper.journal or "N/A")
     authors_escaped = _esc(authors or "")
 
+    # Sober, rigorous full-width template for all analysis modes
     tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[utf8]{{inputenc}}
 \\usepackage[T1]{{fontenc}}
 \\usepackage[italian]{{babel}}
 \\usepackage{{geometry}}
-\\geometry{{margin=2.5cm}}
+\\geometry{{a4paper,top=2.5cm,bottom=2.5cm,left=2.8cm,right=2.8cm}}
 \\usepackage{{hyperref}}
 \\usepackage{{amsmath,amssymb}}
 \\usepackage{{enumitem}}
-\\usepackage{{xcolor}}
-\\usepackage{{fancyhdr}}
+\\usepackage{{lmodern}}
+\\usepackage{{microtype}}
+\\usepackage{{titlesec}}
 
-\\definecolor{{primary}}{{HTML}}{{4338CA}}
-\\hypersetup{{colorlinks=true,linkcolor=primary,urlcolor=primary,citecolor=primary}}
+\\hypersetup{{colorlinks=false,pdfborder={{0 0 0}}}}
 
 \\setcounter{{secnumdepth}}{{0}}
 
-\\pagestyle{{fancy}}
-\\fancyhf{{}}
-\\fancyhead[L]{{\\small\\textcolor{{gray}}{{Analysis {mode.upper()} v{version} — Paper ID: {paper_id}}}}}
-\\fancyhead[R]{{\\small\\textcolor{{gray}}{{FL Research Monitor}}}}
-\\fancyfoot[C]{{\\thepage}}
+% Section formatting: bold small caps, no numbering
+\\titleformat{{\\section}}{{\\normalfont\\large\\bfseries\\scshape}}{{}}{{0pt}}{{}}[\\vspace{{0.2em}}]
+\\titleformat{{\\subsection}}{{\\normalfont\\normalsize\\bfseries}}{{}}{{0pt}}{{}}[\\vspace{{0.1em}}]
+\\titlespacing*{{\\section}}{{0pt}}{{1.4em}}{{0.5em}}
 
-\\title{{{title_escaped}\\\\[0.3em]
-\\large\\textcolor{{primary}}{{Analysis {mode.upper()} — v{version}}}}}
-\\author{{{authors_escaped}}}
-\\date{{{paper.publication_date or "N/A"} \\\\[0.2em]
-\\small DOI: \\href{{https://doi.org/{paper.doi or ""}}}{{{paper.doi or "N/A"}}} \\\\
-\\small Journal: {journal_escaped} \\\\
-\\small Generated: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")} — Engine: {engine}}}
+\\pagestyle{{plain}}
+
+\\setlength{{\\parskip}}{{0.4em}}
+\\setlength{{\\parindent}}{{0pt}}
 
 \\begin{{document}}
-\\maketitle
+
+\\begin{{center}}
+{{\\Large\\bfseries {title_escaped}}}\\\\[0.6em]
+{{\\normalsize {authors_escaped}}}\\\\[0.4em]
+{{\\small {paper.publication_date or "N/A"} \\quad\\textbar\\quad {journal_escaped} \\quad\\textbar\\quad DOI: {paper.doi or "N/A"}}}
+\\end{{center}}
+
+\\vspace{{0.8em}}
 
 {body}
 

@@ -244,6 +244,7 @@ async def trigger_analysis(
                                 healthcare_evidence=structured.get("healthcare_evidence"),
                                 key_findings_summary=structured.get("key_findings_summary"),
                             )
+                            sa.method_tags = structured.get("method_tags", [])
                             sa.fl_techniques = structured.get("fl_techniques", [])
                             sa.datasets = structured.get("datasets", [])
                             sa.baselines = structured.get("baselines", [])

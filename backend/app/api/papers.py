@@ -147,6 +147,7 @@ async def list_papers(
     label: str | None = None,
     fl_technique: str | None = None,
     dataset: str | None = None,
+    method_tag: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -216,6 +217,13 @@ async def list_papers(
         query = query.where(Paper.id.in_(
             select(SA2.paper_id).where(
                 SA2.datasets_json.ilike(f'%{dataset}%')
+            )
+        ))
+    if method_tag:
+        from app.models.structured_analysis import StructuredAnalysis as SA3
+        query = query.where(Paper.id.in_(
+            select(SA3.paper_id).where(
+                SA3.method_tags_json.ilike(f'%{method_tag}%')
             )
         ))
 
@@ -331,6 +339,38 @@ async def get_all_fl_techniques(db: AsyncSession = Depends(get_db)):
         .where(StructuredAnalysis.fl_techniques_json != "[]")
     )
     paper_sets: dict[str, set[int]] = {}  # lowercase -> set of paper_ids
+    forms: dict[str, Counter] = {}
+    for pid, json_str in result.all():
+        try:
+            for t in json.loads(json_str or "[]"):
+                key = t.strip().lower()
+                if not key:
+                    continue
+                if key not in paper_sets:
+                    paper_sets[key] = set()
+                    forms[key] = Counter()
+                paper_sets[key].add(pid)
+                forms[key][t.strip()] += 1
+        except json.JSONDecodeError:
+            continue
+    return [
+        {"name": forms[k].most_common(1)[0][0], "count": len(pids)}
+        for k, pids in sorted(paper_sets.items(), key=lambda x: -len(x[1]))
+    ]
+
+
+@router.get("/method-tags/all")
+async def get_all_method_tags(db: AsyncSession = Depends(get_db)):
+    """Get all unique method tags with unique paper counts (case-insensitive dedup)."""
+    import json
+    from collections import Counter
+    from app.models.structured_analysis import StructuredAnalysis
+
+    result = await db.execute(
+        select(StructuredAnalysis.paper_id, StructuredAnalysis.method_tags_json)
+        .where(StructuredAnalysis.method_tags_json != "[]")
+    )
+    paper_sets: dict[str, set[int]] = {}
     forms: dict[str, Counter] = {}
     for pid, json_str in result.all():
         try:

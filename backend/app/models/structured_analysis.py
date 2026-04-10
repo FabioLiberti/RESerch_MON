@@ -18,6 +18,7 @@ class StructuredAnalysis(Base):
     # Core method info
     problem_addressed = Column(Text, nullable=True)
     proposed_method = Column(Text, nullable=True)
+    method_tags_json = Column(Text, default="[]")  # short normalized tags for filtering
     fl_techniques_json = Column(Text, default="[]")
     datasets_json = Column(Text, default="[]")
     baselines_json = Column(Text, default="[]")
@@ -51,6 +52,14 @@ class StructuredAnalysis(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Properties for JSON fields
+    @property
+    def method_tags(self) -> list[str]:
+        return json.loads(self.method_tags_json) if self.method_tags_json else []
+
+    @method_tags.setter
+    def method_tags(self, value: list[str]):
+        self.method_tags_json = json.dumps(value)
+
     @property
     def fl_techniques(self) -> list[str]:
         return json.loads(self.fl_techniques_json) if self.fl_techniques_json else []

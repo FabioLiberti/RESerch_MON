@@ -38,6 +38,7 @@ export default function PapersPage() {
   const [ratingFilter, setRatingFilter] = useState("");
   const [flTechFilter, setFlTechFilter] = useState("");
   const [datasetFilter, setDatasetFilter] = useState("");
+  const [methodTagFilter, setMethodTagFilter] = useState("");
 
   // Sync URL params with state
   useEffect(() => {
@@ -99,6 +100,7 @@ export default function PapersPage() {
   const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>("/api/v1/labels", authFetcher);
   const { data: allFlTechniques } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/fl-techniques/all", authFetcher);
   const { data: allDatasets } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/datasets/all", authFetcher);
+  const { data: allMethodTags } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/method-tags/all", authFetcher);
 
   const params: Record<string, string> = {
     page: String(page),
@@ -119,6 +121,7 @@ export default function PapersPage() {
   if (ratingFilter) params.min_rating = ratingFilter;
   if (flTechFilter) params.fl_technique = flTechFilter;
   if (datasetFilter) params.dataset = datasetFilter;
+  if (methodTagFilter) params.method_tag = methodTagFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -372,6 +375,18 @@ export default function PapersPage() {
             ))}
           </select>
         )}
+        {(allMethodTags || []).length > 0 && (
+          <select
+            value={methodTagFilter}
+            onChange={(e) => { setMethodTagFilter(e.target.value); setPage(1); }}
+            className={`${cls(methodTagFilter)} max-w-52`}
+          >
+            <option value="">Method: All</option>
+            {[...(allMethodTags || [])].sort((a, b) => a.name.localeCompare(b.name)).map((m) => (
+              <option key={m.name} value={m.name}>{m.name} ({m.count})</option>
+            ))}
+          </select>
+        )}
         <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
@@ -388,10 +403,10 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
