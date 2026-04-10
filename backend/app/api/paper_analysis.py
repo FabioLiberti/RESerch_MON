@@ -1,6 +1,7 @@
 """Paper analysis report API endpoints."""
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
@@ -692,6 +693,351 @@ async def get_summary_card_pdf(
     )
 
 
+class RubricItem(BaseModel):
+    section: str
+    checked: bool = False
+    missing: bool = False
+    note: str = ""
+
+
+class ValidationRequest(BaseModel):
+    status: str  # validated, rejected, needs_revision
+    score: int | None = None  # 1-5
+    notes: str | None = None
+    rubric: list[RubricItem] | None = None
+
+
+@router.post("/queue/{queue_id}/validate")
+async def validate_analysis(
+    queue_id: int,
+    body: ValidationRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set validation status, score, notes, and rubric for an analysis entry."""
+    import json as _json
+    from app.services.validation_report import compute_rubric_score
+
+    if body.status not in ("validated", "rejected", "needs_revision", "pending"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    if body.score is not None and (body.score < 1 or body.score > 5):
+        raise HTTPException(status_code=400, detail="Score must be 1-5")
+
+    item = await db.get(AnalysisQueue, queue_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    item.validation_status = body.status
+    item.validation_notes = body.notes
+    item.validated_at = datetime.utcnow()
+    item.validated_by = user.username
+
+    if body.rubric is not None:
+        rubric_list = [r.model_dump() for r in body.rubric]
+        item.validation_rubric_json = _json.dumps(rubric_list, ensure_ascii=False)
+        # Auto-compute score from rubric if user didn't override
+        if body.score is None:
+            item.validation_score = compute_rubric_score(rubric_list)
+        else:
+            item.validation_score = body.score
+    else:
+        item.validation_score = body.score
+        item.validation_rubric_json = None
+
+    await db.flush()
+    await db.commit()
+    return {
+        "status": item.validation_status,
+        "score": item.validation_score,
+        "validated_at": item.validated_at.isoformat() if item.validated_at else None,
+        "validated_by": item.validated_by,
+        "rubric": _json.loads(item.validation_rubric_json) if item.validation_rubric_json else None,
+    }
+
+
+def _split_md_sections(md_text: str) -> dict[str, str]:
+    """Split a markdown analysis into sections by H2 headings (## Section)."""
+    if not md_text:
+        return {}
+    sections: dict[str, str] = {}
+    current = "_preamble"
+    buffer: list[str] = []
+    for line in md_text.splitlines():
+        if line.startswith("## "):
+            if buffer:
+                sections[current] = "\n".join(buffer).strip()
+            current = line[3:].strip()
+            buffer = []
+        else:
+            buffer.append(line)
+    if buffer:
+        sections[current] = "\n".join(buffer).strip()
+    return sections
+
+
+@router.get("/{paper_id}/diff")
+async def analysis_diff(
+    paper_id: int,
+    queue_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare an analysis (queue_id) with the previous version of the same mode.
+
+    Returns a section-by-section diff with status: unchanged | modified | added | removed.
+    """
+    current = await db.get(AnalysisQueue, queue_id)
+    if not current or current.paper_id != paper_id:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    # Find the previous version of the same mode
+    conditions = [
+        AnalysisQueue.paper_id == paper_id,
+        AnalysisQueue.analysis_mode == current.analysis_mode,
+        AnalysisQueue.status == "done",
+        AnalysisQueue.id != queue_id,
+    ]
+    if current.completed_at:
+        conditions.append(AnalysisQueue.completed_at < current.completed_at)
+    result = await db.execute(
+        select(AnalysisQueue)
+        .where(*conditions)
+        .order_by(AnalysisQueue.completed_at.desc())
+        .limit(1)
+    )
+    previous = result.scalar_one_or_none()
+    if not previous:
+        raise HTTPException(status_code=404, detail="No previous version available for this mode")
+
+    if not current.md_path or not previous.md_path:
+        raise HTTPException(status_code=404, detail="Markdown files missing for one of the versions")
+
+    cur_path = Path(current.md_path)
+    prev_path = Path(previous.md_path)
+    if not cur_path.exists() or not prev_path.exists():
+        raise HTTPException(status_code=404, detail="Markdown files not found on disk")
+
+    cur_text = cur_path.read_text(encoding="utf-8")
+    prev_text = prev_path.read_text(encoding="utf-8")
+
+    cur_sections = _split_md_sections(cur_text)
+    prev_sections = _split_md_sections(prev_text)
+
+    all_sections: list[str] = []
+    seen = set()
+    # Preserve order: previous first then any new in current
+    for s in list(prev_sections.keys()) + list(cur_sections.keys()):
+        if s in seen or s == "_preamble":
+            continue
+        seen.add(s)
+        all_sections.append(s)
+
+    diffs = []
+    for sec in all_sections:
+        in_prev = sec in prev_sections
+        in_cur = sec in cur_sections
+        if in_prev and in_cur:
+            # Normalize whitespace for comparison
+            norm_p = " ".join(prev_sections[sec].split())
+            norm_c = " ".join(cur_sections[sec].split())
+            status = "unchanged" if norm_p == norm_c else "modified"
+        elif in_cur:
+            status = "added"
+        else:
+            status = "removed"
+        diffs.append({
+            "section": sec,
+            "status": status,
+            "prev_text": prev_sections.get(sec, ""),
+            "curr_text": cur_sections.get(sec, ""),
+        })
+
+    return {
+        "current": {"id": current.id, "version": current.version or 1, "mode": current.analysis_mode},
+        "previous": {"id": previous.id, "version": previous.version or 1, "mode": previous.analysis_mode},
+        "sections": diffs,
+        "summary": {
+            "modified": sum(1 for d in diffs if d["status"] == "modified"),
+            "unchanged": sum(1 for d in diffs if d["status"] == "unchanged"),
+            "added": sum(1 for d in diffs if d["status"] == "added"),
+            "removed": sum(1 for d in diffs if d["status"] == "removed"),
+        },
+    }
+
+
+class DiffLLMRequest(BaseModel):
+    section: str
+    prev_text: str
+    curr_text: str
+
+
+@router.post("/diff/llm-summary")
+async def diff_llm_summary(
+    body: DiffLLMRequest,
+    user: User = Depends(get_current_user),
+):
+    """Use Haiku to summarize semantic differences between two versions of a section."""
+    from app.config import settings
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="Anthropic API not configured")
+
+    prompt = f"""Sei un editor scientifico. Confronta queste DUE versioni della sezione "{body.section}" di un Extended Abstract e produci una sintesi delle differenze SEMANTICHE in 2-4 bullet point brevi (in italiano).
+
+VERSIONE PRECEDENTE:
+{body.prev_text}
+
+VERSIONE NUOVA:
+{body.curr_text}
+
+REGOLE:
+- Solo differenze di sostanza (concetti, dati, conclusioni). Ignora differenze puramente stilistiche o di formattazione.
+- Massimo 4 bullet, ognuno di 1-2 righe.
+- Se non ci sono differenze rilevanti, rispondi: "Nessuna differenza sostanziale (solo riformulazioni)."
+- Formato: bullet con `- ` davanti.
+"""
+
+    try:
+        from anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        msg = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = msg.content[0].text if msg.content else ""
+        return {
+            "section": body.section,
+            "summary": text,
+            "input_tokens": msg.usage.input_tokens,
+            "output_tokens": msg.usage.output_tokens,
+        }
+    except Exception as e:
+        logger.error(f"Diff LLM summary failed: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
+
+
+@router.get("/validation-stats")
+async def validation_stats(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate validation stats for the dashboard card."""
+    from sqlalchemy import func, and_
+    from datetime import timedelta
+
+    # Total done analyses (latest version per paper+mode is too costly here, count rows)
+    total_done = (await db.execute(
+        select(func.count(AnalysisQueue.id)).where(AnalysisQueue.status == "done")
+    )).scalar() or 0
+
+    # By validation status
+    by_status = {}
+    for s in ("validated", "rejected", "needs_revision"):
+        cnt = (await db.execute(
+            select(func.count(AnalysisQueue.id)).where(
+                AnalysisQueue.status == "done",
+                AnalysisQueue.validation_status == s,
+            )
+        )).scalar() or 0
+        by_status[s] = cnt
+
+    pending = (await db.execute(
+        select(func.count(AnalysisQueue.id)).where(
+            AnalysisQueue.status == "done",
+            AnalysisQueue.validation_status.is_(None),
+        )
+    )).scalar() or 0
+
+    # This week (last 7 days)
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    this_week = (await db.execute(
+        select(func.count(AnalysisQueue.id)).where(
+            AnalysisQueue.validated_at >= week_ago,
+        )
+    )).scalar() or 0
+
+    # Average score
+    avg_score_row = (await db.execute(
+        select(func.avg(AnalysisQueue.validation_score)).where(
+            AnalysisQueue.validation_score.isnot(None)
+        )
+    )).scalar()
+    avg_score = round(float(avg_score_row), 2) if avg_score_row else None
+
+    return {
+        "total_done": total_done,
+        "validated": by_status["validated"],
+        "rejected": by_status["rejected"],
+        "needs_revision": by_status["needs_revision"],
+        "pending": pending,
+        "this_week": this_week,
+        "avg_score": avg_score,
+    }
+
+
+@router.get("/review-queue")
+async def review_queue(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List analyses pending review (or marked needs_revision), ordered by paper rating desc."""
+    from sqlalchemy import or_, desc
+    result = await db.execute(
+        select(AnalysisQueue, Paper)
+        .join(Paper, Paper.id == AnalysisQueue.paper_id)
+        .where(
+            AnalysisQueue.status == "done",
+            or_(
+                AnalysisQueue.validation_status.is_(None),
+                AnalysisQueue.validation_status == "needs_revision",
+            ),
+        )
+        .order_by(desc(Paper.rating).nulls_last(), AnalysisQueue.completed_at.asc())
+    )
+    rows = result.all()
+
+    # Keep only the latest version per (paper_id, mode) — older superseded entries skipped
+    seen: set[tuple[int, str]] = set()
+    out: list[dict] = []
+    for aq, paper in rows:
+        key = (paper.id, aq.analysis_mode or "quick")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "queue_id": aq.id,
+            "paper_id": paper.id,
+            "title": paper.title,
+            "doi": paper.doi,
+            "journal": paper.journal,
+            "publication_date": paper.publication_date,
+            "rating": paper.rating,
+            "mode": aq.analysis_mode or "quick",
+            "version": aq.version or 1,
+            "validation_status": aq.validation_status,
+            "completed_at": aq.completed_at.isoformat() if aq.completed_at else None,
+        })
+    return out
+
+
+@router.get("/queue/{queue_id}/rubric-template")
+async def get_rubric_template(
+    queue_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the rubric for an analysis entry. If never set, returns blank template."""
+    import json as _json
+    from app.services.validation_report import empty_rubric
+
+    item = await db.get(AnalysisQueue, queue_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if item.validation_rubric_json:
+        return {"rubric": _json.loads(item.validation_rubric_json), "from_existing": True}
+    return {"rubric": empty_rubric(), "from_existing": False}
+
+
 @router.get("/{paper_id}/history")
 async def analysis_history(
     paper_id: int,
@@ -742,6 +1088,12 @@ async def analysis_history(
             "tex_path": q.tex_path,
             "version": q.version or 1,
             "zotero_synced": bool(q.zotero_synced) if q.zotero_synced is not None else False,
+            "validation_status": q.validation_status,
+            "validation_score": q.validation_score,
+            "validation_notes": q.validation_notes,
+            "validation_rubric": __import__("json").loads(q.validation_rubric_json) if q.validation_rubric_json else None,
+            "validated_at": q.validated_at.isoformat() if q.validated_at else None,
+            "validated_by": q.validated_by,
         })
     return result_list
 
@@ -807,6 +1159,28 @@ async def get_analysis_pdf(
         path=str(path),
         media_type="application/pdf",
         filename=path.name,
+    )
+
+
+@router.get("/{paper_id}/validation-report")
+async def get_validation_report_pdf(
+    paper_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate (on demand) and serve the validation report PDF for a paper."""
+    from app.services.validation_report import generate_validation_report
+
+    pdf_path = await generate_validation_report(db, paper_id)
+    if not pdf_path or not pdf_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="No validation report available — at least one analysis must be reviewed first",
+        )
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=pdf_path.name,
     )
 
 

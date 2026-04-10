@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     ncbi_api_key: str = ""
     semantic_scholar_api_key: str = ""
     ieee_api_key: str = ""
+    elsevier_api_key: str = ""
     zotero_api_key: str = ""
     zotero_user_id: str = ""
 

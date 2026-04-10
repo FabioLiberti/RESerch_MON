@@ -20,7 +20,7 @@ const TABS: { key: SourceTab; label: string; description: string }[] = [
 ];
 
 // API sources (exclude compendium)
-const API_SOURCES = ["pubmed", "semantic_scholar", "arxiv", "biorxiv", "medrxiv", "ieee"];
+const API_SOURCES = ["arxiv", "biorxiv", "elsevier", "ieee", "medrxiv", "pubmed", "semantic_scholar"];
 
 export default function PapersPage() {
   const searchParams = useSearchParams();
@@ -39,6 +39,7 @@ export default function PapersPage() {
   const [flTechFilter, setFlTechFilter] = useState("");
   const [datasetFilter, setDatasetFilter] = useState("");
   const [methodTagFilter, setMethodTagFilter] = useState("");
+  const [validationFilter, setValidationFilter] = useState("");
 
   // Sync URL params with state
   useEffect(() => {
@@ -122,6 +123,7 @@ export default function PapersPage() {
   if (flTechFilter) params.fl_technique = flTechFilter;
   if (datasetFilter) params.dataset = datasetFilter;
   if (methodTagFilter) params.method_tag = methodTagFilter;
+  if (validationFilter) params.validation = validationFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -388,6 +390,18 @@ export default function PapersPage() {
           </select>
         )}
         <select
+          value={validationFilter}
+          onChange={(e) => { setValidationFilter(e.target.value); setPage(1); }}
+          className={`${cls(validationFilter)} max-w-44`}
+        >
+          <option value="">Validation: All</option>
+          <option value="any">Reviewed (any)</option>
+          <option value="validated">Validated</option>
+          <option value="needs_revision">Needs revision</option>
+          <option value="rejected">Rejected</option>
+          <option value="pending">Pending review</option>
+        </select>
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -403,10 +417,10 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -636,7 +650,17 @@ export default function PapersPage() {
                               {"★".repeat(paper.rating)}{"☆".repeat(5 - paper.rating)}
                             </span>
                           )}
-                          {paper.on_zotero && (
+                          {paper.on_zotero && paper.zotero_key && (
+                            <a
+                              href={`zotero://select/library/items/${paper.zotero_key}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-700 text-white hover:bg-cyan-600"
+                              title="Open in Zotero desktop"
+                            >
+                              ZOTERO ↗
+                            </a>
+                          )}
+                          {paper.on_zotero && !paper.zotero_key && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-700 text-white" title="On Zotero">
                               ZOTERO
                             </span>

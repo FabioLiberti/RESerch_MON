@@ -16,6 +16,7 @@ export interface Paper {
   has_note: boolean;
   disabled: boolean;
   on_zotero: boolean;
+  zotero_key: string | null;
   rating: number | null;
   created_at: string;
 }

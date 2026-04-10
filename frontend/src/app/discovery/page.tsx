@@ -99,7 +99,7 @@ export default function DiscoveryPage() {
           ? Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-40 bg-[var(--muted)] rounded-xl animate-pulse" />
             ))
-          : (sources || []).map((src: SourceInfo) => (
+          : [...(sources || [])].sort((a: SourceInfo, b: SourceInfo) => a.name.localeCompare(b.name)).map((src: SourceInfo) => (
               <div
                 key={src.name}
                 className={`rounded-xl bg-[var(--card)] border transition-colors cursor-pointer ${
@@ -751,8 +751,15 @@ function RecentSearches() {
                 {statusIcon(job.status)}
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {(job as any).mode && (job as any).mode !== "keywords" && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)] mr-1.5 font-normal">
+                    {(job as any).mode && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded mr-1.5 font-semibold uppercase ${
+                        (job as any).mode === "keywords" ? "bg-blue-700 text-white" :
+                        (job as any).mode === "title" ? "bg-purple-700 text-white" :
+                        (job as any).mode === "author" ? "bg-emerald-700 text-white" :
+                        (job as any).mode === "doi" ? "bg-amber-700 text-white" :
+                        (job as any).mode === "bibliography" ? "bg-pink-700 text-white" :
+                        "bg-gray-700 text-white"
+                      }`}>
                         {(job as any).mode}
                       </span>
                     )}
@@ -828,7 +835,7 @@ function ElapsedTimer({ startTime }: { startTime: number }) {
 
 // --- Smart Search Component ---
 
-const ALL_SOURCES = ["pubmed", "arxiv", "biorxiv", "semantic_scholar", "ieee"];
+const ALL_SOURCES = ["arxiv", "biorxiv", "elsevier", "ieee", "pubmed", "semantic_scholar"];
 
 interface SmartResult {
   title: string;

@@ -48,6 +48,7 @@ class PaperSummary(BaseModel):
     has_note: bool = False
     disabled: bool = False
     on_zotero: bool = False
+    zotero_key: str | None = None
     rating: int | None = None
     created_at: datetime
 

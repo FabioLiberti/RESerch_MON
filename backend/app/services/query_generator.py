@@ -28,6 +28,8 @@ def _generate_keyword_queries(keywords: list[str]) -> dict[str, str]:
     pubmed_parts = [f'"{kw}"[Title/Abstract]' for kw in keywords]
     arxiv_parts = [f'(ti:"{kw}" OR abs:"{kw}")' for kw in keywords]
     ieee_parts = [f'"{kw}"' for kw in keywords]
+    # Scopus: TITLE-ABS-KEY combines title, abstract, and keywords
+    elsevier_parts = [f'TITLE-ABS-KEY("{kw}")' for kw in keywords]
 
     return {
         "pubmed": " AND ".join(pubmed_parts),
@@ -35,6 +37,7 @@ def _generate_keyword_queries(keywords: list[str]) -> dict[str, str]:
         "semantic_scholar": " ".join(keywords),
         "ieee": " AND ".join(ieee_parts),
         "biorxiv": " ".join(keywords),
+        "elsevier": " AND ".join(elsevier_parts),
     }
 
 
@@ -48,6 +51,7 @@ def _generate_title_queries(keywords: list[str]) -> dict[str, str]:
         "semantic_scholar": title_text,
         "ieee": f'("Document Title":"{title_text}")',
         "biorxiv": title_text,
+        "elsevier": f'TITLE("{title_text}")',
     }
 
 
@@ -61,6 +65,7 @@ def _generate_author_queries(keywords: list[str]) -> dict[str, str]:
         "semantic_scholar": author_text,
         "ieee": f'("Authors":"{author_text}")',
         "biorxiv": author_text,
+        "elsevier": f'AUTHOR-NAME("{author_text}")',
     }
 
 
@@ -78,4 +83,5 @@ def _generate_doi_queries(keywords: list[str]) -> dict[str, str]:
         "arxiv": "",  # arXiv doesn't search by DOI
         "ieee": "",   # Would need article number
         "biorxiv": "",  # bioRxiv doesn't search by DOI
+        "elsevier": f'DOI("{doi}")',
     }

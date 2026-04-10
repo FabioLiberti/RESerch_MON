@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("")
 async def list_sources(db: AsyncSession = Depends(get_db)):
     """List all sources with stats."""
-    source_names = ["pubmed", "biorxiv", "semantic_scholar", "arxiv", "ieee"]
+    source_names = sorted(["pubmed", "biorxiv", "semantic_scholar", "arxiv", "ieee", "elsevier"])
     sources = []
 
     for name in source_names:

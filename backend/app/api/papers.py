@@ -66,6 +66,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         has_note=has_note,
         disabled=paper.disabled or False,
         on_zotero=paper.zotero_key is not None,
+        zotero_key=paper.zotero_key,
         rating=paper.rating,
         created_at=paper.created_at,
     )
@@ -148,6 +149,7 @@ async def list_papers(
     fl_technique: str | None = None,
     dataset: str | None = None,
     method_tag: str | None = None,
+    validation: str | None = None,  # any, validated, pending, rejected, needs_revision
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -226,6 +228,27 @@ async def list_papers(
                 SA3.method_tags_json.ilike(f'%{method_tag}%')
             )
         ))
+    if validation:
+        from app.models.analysis import AnalysisQueue as _AQ
+        if validation == "any":
+            # Any validation status set (validated, rejected, needs_revision)
+            query = query.where(Paper.id.in_(
+                select(_AQ.paper_id).where(
+                    _AQ.validation_status.in_(["validated", "rejected", "needs_revision"])
+                )
+            ))
+        elif validation == "pending":
+            # Has analyses, but none reviewed
+            from sqlalchemy import and_, not_
+            has_analysis = select(_AQ.paper_id).where(_AQ.status == "done")
+            has_review = select(_AQ.paper_id).where(
+                _AQ.validation_status.in_(["validated", "rejected", "needs_revision"])
+            )
+            query = query.where(and_(Paper.id.in_(has_analysis), Paper.id.notin_(has_review)))
+        elif validation in ("validated", "rejected", "needs_revision"):
+            query = query.where(Paper.id.in_(
+                select(_AQ.paper_id).where(_AQ.validation_status == validation)
+            ))
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())

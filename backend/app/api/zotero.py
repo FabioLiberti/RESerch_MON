@@ -15,6 +15,7 @@ from app.models.user import User
 from app.api.auth import get_current_user, require_admin
 from app.clients.zotero import ZoteroClient
 from app.services.zotero_sync import ZoteroSyncService
+from app.services.validation_report import generate_validation_report, get_validation_summary, build_validation_zotero_tags
 
 logger = logging.getLogger(__name__)
 
@@ -102,19 +103,28 @@ async def sync_analysis(
     mode_order = {"extended": 0, "summary": 1, "quick": 2, "deep": 3}
     analyses_to_sync.sort(key=lambda a: mode_order.get(a.analysis_mode or "quick", 9))
 
+    # Generate dynamic validation report (only if at least one analysis is validated)
+    validation_pdf_path = await generate_validation_report(db, paper_id)
+    validation_summary = get_validation_summary(analyses_to_sync)
+
     client = ZoteroClient()
     if not client.is_configured():
         raise HTTPException(status_code=503, detail="Zotero not configured")
 
     try:
-        # Delete old analysis attachments before uploading new ones
+        # Delete old analysis + validation attachments before uploading new ones
         await client.delete_child_attachments(paper.zotero_key, f"analysis_")
+        await client.delete_child_attachments(paper.zotero_key, f"validation_")
 
         uploaded = []
+
+        # Build ordered upload list:
+        # 1. extended.pdf  2. validation.pdf  3. summary.pdf  4. quick.pdf  5. deep.pdf
+        upload_queue: list[tuple[str, str, str, AnalysisQueue | None]] = []
+        extended_added = False
         for analysis in analyses_to_sync:
             mode = analysis.analysis_mode or "quick"
 
-            # Prefer PDF, fallback to HTML (lowercase filenames)
             if analysis.pdf_path and Path(analysis.pdf_path).exists():
                 file_path = analysis.pdf_path
                 filename = f"analysis_{mode}_{paper_id}.pdf"
@@ -126,6 +136,28 @@ async def sync_analysis(
             else:
                 continue
 
+            upload_queue.append((file_path, filename, content_type, analysis))
+
+            # Insert validation right after extended
+            if mode == "extended" and validation_pdf_path and validation_pdf_path.exists():
+                upload_queue.append((
+                    str(validation_pdf_path),
+                    f"validation_{paper_id}.pdf",
+                    "application/pdf",
+                    None,
+                ))
+                extended_added = True
+
+        # If no extended analysis, but we have a validation report, prepend it
+        if validation_pdf_path and validation_pdf_path.exists() and not extended_added:
+            upload_queue.insert(0, (
+                str(validation_pdf_path),
+                f"validation_{paper_id}.pdf",
+                "application/pdf",
+                None,
+            ))
+
+        for file_path, filename, content_type, analysis in upload_queue:
             attachment_key = await client.upload_attachment(
                 parent_item_key=paper.zotero_key,
                 file_path=file_path,
@@ -134,7 +166,33 @@ async def sync_analysis(
             )
             if attachment_key:
                 uploaded.append(filename)
-                analysis.zotero_synced = True
+                if analysis is not None:
+                    analysis.zotero_synced = True
+
+        # Update Extra field and tags with validation summary
+        try:
+            # Rebuild extra: rating + validation
+            extra_lines: list[str] = []
+            if paper.rating:
+                stars = "★" * paper.rating + "☆" * (5 - paper.rating)
+                extra_lines.append(f"Rating: {stars} ({paper.rating}/5)")
+            extra_lines.append(f"Validation: {validation_summary['overall']}")
+            if validation_summary["validated_modes"]:
+                extra_lines.append(f"Validated: {', '.join(validation_summary['validated_modes'])}")
+            if validation_summary["rejected_modes"]:
+                extra_lines.append(f"Rejected: {', '.join(validation_summary['rejected_modes'])}")
+            if validation_summary["needs_revision_modes"]:
+                extra_lines.append(f"Needs revision: {', '.join(validation_summary['needs_revision_modes'])}")
+            await client.update_extra(paper.zotero_key, "\n".join(extra_lines))
+
+            # Add validation status tags (preserve existing keyword/label tags)
+            existing_tags = list(paper.keywords or [])
+            for vt in build_validation_zotero_tags(validation_summary):
+                if vt not in existing_tags:
+                    existing_tags.append(vt)
+            await client.update_tags(paper.zotero_key, existing_tags)
+        except Exception as e:
+            logger.warning(f"Failed to update Zotero metadata with validation info: {e}")
 
         await db.flush()
         await db.commit()

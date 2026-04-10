@@ -9,6 +9,8 @@ from sqlalchemy.orm import selectinload
 from app.clients.zotero import ZoteroClient
 from app.models.paper import Paper, PaperAuthor
 from app.models.label import Label, PaperLabel, PaperNote
+from app.models.analysis import AnalysisQueue
+from app.services.validation_report import get_validation_summary, build_validation_zotero_tags
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +92,40 @@ class ZoteroSyncService:
             if label.name not in tags:
                 tags.append(label.name)
 
-        # Build extra field with rating
+        # Build extra field with rating + validation summary
         extra_lines = []
         if paper.rating:
             stars = "★" * paper.rating + "☆" * (5 - paper.rating)
             extra_lines.append(f"Rating: {stars} ({paper.rating}/5)")
+
+        # Validation summary (latest analysis per mode)
+        analysis_result = await db.execute(
+            select(AnalysisQueue)
+            .where(AnalysisQueue.paper_id == paper_id, AnalysisQueue.status == "done")
+            .order_by(AnalysisQueue.completed_at.desc())
+        )
+        all_analyses = list(analysis_result.scalars().all())
+        seen_m: set[str] = set()
+        latest: list[AnalysisQueue] = []
+        for a in all_analyses:
+            m = a.analysis_mode or "quick"
+            if m not in seen_m:
+                seen_m.add(m)
+                latest.append(a)
+        if latest:
+            vsum = get_validation_summary(latest)
+            extra_lines.append(f"Validation: {vsum['overall']}")
+            if vsum["validated_modes"]:
+                extra_lines.append(f"Validated: {', '.join(vsum['validated_modes'])}")
+            if vsum["rejected_modes"]:
+                extra_lines.append(f"Rejected: {', '.join(vsum['rejected_modes'])}")
+            if vsum["needs_revision_modes"]:
+                extra_lines.append(f"Needs revision: {', '.join(vsum['needs_revision_modes'])}")
+            # Add validation tags (emoji visible + short for colored tags)
+            for vt in build_validation_zotero_tags(vsum):
+                if vt not in tags:
+                    tags.append(vt)
+
         extra_field = "\n".join(extra_lines) if extra_lines else ""
 
         # Get note

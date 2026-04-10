@@ -78,7 +78,36 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Zotero Sync */}
-      <SyncPaperToZotero paperId={paperId} hasZoteroKey={!!paper.zotero_key} />
+      <div className="flex items-center gap-2 flex-wrap">
+        <SyncPaperToZotero paperId={paperId} hasZoteroKey={!!paper.zotero_key} />
+        {paper.zotero_key && (
+          <>
+            <a
+              href={`zotero://select/library/items/${paper.zotero_key}`}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-700 text-white text-xs font-medium hover:bg-amber-600 transition-colors"
+              title="Open in Zotero desktop app"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Open in Zotero
+            </a>
+            <a
+              href={`https://www.zotero.org/users/14445641/items/${paper.zotero_key}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-900 text-white text-xs font-medium hover:bg-amber-800 transition-colors"
+              title="Open on zotero.org (web)"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8M3.6 15h16.8M11 3a17 17 0 000 18M13 3a17 17 0 010 18" />
+              </svg>
+              Web
+            </a>
+          </>
+        )}
+      </div>
 
       {/* Labels & Notes */}
       <LabelsAndNotes paperId={paperId} />
@@ -703,7 +732,6 @@ function AnalysisButton({ paperId }: { paperId: number }) {
         >
           Analysis PDF
         </button>
-        <SyncAnalysisToZotero paperId={paperId} />
         <button
           onClick={trigger}
           disabled={status === "loading"}
@@ -847,6 +875,19 @@ interface AnalysisRun {
   tex_path: string | null;
   version: number;
   zotero_synced: boolean;
+  validation_status: string | null;
+  validation_score: number | null;
+  validation_notes: string | null;
+  validation_rubric: RubricItem[] | null;
+  validated_at: string | null;
+  validated_by: string | null;
+}
+
+interface RubricItem {
+  section: string;
+  checked: boolean;
+  missing: boolean;
+  note: string;
 }
 
 // --- Summary Card (option A: from structured data, zero cost) ---
@@ -1063,13 +1104,55 @@ function SummaryCard({ paperId }: { paperId: number }) {
 
 
 function AnalysisHistory({ paperId }: { paperId: number }) {
-  const { data: history } = useSWR<AnalysisRun[]>(
+  const { data: history, mutate: mutateHistory } = useSWR<AnalysisRun[]>(
     `/api/v1/analysis/${paperId}/history`,
     authFetcher,
     { shouldRetryOnError: false }
   );
+  const [reviewing, setReviewing] = useState<AnalysisRun | null>(null);
+  const [diffing, setDiffing] = useState<AnalysisRun | null>(null);
+
+  // Auto-open review modal when URL has ?review={queue_id} (from /review queue page)
+  useEffect(() => {
+    if (typeof window === "undefined" || !history) return;
+    const params = new URLSearchParams(window.location.search);
+    const reviewId = params.get("review");
+    if (reviewId) {
+      const target = history.find(r => String(r.id) === reviewId);
+      if (target) {
+        setReviewing(target);
+        // Clean URL so refresh doesn't re-open
+        const url = new URL(window.location.href);
+        url.searchParams.delete("review");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }, [history]);
 
   if (!history || history.length === 0) return null;
+
+  const validationBadge = (run: AnalysisRun) => {
+    if (!run.validation_status) return null;
+    const cls = run.validation_status === "validated"
+      ? "bg-emerald-700 text-white"
+      : run.validation_status === "rejected"
+      ? "bg-red-700 text-white"
+      : run.validation_status === "needs_revision"
+      ? "bg-orange-600 text-white"
+      : "bg-gray-600 text-white";
+    const label = run.validation_status === "validated"
+      ? "✓ VALIDATED"
+      : run.validation_status === "rejected"
+      ? "✗ REJECTED"
+      : run.validation_status === "needs_revision"
+      ? "⟳ REVISION"
+      : "PENDING";
+    return (
+      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${cls}`} title={`By ${run.validated_by || "?"} on ${run.validated_at || ""}${run.validation_score ? ` — Score ${run.validation_score}/5` : ""}`}>
+        {label}{run.validation_score ? ` ${run.validation_score}/5` : ""}
+      </span>
+    );
+  };
 
   const engineLabel = (engine: string) => {
     if (engine.includes("claude")) return "Claude Opus 4.6";
@@ -1117,8 +1200,26 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
                     {run.duration_s < 60 ? `${run.duration_s}s` : `${Math.floor(run.duration_s / 60)}m ${run.duration_s % 60}s`}
                   </span>
                 )}
+                {validationBadge(run)}
               </div>
               <div className="flex gap-1.5 ml-3 shrink-0">
+                {run.status === "done" && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); setReviewing(run); }}
+                    className="text-[10px] px-2 py-1 rounded bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300"
+                  >
+                    Review
+                  </button>
+                )}
+                {run.status === "done" && (run.version || 1) > 1 && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); setDiffing(run); }}
+                    className="text-[10px] px-2 py-1 rounded bg-fuchsia-700 text-white font-bold hover:bg-fuchsia-600"
+                    title="Compare with previous version"
+                  >
+                    Diff
+                  </button>
+                )}
                 {run.html_path && (
                   <button
                     onClick={(e) => {
@@ -1220,6 +1321,436 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
           );
         })}
       </div>
+      {reviewing && (
+        <ReviewModal
+          run={reviewing}
+          paperId={paperId}
+          onClose={() => setReviewing(null)}
+          onSaved={() => { setReviewing(null); mutateHistory(); }}
+        />
+      )}
+      {diffing && (
+        <DiffModal
+          run={diffing}
+          paperId={paperId}
+          onClose={() => setDiffing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+
+// --- Review Modal (side-by-side: analysis on left, rubric on right) ---
+
+function ReviewModal({ run, paperId, onClose, onSaved }: {
+  run: AnalysisRun;
+  paperId: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [status, setStatus] = useState<string>(run.validation_status || "validated");
+  const [notes, setNotes] = useState<string>(run.validation_notes || "");
+  const [rubric, setRubric] = useState<RubricItem[]>([]);
+  const [analysisHtml, setAnalysisHtml] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load rubric (existing or template) and analysis HTML in parallel
+  useEffect(() => {
+    const token = localStorage.getItem("fl-token");
+    const auth = token ? { Authorization: `Bearer ${token}` } : {};
+
+    Promise.all([
+      fetch(`/api/v1/analysis/queue/${run.id}/rubric-template`, { headers: auth }).then(r => r.json()),
+      fetch(`/api/v1/analysis/${paperId}/html?queue_id=${run.id}`, { headers: auth }).then(r => r.text()),
+    ])
+      .then(([rubricRes, html]) => {
+        setRubric(rubricRes.rubric || []);
+        setAnalysisHtml(html);
+      })
+      .catch((e) => setError(`Load failed: ${e.message}`))
+      .finally(() => setLoading(false));
+  }, [run.id, paperId]);
+
+  // Auto score from rubric
+  const autoScore = (() => {
+    if (rubric.length === 0) return null;
+    const checked = rubric.filter(r => r.checked).length;
+    const total = rubric.length;
+    const s = Math.round((checked / total) * 5);
+    return checked > 0 ? Math.max(1, Math.min(5, s)) : 1;
+  })();
+
+  const updateItem = (idx: number, patch: Partial<RubricItem>) => {
+    setRubric(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem("fl-token");
+      const res = await fetch(`/api/v1/analysis/queue/${run.id}/validate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status, notes: notes || null, rubric }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Save failed");
+      }
+      onSaved();
+    } catch (e: any) {
+      setError(e.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const modeLabel = run.mode === "extended" ? "Extended Abstract" : run.mode.charAt(0).toUpperCase() + run.mode.slice(1);
+
+  // Open the validation report PDF (regenerated server-side, only if at least one validated)
+  const viewValidationReport = () => {
+    const token = localStorage.getItem("fl-token");
+    fetch(`/api/v1/analysis/${paperId}/validation-report`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => {
+        if (!r.ok) throw new Error("Validation report not available — save at least one review first");
+        return r.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+      })
+      .catch(e => alert(e.message));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2" onClick={onClose}>
+      <div
+        className="bg-[var(--card)] border border-[var(--border)] rounded-xl w-full h-[95vh] max-w-[1800px] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center gap-3">
+            <h3 className="text-base font-semibold">Review — {modeLabel} (v{run.version || 1})</h3>
+            <span className="text-xs text-[var(--muted-foreground)]">Paper ID: {paperId}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={viewValidationReport}
+              className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600 font-bold"
+              title="Open the latest validation report PDF"
+            >
+              View Validation PDF
+            </button>
+            <button onClick={onClose} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xl leading-none px-2">✕</button>
+          </div>
+        </div>
+
+        {/* Body: side-by-side */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* LEFT: Analysis preview */}
+          <div className="flex-1 border-r border-[var(--border)] overflow-hidden bg-white">
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-[var(--muted-foreground)]">Loading analysis...</div>
+            ) : (
+              <iframe
+                title="Analysis preview"
+                srcDoc={analysisHtml}
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin"
+              />
+            )}
+          </div>
+
+          {/* RIGHT: Rubric + status + notes */}
+          <div className="w-[42%] min-w-[420px] flex flex-col overflow-hidden">
+            <div className="overflow-y-auto p-4 flex-1 space-y-4">
+              {/* Status */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { v: "validated", l: "✓ Validate", c: "bg-emerald-700 hover:bg-emerald-600" },
+                    { v: "needs_revision", l: "⟳ Revision", c: "bg-orange-600 hover:bg-orange-500" },
+                    { v: "rejected", l: "✗ Reject", c: "bg-red-700 hover:bg-red-600" },
+                  ].map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => setStatus(opt.v)}
+                      className={`px-3 py-2 rounded text-xs font-bold text-white ${opt.c} ${status === opt.v ? "ring-2 ring-white/60" : "opacity-60"}`}
+                    >
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Auto score */}
+              <div className="flex items-center justify-between px-3 py-2 rounded bg-[var(--secondary)]">
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">Computed score</span>
+                <span className="text-sm">
+                  {autoScore !== null ? (
+                    <>
+                      <span className="text-amber-400">{"★".repeat(autoScore)}</span>
+                      <span className="text-gray-600">{"★".repeat(5 - autoScore)}</span>
+                      <span className="ml-2 text-[var(--foreground)] font-bold">{autoScore}/5</span>
+                    </>
+                  ) : "—"}
+                </span>
+              </div>
+
+              {/* Rubric */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
+                  Rubric ({rubric.filter(r => r.checked).length}/{rubric.length} OK · {rubric.filter(r => r.missing).length} missing)
+                </label>
+                <div className="space-y-1.5">
+                  {rubric.map((item, idx) => (
+                    <div key={item.section} className="rounded border border-[var(--border)] bg-[var(--secondary)] p-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateItem(idx, { checked: !item.checked, missing: item.checked ? item.missing : false })}
+                          className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
+                            item.checked ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-400 border border-gray-600"
+                          }`}
+                          title="Mark as OK"
+                        >
+                          {item.checked ? "✓" : ""}
+                        </button>
+                        <button
+                          onClick={() => updateItem(idx, { missing: !item.missing, checked: item.missing ? item.checked : false })}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            item.missing ? "bg-red-700 text-white" : "bg-gray-700 text-gray-400 border border-gray-600"
+                          }`}
+                          title="Mark as missing from analysis"
+                        >
+                          MISSING
+                        </button>
+                        <span className="text-xs font-medium text-[var(--foreground)] flex-1">{item.section}</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={item.note}
+                        onChange={(e) => updateItem(idx, { note: e.target.value })}
+                        placeholder="Note for this section (optional)"
+                        className="mt-1.5 w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] text-[var(--foreground)]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* General notes */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">General notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Overall validation notes (visible in the validation report PDF)..."
+                  className="w-full px-3 py-2 rounded bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--foreground)] resize-none"
+                />
+              </div>
+
+              {error && <div className="text-xs text-red-400">{error}</div>}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-[var(--border)] p-3 flex justify-end gap-2 shrink-0">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded bg-[var(--secondary)] border border-[var(--border)] text-xs font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                disabled={saving || loading}
+                className="px-4 py-2 rounded bg-indigo-700 text-white text-xs font-bold hover:bg-indigo-600 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Review"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// --- Diff Modal (compare with previous version) ---
+
+interface DiffSection {
+  section: string;
+  status: "unchanged" | "modified" | "added" | "removed";
+  prev_text: string;
+  curr_text: string;
+}
+
+interface DiffData {
+  current: { id: number; version: number; mode: string };
+  previous: { id: number; version: number; mode: string };
+  sections: DiffSection[];
+  summary: { modified: number; unchanged: number; added: number; removed: number };
+}
+
+function DiffModal({ run, paperId, onClose }: { run: AnalysisRun; paperId: number; onClose: () => void }) {
+  const [data, setData] = useState<DiffData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [llmSummaries, setLlmSummaries] = useState<Record<string, string>>({});
+  const [llmLoading, setLlmLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("fl-token");
+    fetch(`/api/v1/analysis/${paperId}/diff?queue_id=${run.id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || "Diff load failed");
+        }
+        return r.json();
+      })
+      .then((d) => setData(d))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [run.id, paperId]);
+
+  const requestLlmSummary = async (sec: DiffSection) => {
+    if (llmSummaries[sec.section] || llmLoading === sec.section) return;
+    setLlmLoading(sec.section);
+    try {
+      const token = localStorage.getItem("fl-token");
+      const r = await fetch("/api/v1/analysis/diff/llm-summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          section: sec.section,
+          prev_text: sec.prev_text,
+          curr_text: sec.curr_text,
+        }),
+      });
+      if (!r.ok) throw new Error("LLM call failed");
+      const d = await r.json();
+      setLlmSummaries((prev) => ({ ...prev, [sec.section]: d.summary }));
+    } catch (e: any) {
+      setLlmSummaries((prev) => ({ ...prev, [sec.section]: `Error: ${e.message}` }));
+    } finally {
+      setLlmLoading(null);
+    }
+  };
+
+  const statusColor = (s: string) => {
+    switch (s) {
+      case "modified": return "bg-amber-600 text-white";
+      case "added":    return "bg-emerald-600 text-white";
+      case "removed":  return "bg-red-700 text-white";
+      default:         return "bg-gray-600 text-white";
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div
+        className="bg-[var(--card)] border border-[var(--border)] rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
+          <div>
+            <h3 className="text-base font-semibold">Compare versions — {run.mode.toUpperCase()}</h3>
+            {data && (
+              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                v{data.previous.version} → v{data.current.version} ·
+                {" "}<span className="text-amber-400">{data.summary.modified} modified</span> ·
+                {" "}<span className="text-emerald-400">{data.summary.added} added</span> ·
+                {" "}<span className="text-red-400">{data.summary.removed} removed</span> ·
+                {" "}{data.summary.unchanged} unchanged
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xl leading-none px-2">✕</button>
+        </div>
+
+        <div className="overflow-y-auto p-4 flex-1">
+          {loading && <div className="text-sm text-[var(--muted-foreground)]">Loading diff...</div>}
+          {error && <div className="text-sm text-red-400">{error}</div>}
+          {data && (
+            <div className="space-y-2">
+              {data.sections.map((sec) => {
+                const isExpanded = expandedSection === sec.section;
+                const isChanged = sec.status !== "unchanged";
+                return (
+                  <div key={sec.section} className="rounded-lg border border-[var(--border)] bg-[var(--secondary)] overflow-hidden">
+                    <button
+                      onClick={() => isChanged && setExpandedSection(isExpanded ? null : sec.section)}
+                      className={`w-full flex items-center justify-between px-3 py-2 ${isChanged ? "cursor-pointer hover:bg-[var(--muted)]" : "cursor-default opacity-60"}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${statusColor(sec.status)}`}>
+                          {sec.status.toUpperCase()}
+                        </span>
+                        <span className="text-sm font-medium text-[var(--foreground)]">{sec.section}</span>
+                      </div>
+                      {isChanged && (
+                        <span className="text-[var(--muted-foreground)] text-xs">{isExpanded ? "▾" : "▸"}</span>
+                      )}
+                    </button>
+                    {isExpanded && (
+                      <div className="border-t border-[var(--border)] p-3 space-y-3">
+                        <div>
+                          <button
+                            onClick={() => requestLlmSummary(sec)}
+                            disabled={llmLoading === sec.section}
+                            className="text-[10px] px-2 py-1 rounded bg-indigo-700 text-white font-bold hover:bg-indigo-600 disabled:opacity-50"
+                          >
+                            {llmLoading === sec.section ? "Analyzing..." : "🤖 Summarize changes"}
+                          </button>
+                          {llmSummaries[sec.section] && (
+                            <div className="mt-2 p-2 rounded bg-indigo-900/30 border border-indigo-700/40 text-[11px] text-[var(--foreground)] whitespace-pre-wrap">
+                              {llmSummaries[sec.section]}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mb-1">Previous (v{data.previous.version})</div>
+                            <div className="p-2 rounded bg-red-900/20 border border-red-800/40 text-[11px] text-[var(--foreground)] whitespace-pre-wrap max-h-60 overflow-y-auto">
+                              {sec.prev_text || <span className="opacity-50">— empty —</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mb-1">Current (v{data.current.version})</div>
+                            <div className="p-2 rounded bg-emerald-900/20 border border-emerald-800/40 text-[11px] text-[var(--foreground)] whitespace-pre-wrap max-h-60 overflow-y-auto">
+                              {sec.curr_text || <span className="opacity-50">— empty —</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1320,15 +1851,34 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
     setStatus("syncing");
     setMsg(null);
     try {
+      // Step 1: sync paper metadata, tags, extra field, validation summary
       const res = await api.syncToZotero([paperId]);
-      if (res.synced > 0) {
-        setStatus("idle");
-        setMsg("Synced to Zotero (tags + notes)");
-        mutate(`/api/v1/papers/${paperId}`);
-      } else {
+      if (res.synced <= 0) {
         setStatus("error");
-        setMsg("Sync failed");
+        setMsg("Paper sync failed");
+        return;
       }
+
+      // Step 2: sync analysis attachments + dynamic validation report
+      let analysisMsg = "";
+      try {
+        const ares = await api.syncAnalysisToZotero(paperId);
+        if (ares.status === "uploaded" && ares.count > 0) {
+          const files = (ares.filenames || []).join(", ");
+          analysisMsg = ` · ${ares.count} attachment${ares.count > 1 ? "s" : ""}: ${files}`;
+        } else if (ares.status === "already_synced") {
+          analysisMsg = " · attachments already synced";
+        }
+      } catch (e: any) {
+        // Analysis sync failure is non-fatal — paper metadata still synced
+        if (!String(e?.message || "").includes("No analysis report")) {
+          analysisMsg = ` · attachments: ${e?.message || "failed"}`;
+        }
+      }
+
+      setStatus("idle");
+      setMsg(`Synced to Zotero${analysisMsg}`);
+      mutate(`/api/v1/papers/${paperId}`);
     } catch (e: any) {
       setStatus("error");
       setMsg(e.message || "Sync failed");
@@ -1383,60 +1933,6 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
       )}
       {msg && (
         <span className={`text-xs ${msg.includes("Removed") || msg.includes("Synced") ? "text-emerald-400" : "text-red-400"}`}>{msg}</span>
-      )}
-    </div>
-  );
-}
-
-
-// --- Sync Analysis to Zotero ---
-
-function SyncAnalysisToZotero({ paperId }: { paperId: number }) {
-  const [status, setStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const sync = async () => {
-    setStatus("syncing");
-    setMsg(null);
-    try {
-      const res = await api.syncAnalysisToZotero(paperId);
-      setStatus("done");
-      if (res.status === "already_synced") {
-        setMsg("Already synced to Zotero");
-      } else {
-        setMsg(`Uploaded: ${res.filenames?.join(", ") || res.filename}`);
-      }
-    } catch (e: any) {
-      setStatus("error");
-      setMsg(e.message || "Sync failed");
-    }
-  };
-
-  return (
-    <div className="inline-flex items-center gap-2">
-      <button
-        onClick={sync}
-        disabled={status === "syncing" || status === "done"}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 text-white text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
-      >
-        {status === "syncing" ? (
-          <>
-            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Syncing...
-          </>
-        ) : status === "done" ? (
-          "Synced to Zotero"
-        ) : (
-          "Sync Analysis to Zotero"
-        )}
-      </button>
-      {msg && (
-        <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>
-          {msg}
-        </span>
       )}
     </div>
   );

@@ -142,6 +142,13 @@ class AnalysisQueue(Base):
     tex_path = Column(Text, nullable=True)
     version = Column(Integer, default=1)
     zotero_synced = Column(Boolean, default=False)
+    # Validation fields (review by user)
+    validation_status = Column(String(20), nullable=True)  # validated, rejected, needs_revision, pending
+    validation_score = Column(Integer, nullable=True)  # 1-5
+    validation_notes = Column(Text, nullable=True)
+    validation_rubric_json = Column(Text, nullable=True)  # JSON: rubric checklist + per-item notes
+    validated_at = Column(DateTime, nullable=True)
+    validated_by = Column(String(100), nullable=True)  # username
     created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

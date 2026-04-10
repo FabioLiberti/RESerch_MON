@@ -29,30 +29,64 @@ class ZoteroClient(BaseAPIClient):
     def is_configured(self) -> bool:
         return bool(settings.zotero_api_key and settings.zotero_user_id)
 
+    async def _list_collections(self, endpoint: str) -> list[dict]:
+        """Paginated GET on a collections endpoint. Returns all collections."""
+        all_cols: list[dict] = []
+        start = 0
+        limit = 100
+        while True:
+            response = await self._request(
+                "GET",
+                endpoint,
+                params={"limit": limit, "start": start},
+                headers=self._headers(),
+            )
+            batch = response.json()
+            if not batch:
+                break
+            all_cols.extend(batch)
+            if len(batch) < limit:
+                break
+            start += limit
+        return all_cols
+
     async def get_or_create_collection(self, name: str = COLLECTION_NAME, parent_key: str | None = None) -> str | None:
-        """Get or create a collection. Returns collection key."""
+        """Get or create a collection. Returns collection key.
+
+        Uses targeted endpoints to avoid pagination issues:
+        - parent_key=None  → /collections/top  (top-level collections only)
+        - parent_key=...   → /collections/{key}/collections  (children of parent)
+        """
         if not self.is_configured():
             logger.warning("[zotero] Not configured (missing API key or user ID)")
             return None
 
         try:
-            # List collections
-            response = await self._request(
-                "GET",
-                f"{self.user_prefix}/collections",
-                headers=self._headers(),
-            )
-            collections = response.json()
+            if parent_key is None:
+                endpoint = f"{self.user_prefix}/collections/top"
+            else:
+                endpoint = f"{self.user_prefix}/collections/{parent_key}/collections"
 
+            collections = await self._list_collections(endpoint)
+
+            # Find existing match. If multiple duplicates exist, return the one
+            # with the most items (so we don't keep writing into an empty dup).
+            matches: list[tuple[str, int]] = []
             for col in collections:
                 data = col.get("data", {})
                 if data.get("name") == name:
-                    # Check parent matches
-                    col_parent = data.get("parentCollection", False)
-                    if parent_key is None and not col_parent:
-                        return col["key"]
-                    if parent_key and col_parent == parent_key:
-                        return col["key"]
+                    num = data.get("meta", {}).get("numItems") or col.get("meta", {}).get("numItems") or 0
+                    matches.append((col["key"], num))
+
+            if matches:
+                matches.sort(key=lambda x: x[1], reverse=True)
+                if len(matches) > 1:
+                    logger.warning(
+                        f"[zotero] Found {len(matches)} collections named '{name}' "
+                        f"(parent={parent_key}). Using {matches[0][0]} (most items). "
+                        f"Run scripts/merge_zotero_duplicate_collections.py to clean up."
+                    )
+                return matches[0][0]
 
             # Create collection
             col_data = {"name": name}

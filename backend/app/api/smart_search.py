@@ -35,12 +35,14 @@ def _get_clients():
         from app.clients.biorxiv import BioRxivClient
         from app.clients.semantic_scholar import SemanticScholarClient
         from app.clients.ieee import IEEEXploreClient
+        from app.clients.elsevier import ElsevierClient
         _clients = {
             "pubmed": PubMedClient(),
             "arxiv": ArXivClient(),
             "biorxiv": BioRxivClient(),
             "semantic_scholar": SemanticScholarClient(),
             "ieee": IEEEXploreClient(),
+            "elsevier": ElsevierClient(),
         }
     return _clients
 

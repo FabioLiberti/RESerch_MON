@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.arxiv import ArXivClient
 from app.clients.biorxiv import BioRxivClient
+from app.clients.elsevier import ElsevierClient
 from app.clients.ieee import IEEEXploreClient
 from app.clients.pubmed import PubMedClient
 from app.clients.semantic_scholar import SemanticScholarClient
@@ -38,6 +39,7 @@ class DiscoveryService:
             "arxiv": ArXivClient(),
             "biorxiv": BioRxivClient(),
             "ieee": IEEEXploreClient(),
+            "elsevier": ElsevierClient(),
         }
 
     async def close(self):

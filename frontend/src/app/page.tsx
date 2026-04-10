@@ -1,6 +1,7 @@
 "use client";
 
 import StatsCards from "@/components/dashboard/StatsCards";
+import ValidationStatsCard from "@/components/dashboard/ValidationStatsCard";
 import TimelineChart from "@/components/dashboard/TimelineChart";
 import SourcePieChart from "@/components/dashboard/SourcePieChart";
 import TopicTreemap from "@/components/dashboard/TopicTreemap";
@@ -48,6 +49,9 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <StatsCards stats={overview} isLoading={overviewLoading} />
+
+      {/* Validation Stats */}
+      <ValidationStatsCard />
 
       {/* Heatmap */}
       <HeatmapCalendar data={heatmap?.data} year={heatmap?.year || new Date().getFullYear()} />
