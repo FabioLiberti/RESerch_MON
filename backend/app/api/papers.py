@@ -137,6 +137,7 @@ async def list_papers(
     date_to: str | None = None,
     has_pdf: bool | None = None,
     on_zotero: bool | None = None,
+    disabled: bool | None = None,
     min_rating: int | None = None,
     q: str | None = None,  # Unified search: title, abstract, DOI, author
     search: str | None = None,
@@ -167,6 +168,10 @@ async def list_papers(
         query = query.where(Paper.pdf_local_path.isnot(None))
     if on_zotero is True:
         query = query.where(Paper.zotero_key.isnot(None))
+    if disabled is True:
+        query = query.where(Paper.disabled.is_(True))
+    elif disabled is False:
+        query = query.where((Paper.disabled.is_(False)) | (Paper.disabled.is_(None)))
     if min_rating is not None:
         query = query.where(Paper.rating >= min_rating)
     if q:
@@ -200,16 +205,17 @@ async def list_papers(
         ).where(Label.name == label)
     if fl_technique:
         from app.models.structured_analysis import StructuredAnalysis
+        # Case-insensitive partial match to handle variations
         query = query.where(Paper.id.in_(
             select(StructuredAnalysis.paper_id).where(
-                StructuredAnalysis.fl_techniques_json.ilike(f'%"{fl_technique}"%')
+                StructuredAnalysis.fl_techniques_json.ilike(f'%{fl_technique}%')
             )
         ))
     if dataset:
         from app.models.structured_analysis import StructuredAnalysis as SA2
         query = query.where(Paper.id.in_(
             select(SA2.paper_id).where(
-                SA2.datasets_json.ilike(f'%"{dataset}"%')
+                SA2.datasets_json.ilike(f'%{dataset}%')
             )
         ))
 
@@ -315,42 +321,66 @@ async def get_all_keywords(db: AsyncSession = Depends(get_db)):
 
 @router.get("/fl-techniques/all")
 async def get_all_fl_techniques(db: AsyncSession = Depends(get_db)):
-    """Get all unique FL techniques with paper counts."""
+    """Get all unique FL techniques with unique paper counts (case-insensitive dedup)."""
     import json
     from collections import Counter
     from app.models.structured_analysis import StructuredAnalysis
 
     result = await db.execute(
-        select(StructuredAnalysis.fl_techniques_json).where(StructuredAnalysis.fl_techniques_json != "[]")
+        select(StructuredAnalysis.paper_id, StructuredAnalysis.fl_techniques_json)
+        .where(StructuredAnalysis.fl_techniques_json != "[]")
     )
-    counter: Counter = Counter()
-    for (json_str,) in result.all():
+    paper_sets: dict[str, set[int]] = {}  # lowercase -> set of paper_ids
+    forms: dict[str, Counter] = {}
+    for pid, json_str in result.all():
         try:
             for t in json.loads(json_str or "[]"):
-                counter[t] += 1
+                key = t.strip().lower()
+                if not key:
+                    continue
+                if key not in paper_sets:
+                    paper_sets[key] = set()
+                    forms[key] = Counter()
+                paper_sets[key].add(pid)
+                forms[key][t.strip()] += 1
         except json.JSONDecodeError:
             continue
-    return [{"name": name, "count": count} for name, count in counter.most_common()]
+    return [
+        {"name": forms[k].most_common(1)[0][0], "count": len(pids)}
+        for k, pids in sorted(paper_sets.items(), key=lambda x: -len(x[1]))
+    ]
 
 
 @router.get("/datasets/all")
 async def get_all_datasets(db: AsyncSession = Depends(get_db)):
-    """Get all unique datasets with paper counts."""
+    """Get all unique datasets with unique paper counts (case-insensitive dedup)."""
     import json
     from collections import Counter
     from app.models.structured_analysis import StructuredAnalysis
 
     result = await db.execute(
-        select(StructuredAnalysis.datasets_json).where(StructuredAnalysis.datasets_json != "[]")
+        select(StructuredAnalysis.paper_id, StructuredAnalysis.datasets_json)
+        .where(StructuredAnalysis.datasets_json != "[]")
     )
-    counter: Counter = Counter()
-    for (json_str,) in result.all():
+    paper_sets: dict[str, set[int]] = {}
+    forms: dict[str, Counter] = {}
+    for pid, json_str in result.all():
         try:
             for d in json.loads(json_str or "[]"):
-                counter[d] += 1
+                key = d.strip().lower()
+                if not key:
+                    continue
+                if key not in paper_sets:
+                    paper_sets[key] = set()
+                    forms[key] = Counter()
+                paper_sets[key].add(pid)
+                forms[key][d.strip()] += 1
         except json.JSONDecodeError:
             continue
-    return [{"name": name, "count": count} for name, count in counter.most_common()]
+    return [
+        {"name": forms[k].most_common(1)[0][0], "count": len(pids)}
+        for k, pids in sorted(paper_sets.items(), key=lambda x: -len(x[1]))
+    ]
 
 
 @router.get("/keywords/categorized")

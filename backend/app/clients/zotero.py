@@ -88,6 +88,7 @@ class ZoteroClient(BaseAPIClient):
         url: str | None = None,
         paper_type: str = "journalArticle",
         tags: list[str] | None = None,
+        extra: str | None = None,
     ) -> str | None:
         """Add a paper to one or more Zotero collections. Returns item key or None."""
         if not self.is_configured():
@@ -125,6 +126,10 @@ class ZoteroClient(BaseAPIClient):
         # Tags
         if tags:
             item_data["tags"] = [{"tag": t} for t in tags]
+
+        # Extra field (for rating, custom metadata)
+        if extra:
+            item_data["extra"] = extra
 
         # Journal field name depends on item type
         if zotero_type == "conferencePaper":
@@ -176,6 +181,28 @@ class ZoteroClient(BaseAPIClient):
         except Exception as e:
             logger.error(f"[zotero] Error adding note: {e}")
         return None
+
+    async def update_extra(self, item_key: str, extra: str) -> bool:
+        """Update the 'extra' field on an existing Zotero item."""
+        if not self.is_configured():
+            return False
+        try:
+            response = await self._request(
+                "GET", f"{self.user_prefix}/items/{item_key}",
+                headers=self._headers(),
+            )
+            item = response.json()
+            version = item.get("version", 0)
+            await self._request(
+                "PATCH", f"{self.user_prefix}/items/{item_key}",
+                headers={**self._headers(), "If-Unmodified-Since-Version": str(version)},
+                json={"extra": extra},
+            )
+            logger.info(f"[zotero] Updated extra on {item_key}")
+            return True
+        except Exception as e:
+            logger.error(f"[zotero] Error updating extra: {e}")
+            return False
 
     async def update_tags(self, item_key: str, tags: list[str]) -> bool:
         """Update tags on an existing Zotero item."""

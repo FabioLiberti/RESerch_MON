@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 # Unicode-aware whitespace class (includes \u2002, \u2003, \xa0, etc.)
 _S = r'[\s\u2002\u2003\u00a0\x07]'
 # Terminators: blank line, section headings (I., II., 1, 1., 2, INTRODUCTION, Abstract, etc.)
-_TERM = rf'(?:\.\n[A-Z]|\n{_S}*\n|\n{_S}*(?:[IVX]+\.?{_S}+\S|\d+\.?{_S}+\S|INTRODUCTION|ABSTRACT|Background|Methods|Results|Discussion|Conclusion|References|Copyright|©|\u00a9|\*{_S}*\S))'
+_TERM = rf'(?:\.\n[A-Z]|\n{_S}*\n|\n{_S}*(?:A\s+B\s+S\s+T\s+R\s+A\s+C\s+T|[IVX]+\.?{_S}+\S|\d+\.?{_S}+\S|INTRODUCTION|ABSTRACT|Background|Methods|Results|Discussion|Conclusion|References|Copyright|©|\u00a9|\*{_S}*\S))'
 
 # Patterns for keyword sections in papers
 KEYWORD_PATTERNS = [
@@ -52,20 +52,42 @@ def extract_keywords_from_pdf(pdf_path: str) -> dict[str, list[str]]:
         match = pattern.search(text)
         if match:
             raw = match.group(1).strip()
-            # Clean up: remove newlines, extra spaces
-            raw = re.sub(r'\s+', ' ', raw)
             # Remove trailing period
             raw = raw.rstrip('.')
 
-            # Split by comma, semicolon, middle dot, or em-dash
-            keywords = re.split(r'[,;·\u00b7\u2022]', raw)
-            keywords = [kw.strip().strip('·•–—') for kw in keywords if kw.strip()]
+            # Detect if keywords are one-per-line (no inline separator on first non-empty line)
+            lines = [l.strip() for l in raw.split('\n') if l.strip()]
+            has_inline_sep = any(re.search(r'[,;·\u00b7\u2022]', line) for line in lines[:3])
 
-            # Filter out very short or very long items (likely parsing errors)
-            keywords = [kw for kw in keywords if 2 < len(kw) < 80]
+            if not has_inline_sep and len(lines) > 1:
+                # One keyword per line
+                keywords = lines
+            else:
+                # Inline separators: collapse newlines, split by , ; · etc.
+                clean = re.sub(r'\s+', ' ', raw)
+                keywords = re.split(r'[,;·\u00b7\u2022]', clean)
+                keywords = [kw.strip() for kw in keywords if kw.strip()]
+
+            # Clean each keyword
+            keywords = [kw.strip().strip('·•–—.,;:') for kw in keywords if kw.strip()]
+            # Filter: reasonable length (allow long technical terms with parentheses/acronyms)
+            def _is_valid_kw(kw: str) -> bool:
+                if not (2 < len(kw) < 120):
+                    return False
+                if kw.count(' ') > 10:
+                    return False
+                # Exclude spaced-out section headers like "A B S T R A C T"
+                if re.match(r'^([A-Z]\s){3,}', kw):
+                    return False
+                return True
+            keywords = [kw for kw in keywords if _is_valid_kw(kw)]
+            # Stop at first item that contains "A B S T R A C T" (section break)
+            for i, kw in enumerate(keywords):
+                if re.search(r'A\s+B\s+S\s+T\s+R\s+A\s+C\s+T', kw):
+                    keywords = keywords[:i]
+                    break
 
             if keywords:
-                # Determine category name based on which pattern matched
                 pattern_str = pattern.pattern.lower()
                 if 'index' in pattern_str:
                     cat_name = "Index Terms"
@@ -76,6 +98,6 @@ def extract_keywords_from_pdf(pdf_path: str) -> dict[str, list[str]]:
 
                 result[cat_name] = keywords
                 logger.info(f"Extracted {len(keywords)} {cat_name} from PDF")
-                break  # Use first match
+                break
 
     return result

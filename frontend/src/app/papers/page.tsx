@@ -34,6 +34,7 @@ export default function PapersPage() {
   const [labelFilter, setLabelFilter] = useState("");
   const [pdfFilter, setPdfFilter] = useState("");
   const [zoteroFilter, setZoteroFilter] = useState("");
+  const [disabledFilter, setDisabledFilter] = useState("");
   const [ratingFilter, setRatingFilter] = useState("");
   const [flTechFilter, setFlTechFilter] = useState("");
   const [datasetFilter, setDatasetFilter] = useState("");
@@ -113,6 +114,8 @@ export default function PapersPage() {
   if (labelFilter) params.label = labelFilter;
   if (pdfFilter === "yes") params.has_pdf = "true";
   if (zoteroFilter === "yes") params.on_zotero = "true";
+  if (disabledFilter === "yes") params.disabled = "true";
+  else if (disabledFilter === "no") params.disabled = "false";
   if (ratingFilter) params.min_rating = ratingFilter;
   if (flTechFilter) params.fl_technique = flTechFilter;
   if (datasetFilter) params.dataset = datasetFilter;
@@ -221,32 +224,42 @@ export default function PapersPage() {
       )}
 
       {/* Filters */}
+      {(() => null)()}
+      {/* Helper for active filter highlight */}
+      {/* Filters */}
       <div className="flex flex-wrap gap-3">
+        {(() => {
+          const active = "border-blue-500 bg-blue-500/10 text-blue-300 ring-1 ring-blue-500/30";
+          const normal = "border-[var(--border)] bg-[var(--secondary)]";
+          const cls = (v: string) => `px-4 py-2 rounded-lg border text-sm focus:outline-none ${v ? active : normal}`;
+          const inputCls = (v: string) => `${cls(v)} focus:border-[var(--primary)]`;
+          return (
+            <>
         <input
           type="text"
           placeholder="Search title/abstract..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-48"
+          className={`${inputCls(search)} w-48`}
         />
         <input
           type="text"
           placeholder="Author..."
           value={authorFilter}
           onChange={(e) => { setAuthorFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-36"
+          className={`${inputCls(authorFilter)} w-36`}
         />
         <input
           type="text"
           placeholder="DOI..."
           value={doiFilter}
           onChange={(e) => { setDoiFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] w-40"
+          className={`${inputCls(doiFilter)} w-40`}
         />
         <select
           value={topicFilter}
           onChange={(e) => { setTopicFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+          className={cls(topicFilter)}
         >
           <option value="">All Topics</option>
           {(Array.isArray(topics) ? topics : [])
@@ -259,7 +272,7 @@ export default function PapersPage() {
           <select
             value={sourceFilter}
             onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }}
-            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+            className={cls(sourceFilter)}
           >
             <option value="">
               {activeTab === "api" ? "All API Sources" : "All Sources"}
@@ -274,7 +287,7 @@ export default function PapersPage() {
         <select
           value={keywordFilter}
           onChange={(e) => { setKeywordFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-52"
+          className={`${cls(keywordFilter)} max-w-52`}
         >
           <option value="">All Keywords</option>
           {(Array.isArray(allKeywords) ? allKeywords : [])
@@ -290,7 +303,7 @@ export default function PapersPage() {
           <select
             value={labelFilter}
             onChange={(e) => { setLabelFilter(e.target.value); setPage(1); }}
-            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-44"
+            className={`${cls(labelFilter)} max-w-44`}
           >
             <option value="">All Labels</option>
             {(allLabels || []).map((l) => (
@@ -301,7 +314,7 @@ export default function PapersPage() {
         <select
           value={pdfFilter}
           onChange={(e) => { setPdfFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+          className={cls(pdfFilter)}
         >
           <option value="">PDF: All</option>
           <option value="yes">With PDF</option>
@@ -309,15 +322,24 @@ export default function PapersPage() {
         <select
           value={zoteroFilter}
           onChange={(e) => { setZoteroFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+          className={cls(zoteroFilter)}
         >
           <option value="">Zotero: All</option>
           <option value="yes">On Zotero</option>
         </select>
         <select
+          value={disabledFilter}
+          onChange={(e) => { setDisabledFilter(e.target.value); setPage(1); }}
+          className={cls(disabledFilter)}
+        >
+          <option value="">Status: All</option>
+          <option value="no">Active</option>
+          <option value="yes">Disabled</option>
+        </select>
+        <select
           value={ratingFilter}
           onChange={(e) => { setRatingFilter(e.target.value); setPage(1); }}
-          className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
+          className={cls(ratingFilter)}
         >
           <option value="">Rating: All</option>
           <option value="1">★ 1+</option>
@@ -330,10 +352,10 @@ export default function PapersPage() {
           <select
             value={flTechFilter}
             onChange={(e) => { setFlTechFilter(e.target.value); setPage(1); }}
-            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-48"
+            className={`${cls(flTechFilter)} max-w-48`}
           >
             <option value="">FL Technique: All</option>
-            {(allFlTechniques || []).map((t) => (
+            {[...(allFlTechniques || [])].sort((a, b) => a.name.localeCompare(b.name)).map((t) => (
               <option key={t.name} value={t.name}>{t.name} ({t.count})</option>
             ))}
           </select>
@@ -342,10 +364,10 @@ export default function PapersPage() {
           <select
             value={datasetFilter}
             onChange={(e) => { setDatasetFilter(e.target.value); setPage(1); }}
-            className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none max-w-48"
+            className={`${cls(datasetFilter)} max-w-48`}
           >
             <option value="">Dataset: All</option>
-            {(allDatasets || []).map((d) => (
+            {[...(allDatasets || [])].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
               <option key={d.name} value={d.name}>{d.name} ({d.count})</option>
             ))}
           </select>
@@ -366,16 +388,19 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || ratingFilter || flTechFilter || datasetFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
             Clear filters
           </button>
         )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Analysis message */}

@@ -98,8 +98,8 @@ async def sync_analysis(
     if not analyses_to_sync:
         raise HTTPException(status_code=404, detail="No analysis report found for this paper")
 
-    # Order: summary first, then quick, then deep — so Zotero doesn't rename the first as "PDF"
-    mode_order = {"summary": 0, "quick": 1, "deep": 2}
+    # Order: extended first (becomes Zotero's main "PDF" attachment), then summary, quick, deep
+    mode_order = {"extended": 0, "summary": 1, "quick": 2, "deep": 3}
     analyses_to_sync.sort(key=lambda a: mode_order.get(a.analysis_mode or "quick", 9))
 
     client = ZoteroClient()

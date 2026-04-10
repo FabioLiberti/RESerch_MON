@@ -46,7 +46,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Systems: "bg-cyan-500/15 text-cyan-400",
 };
 
-type SidebarTab = "labels" | "topics" | "paths";
+type SidebarTab = "labels" | "keywords" | "topics" | "paths";
 
 function SidebarTabs() {
   const [activeTab, setActiveTab] = useState<SidebarTab>("labels");
@@ -57,6 +57,7 @@ function SidebarTabs() {
       <div className="flex mx-4 mb-2 gap-0.5 p-0.5 rounded-lg bg-[var(--secondary)]">
         {([
           { key: "labels" as const, label: "Labels" },
+          { key: "keywords" as const, label: "Keys" },
           { key: "topics" as const, label: "Topics" },
           { key: "paths" as const, label: "Paths" },
         ]).map((tab) => (
@@ -64,7 +65,7 @@ function SidebarTabs() {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              "flex-1 px-2 py-1.5 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all",
+              "flex-1 px-1 py-1.5 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all",
               activeTab === tab.key
                 ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
                 : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
@@ -77,8 +78,45 @@ function SidebarTabs() {
 
       {/* Tab content */}
       {activeTab === "labels" && <LabelsSection />}
+      {activeTab === "keywords" && <KeywordsSection />}
       {activeTab === "topics" && <TopicsSection />}
       {activeTab === "paths" && <LearningPathSection />}
+    </div>
+  );
+}
+
+
+function KeywordsSection() {
+  const { data: keywords } = useSWR<{ keyword: string; count: number }[]>(
+    "/api/v1/papers/keywords/all", authFetcher
+  );
+
+  if (!keywords || keywords.length === 0) {
+    return (
+      <p className="px-6 py-2 text-[10px] text-[var(--muted-foreground)]">
+        No keywords yet.
+      </p>
+    );
+  }
+
+  // Show top 50 keywords by count, then sort alphabetically
+  const top = keywords
+    .filter((k) => k.count >= 2)
+    .slice(0, 50)
+    .sort((a, b) => a.keyword.localeCompare(b.keyword));
+
+  return (
+    <div className="max-h-96 overflow-y-auto">
+      {top.map((k) => (
+        <Link
+          key={k.keyword}
+          href={`/papers?keyword=${encodeURIComponent(k.keyword)}`}
+          className="flex items-center gap-2 px-6 py-1.5 text-xs text-[var(--secondary-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
+        >
+          <span className="flex-1 truncate">{k.keyword}</span>
+          <span className="text-[10px] text-[var(--muted-foreground)]">{k.count}</span>
+        </Link>
+      ))}
     </div>
   );
 }

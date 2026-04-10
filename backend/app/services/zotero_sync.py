@@ -90,6 +90,13 @@ class ZoteroSyncService:
             if label.name not in tags:
                 tags.append(label.name)
 
+        # Build extra field with rating
+        extra_lines = []
+        if paper.rating:
+            stars = "★" * paper.rating + "☆" * (5 - paper.rating)
+            extra_lines.append(f"Rating: {stars} ({paper.rating}/5)")
+        extra_field = "\n".join(extra_lines) if extra_lines else ""
+
         # Get note
         note_result = await db.execute(
             select(PaperNote).where(PaperNote.paper_id == paper_id)
@@ -97,12 +104,11 @@ class ZoteroSyncService:
         note = note_result.scalar_one_or_none()
 
         if paper.zotero_key:
-            # Paper already in Zotero — update collections, tags, and notes
+            # Paper already in Zotero — update collections, tags, extra, and notes
             for key in collection_keys:
                 await self.client.add_paper_to_collection(paper.zotero_key, key)
-            # Update tags
             await self.client.update_tags(paper.zotero_key, tags)
-            # Sync note (delete old notes, add new if exists)
+            await self.client.update_extra(paper.zotero_key, extra_field)
             if note and note.text and note.text.strip():
                 await self.client.delete_child_notes(paper.zotero_key)
                 await self.client.add_note(paper.zotero_key, f"<p>{note.text}</p>")
@@ -121,12 +127,12 @@ class ZoteroSyncService:
             url=paper.pdf_url,
             paper_type=paper.paper_type,
             tags=tags,
+            extra=extra_field,
         )
 
         if zotero_key:
             paper.zotero_key = zotero_key
             await db.flush()
-            # Add note if exists
             if note and note.text and note.text.strip():
                 await self.client.add_note(zotero_key, f"<p>{note.text}</p>")
             logger.info(f"Paper {paper_id} synced to Zotero ({zotero_key}) in {len(collection_keys)} collections, {len(tags)} tags")
