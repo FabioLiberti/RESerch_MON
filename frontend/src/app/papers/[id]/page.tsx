@@ -885,7 +885,7 @@ interface AnalysisRun {
 
 interface RubricItem {
   section: string;
-  checked: boolean;
+  score: number | null;
   missing: boolean;
   note: string;
 }
@@ -1351,8 +1351,13 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
 }) {
   const [status, setStatus] = useState<string>(run.validation_status || "validated");
   const [notes, setNotes] = useState<string>(run.validation_notes || "");
+  const [generalScore, setGeneralScore] = useState<number | null>(null);
   const [rubric, setRubric] = useState<RubricItem[]>([]);
+  const [reviewerScore, setReviewerScore] = useState<number | null>(run.validation_score || null);
+  const [reviewerScoreEdited, setReviewerScoreEdited] = useState(false);
   const [analysisHtml, setAnalysisHtml] = useState<string>("");
+  const [hasPaperPdf, setHasPaperPdf] = useState(true);
+  const [activeTab, setActiveTab] = useState<"abstract" | "paper">("abstract");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1367,21 +1372,38 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
       fetch(`/api/v1/analysis/${paperId}/html?queue_id=${run.id}`, { headers: auth }).then(r => r.text()),
     ])
       .then(([rubricRes, html]) => {
-        setRubric(rubricRes.rubric || []);
+        setRubric(rubricRes.items || []);
+        setGeneralScore(rubricRes.general_score ?? null);
         setAnalysisHtml(html);
       })
       .catch((e) => setError(`Load failed: ${e.message}`))
       .finally(() => setLoading(false));
+
+    // Check if the paper has a local PDF available
+    fetch(`/api/v1/papers/${paperId}/pdf-file`, { method: "HEAD" })
+      .then((r) => setHasPaperPdf(r.ok))
+      .catch(() => setHasPaperPdf(false));
   }, [run.id, paperId]);
 
-  // Auto score from rubric
-  const autoScore = (() => {
-    if (rubric.length === 0) return null;
-    const checked = rubric.filter(r => r.checked).length;
-    const total = rubric.length;
-    const s = Math.round((checked / total) * 5);
-    return checked > 0 ? Math.max(1, Math.min(5, s)) : 1;
+  // Auto score from rubric (per-item scores + general_score)
+  const computedScore = (() => {
+    const values: number[] = [];
+    for (const r of rubric) {
+      if (r.missing) values.push(1);
+      else if (r.score !== null && r.score >= 1 && r.score <= 5) values.push(r.score);
+    }
+    if (generalScore !== null && generalScore >= 1 && generalScore <= 5) values.push(generalScore);
+    if (values.length === 0) return null;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    return Math.max(1, Math.min(5, Math.round(avg)));
   })();
+
+  // If user hasn't manually edited reviewer score, keep it in sync with computed
+  useEffect(() => {
+    if (!reviewerScoreEdited && computedScore !== null) {
+      setReviewerScore(computedScore);
+    }
+  }, [computedScore, reviewerScoreEdited]);
 
   const updateItem = (idx: number, patch: Partial<RubricItem>) => {
     setRubric(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -1398,7 +1420,13 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ status, notes: notes || null, rubric }),
+        body: JSON.stringify({
+          status,
+          notes: notes || null,
+          rubric,
+          general_score: generalScore,
+          score: reviewerScore,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1457,22 +1485,59 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
 
         {/* Body: side-by-side */}
         <div className="flex flex-1 overflow-hidden">
-          {/* LEFT: Analysis preview */}
-          <div className="flex-1 border-r border-[var(--border)] overflow-hidden bg-white">
-            {loading ? (
-              <div className="h-full flex items-center justify-center text-[var(--muted-foreground)]">Loading analysis...</div>
-            ) : (
-              <iframe
-                title="Analysis preview"
-                srcDoc={analysisHtml}
-                className="w-full h-full border-0"
-                sandbox="allow-same-origin"
-              />
-            )}
+          {/* LEFT: Tabbed preview (Extended Abstract / Paper PDF) */}
+          <div className="flex-1 border-r border-[var(--border)] flex flex-col overflow-hidden bg-white">
+            {/* Tab bar */}
+            <div className="flex shrink-0 border-b border-gray-300 bg-gray-100">
+              <button
+                onClick={() => setActiveTab("abstract")}
+                className={`px-4 py-2 text-xs font-bold transition-colors ${
+                  activeTab === "abstract"
+                    ? "bg-white text-gray-900 border-b-2 border-indigo-600"
+                    : "text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                📄 {modeLabel} (analysis)
+              </button>
+              <button
+                onClick={() => setActiveTab("paper")}
+                disabled={!hasPaperPdf}
+                className={`px-4 py-2 text-xs font-bold transition-colors ${
+                  activeTab === "paper"
+                    ? "bg-white text-gray-900 border-b-2 border-indigo-600"
+                    : "text-gray-600 hover:bg-gray-200"
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                title={hasPaperPdf ? "Open the original paper PDF" : "No local PDF available for this paper"}
+              >
+                📕 Original Paper PDF
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              {activeTab === "abstract" ? (
+                loading ? (
+                  <div className="h-full flex items-center justify-center text-gray-500">Loading analysis...</div>
+                ) : (
+                  <iframe
+                    title="Analysis preview"
+                    srcDoc={analysisHtml}
+                    className="w-full h-full border-0"
+                    sandbox="allow-same-origin"
+                  />
+                )
+              ) : hasPaperPdf ? (
+                <iframe
+                  title="Original paper PDF"
+                  src={`/api/v1/papers/${paperId}/pdf-file#view=FitH`}
+                  className="w-full h-full border-0"
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">No local PDF available for this paper</div>
+              )}
+            </div>
           </div>
 
           {/* RIGHT: Rubric + status + notes */}
-          <div className="w-[42%] min-w-[420px] flex flex-col overflow-hidden">
+          <div className="w-[44%] min-w-[440px] flex flex-col overflow-hidden">
             <div className="overflow-y-auto p-4 flex-1 space-y-4">
               {/* Status */}
               <div>
@@ -1494,48 +1559,87 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                 </div>
               </div>
 
-              {/* Auto score */}
-              <div className="flex items-center justify-between px-3 py-2 rounded bg-[var(--secondary)]">
-                <span className="text-xs font-medium text-[var(--muted-foreground)]">Computed score</span>
-                <span className="text-sm">
-                  {autoScore !== null ? (
-                    <>
-                      <span className="text-amber-400">{"★".repeat(autoScore)}</span>
-                      <span className="text-gray-600">{"★".repeat(5 - autoScore)}</span>
-                      <span className="ml-2 text-[var(--foreground)] font-bold">{autoScore}/5</span>
-                    </>
-                  ) : "—"}
-                </span>
+              {/* Computed + Reviewer scores */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-3 py-2 rounded bg-[var(--secondary)] border border-[var(--border)]">
+                  <span className="text-xs font-medium text-[var(--muted-foreground)]">Computed score</span>
+                  <span className="text-sm">
+                    {computedScore !== null ? (
+                      <>
+                        <span className="text-amber-400">{"★".repeat(computedScore)}</span>
+                        <span className="text-gray-600">{"★".repeat(5 - computedScore)}</span>
+                        <span className="ml-2 text-[var(--foreground)] font-bold">{computedScore}/5</span>
+                      </>
+                    ) : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 rounded bg-red-900/30 border-2 border-red-600">
+                  <div>
+                    <div className="text-xs font-bold text-red-400">Reviewer score</div>
+                    <div className="text-[9px] text-red-300/70">final · saved as validation_score</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <button
+                          key={n}
+                          onClick={() => { setReviewerScore(n); setReviewerScoreEdited(true); }}
+                          className={`text-xl leading-none px-0.5 ${n <= (reviewerScore || 0) ? "text-red-500" : "text-gray-700"} hover:scale-110 transition-transform`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-sm text-red-400 font-bold">{reviewerScore || "—"}/5</span>
+                    {reviewerScoreEdited && (
+                      <button
+                        onClick={() => { setReviewerScoreEdited(false); setReviewerScore(computedScore); }}
+                        className="text-[9px] text-red-300 hover:text-white underline"
+                        title="Reset to computed"
+                      >
+                        reset
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Rubric */}
               <div>
                 <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
-                  Rubric ({rubric.filter(r => r.checked).length}/{rubric.length} OK · {rubric.filter(r => r.missing).length} missing)
+                  Rubric ({rubric.filter(r => r.score !== null && !r.missing).length}/{rubric.length} scored · {rubric.filter(r => r.missing).length} missing)
                 </label>
                 <div className="space-y-1.5">
                   {rubric.map((item, idx) => (
                     <div key={item.section} className="rounded border border-[var(--border)] bg-[var(--secondary)] p-2">
                       <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-[var(--foreground)] flex-1">{item.section}</span>
+                        {/* Per-item star score */}
+                        <div className="flex">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                              key={n}
+                              onClick={() => updateItem(idx, { score: n, missing: false })}
+                              disabled={item.missing}
+                              className={`text-base leading-none px-0.5 ${
+                                !item.missing && item.score !== null && n <= item.score
+                                  ? "text-amber-400"
+                                  : "text-gray-700"
+                              } hover:scale-110 transition-transform disabled:opacity-30 disabled:cursor-not-allowed`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
                         <button
-                          onClick={() => updateItem(idx, { checked: !item.checked, missing: item.checked ? item.missing : false })}
-                          className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
-                            item.checked ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-400 border border-gray-600"
-                          }`}
-                          title="Mark as OK"
-                        >
-                          {item.checked ? "✓" : ""}
-                        </button>
-                        <button
-                          onClick={() => updateItem(idx, { missing: !item.missing, checked: item.missing ? item.checked : false })}
+                          onClick={() => updateItem(idx, { missing: !item.missing, score: item.missing ? item.score : null })}
                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                             item.missing ? "bg-red-700 text-white" : "bg-gray-700 text-gray-400 border border-gray-600"
                           }`}
-                          title="Mark as missing from analysis"
+                          title="Mark section as missing from analysis (auto score=1)"
                         >
                           MISSING
                         </button>
-                        <span className="text-xs font-medium text-[var(--foreground)] flex-1">{item.section}</span>
                       </div>
                       <input
                         type="text"
@@ -1549,9 +1653,25 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                 </div>
               </div>
 
-              {/* General notes */}
+              {/* General notes (with its own score) */}
               <div>
-                <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">General notes</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-[var(--muted-foreground)]">General notes</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] text-[var(--muted-foreground)] mr-1">score</span>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button
+                        key={n}
+                        onClick={() => setGeneralScore(generalScore === n ? null : n)}
+                        className={`text-base leading-none px-0.5 ${
+                          generalScore !== null && n <= generalScore ? "text-amber-400" : "text-gray-700"
+                        } hover:scale-110 transition-transform`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}

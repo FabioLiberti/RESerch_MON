@@ -695,15 +695,16 @@ async def get_summary_card_pdf(
 
 class RubricItem(BaseModel):
     section: str
-    checked: bool = False
+    score: int | None = None  # 1-5 per-section reviewer score
     missing: bool = False
     note: str = ""
 
 
 class ValidationRequest(BaseModel):
     status: str  # validated, rejected, needs_revision
-    score: int | None = None  # 1-5
+    score: int | None = None  # 1-5 — final REVIEWER score (overrides computed)
     notes: str | None = None
+    general_score: int | None = None  # 1-5 score given to General notes section
     rubric: list[RubricItem] | None = None
 
 
@@ -734,12 +735,14 @@ async def validate_analysis(
 
     if body.rubric is not None:
         rubric_list = [r.model_dump() for r in body.rubric]
-        item.validation_rubric_json = _json.dumps(rubric_list, ensure_ascii=False)
-        # Auto-compute score from rubric if user didn't override
-        if body.score is None:
-            item.validation_score = compute_rubric_score(rubric_list)
-        else:
+        # Persist the rubric AND the general_score together, so the modal can rebuild state
+        payload = {"items": rubric_list, "general_score": body.general_score}
+        item.validation_rubric_json = _json.dumps(payload, ensure_ascii=False)
+        # Reviewer score wins; otherwise auto-compute
+        if body.score is not None:
             item.validation_score = body.score
+        else:
+            item.validation_score = compute_rubric_score(rubric_list, body.general_score)
     else:
         item.validation_score = body.score
         item.validation_rubric_json = None
@@ -1020,22 +1023,52 @@ async def review_queue(
     return out
 
 
+def _parse_rubric_payload(json_str: str | None) -> dict:
+    """Parse stored rubric payload supporting both legacy (list) and new (dict) format."""
+    import json as _json
+    from app.services.validation_report import empty_rubric
+
+    if not json_str:
+        return {"items": empty_rubric(), "general_score": None}
+    try:
+        data = _json.loads(json_str)
+    except Exception:
+        return {"items": empty_rubric(), "general_score": None}
+    if isinstance(data, list):
+        # Legacy format: list of items with checked/missing/note
+        items = []
+        for it in data:
+            items.append({
+                "section": it.get("section", ""),
+                # Migrate legacy 'checked' bool to score: True -> 5, False -> None
+                "score": 5 if it.get("checked") else None,
+                "missing": it.get("missing", False),
+                "note": it.get("note", ""),
+            })
+        return {"items": items, "general_score": None}
+    if isinstance(data, dict):
+        return {
+            "items": data.get("items") or empty_rubric(),
+            "general_score": data.get("general_score"),
+        }
+    return {"items": empty_rubric(), "general_score": None}
+
+
 @router.get("/queue/{queue_id}/rubric-template")
 async def get_rubric_template(
     queue_id: int,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the rubric for an analysis entry. If never set, returns blank template."""
-    import json as _json
+    """Return the rubric (items + general_score) for an analysis. Blank template if unset."""
     from app.services.validation_report import empty_rubric
 
     item = await db.get(AnalysisQueue, queue_id)
     if not item:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if item.validation_rubric_json:
-        return {"rubric": _json.loads(item.validation_rubric_json), "from_existing": True}
-    return {"rubric": empty_rubric(), "from_existing": False}
+        return {**_parse_rubric_payload(item.validation_rubric_json), "from_existing": True}
+    return {"items": empty_rubric(), "general_score": None, "from_existing": False}
 
 
 @router.get("/{paper_id}/history")

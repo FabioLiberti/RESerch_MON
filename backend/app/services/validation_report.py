@@ -54,31 +54,36 @@ RUBRIC_SECTIONS: list[str] = [
 
 
 def empty_rubric() -> list[dict]:
-    """Return a fresh blank rubric: every section unchecked, not missing, no note."""
+    """Return a fresh blank rubric: every section with score=null, not missing."""
     return [
-        {"section": s, "checked": False, "missing": False, "note": ""}
+        {"section": s, "score": None, "missing": False, "note": ""}
         for s in RUBRIC_SECTIONS
     ]
 
 
-def compute_rubric_score(rubric: list[dict]) -> int | None:
-    """Compute a 1-5 score from a rubric.
+def compute_rubric_score(rubric: list[dict], general_score: int | None = None) -> int | None:
+    """Compute a 1-5 overall score from a rubric (per-item scores) + general_score.
 
-    Score = checked / (total - missing) * 5, rounded.
-    Missing items penalize because they reduce 'checked' but stay in the denominator
-    via the section total.
-    Returns None for empty rubrics.
+    - Each rubric item contributes its 1-5 score.
+    - Items marked 'missing' contribute 1.
+    - Items with no score (None) and not missing are skipped (not yet rated).
+    - general_score (for the overall General notes section) also contributes if set.
+    Returns None if no values to average.
     """
-    if not rubric:
+    values: list[int] = []
+    for r in rubric or []:
+        if r.get("missing"):
+            values.append(1)
+        else:
+            s = r.get("score")
+            if isinstance(s, int) and 1 <= s <= 5:
+                values.append(s)
+    if isinstance(general_score, int) and 1 <= general_score <= 5:
+        values.append(general_score)
+    if not values:
         return None
-    total = len(rubric)
-    if total == 0:
-        return None
-    checked = sum(1 for r in rubric if r.get("checked"))
-    # Missing sections never get a check; they reduce the achievable max but
-    # we keep total as denominator so missing genuinely lowers the score.
-    score = round((checked / total) * 5)
-    return max(1, min(5, score)) if checked > 0 else 1
+    avg = sum(values) / len(values)
+    return max(1, min(5, round(avg)))
 
 
 async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | None:
@@ -143,45 +148,69 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
             "needs_revision": "orange",
         }.get(a.validation_status or "", "gray")
 
-        # Parse rubric if present
+        # Parse rubric if present (supports both legacy list and new dict payload)
         rubric_table = ""
+        general_score_line = ""
+        computed_score_value: int | None = None
         if a.validation_rubric_json:
             try:
-                rubric = json.loads(a.validation_rubric_json)
-                if rubric:
+                payload = json.loads(a.validation_rubric_json)
+                items = payload if isinstance(payload, list) else payload.get("items", [])
+                general_score = None if isinstance(payload, list) else payload.get("general_score")
+                if items:
                     rows = []
-                    for r in rubric:
+                    for r in items:
                         sec = _esc(r.get("section", ""))
                         if r.get("missing"):
                             mark = "\\textcolor{darkred}{\\textbf{MISSING}}"
-                        elif r.get("checked"):
-                            mark = "\\textcolor{darkgreen}{\\textbf{OK}}"
+                            score_cell = "\\textcolor{darkred}{1/5}"
                         else:
-                            mark = "\\textcolor{gray}{--}"
+                            sc = r.get("score")
+                            if isinstance(sc, int) and 1 <= sc <= 5:
+                                stars = "\\textcolor{darkgreen}{" + ("$\\bigstar$" * sc) + "}" + ("$\\star$" * (5 - sc))
+                                mark = stars
+                                score_cell = f"{sc}/5"
+                            else:
+                                mark = "\\textcolor{gray}{--}"
+                                score_cell = "--"
+                        # Legacy compatibility: if no score key but 'checked' is True, treat as 5
+                        if r.get("score") is None and r.get("checked") and not r.get("missing"):
+                            mark = "\\textcolor{darkgreen}{$\\bigstar\\bigstar\\bigstar\\bigstar\\bigstar$}"
+                            score_cell = "5/5"
                         item_note = _esc(r.get("note") or "")
                         rows.append(
-                            f"{sec} & {mark} & {item_note} \\\\\n"
+                            f"{sec} & {score_cell} & {item_note} \\\\\n"
                         )
                     rubric_table = (
                         "\\vspace{0.4em}\n"
                         "\\noindent\\textbf{Section-by-section rubric:}\n"
                         "\\vspace{0.2em}\n"
-                        "\\begin{tabular}{@{}p{3.8cm}p{1.8cm}p{9.0cm}@{}}\n"
+                        "\\begin{tabular}{@{}p{3.8cm}p{1.4cm}p{9.4cm}@{}}\n"
                         "\\hline\n"
-                        "\\textbf{Section} & \\textbf{Status} & \\textbf{Note} \\\\\n"
+                        "\\textbf{Section} & \\textbf{Score} & \\textbf{Note} \\\\\n"
                         "\\hline\n"
                         + "".join(rows)
                         + "\\hline\n"
                         "\\end{tabular}\n"
                     )
+                    if isinstance(general_score, int) and 1 <= general_score <= 5:
+                        general_score_line = f"\\textbf{{General notes score}} & {general_score}/5 \\\\\n"
+                    computed_score_value = compute_rubric_score(items, general_score if isinstance(general_score, int) else None)
             except Exception as e:
                 logger.warning(f"Failed to render rubric for analysis {a.id}: {e}")
 
+        computed_line = ""
+        if computed_score_value is not None and a.validation_score is not None and computed_score_value != a.validation_score:
+            computed_line = f"\\textbf{{Computed score}} & {computed_score_value}/5 \\\\\n"
+
+        score_label = "Reviewer score" if a.validation_score is not None else "Score"
         block = (
             f"\\subsection*{{{mode_label} (v{version})}}\n"
             f"\\begin{{tabular}}{{@{{}}p{{3.5cm}}p{{12cm}}@{{}}}}\n"
             f"\\textbf{{Status}}      & \\textcolor{{{status_color}}}{{\\textbf{{{status}}}}} \\\\\n"
-            f"\\textbf{{Score}}       & {score} \\\\\n"
+            f"\\textbf{{{score_label}}} & {score} \\\\\n"
+            f"{computed_line}"
+            f"{general_score_line}"
             f"\\textbf{{Date}}        & {date} \\\\\n"
             f"\\textbf{{Validator}}   & {validator} \\\\\n"
             f"\\textbf{{Notes}}       & {notes} \\\\\n"
