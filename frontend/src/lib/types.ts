@@ -18,6 +18,7 @@ export interface Paper {
   on_zotero: boolean;
   zotero_key: string | null;
   rating: number | null;
+  quality_grade: string | null;
   created_at: string;
 }
 

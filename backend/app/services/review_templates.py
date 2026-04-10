@@ -181,10 +181,139 @@ _IEEE_TAI = ReviewTemplate(
 )
 
 
+# ---------- Paper Quality Review (published papers) ----------
+# Used by the Paper Quality Review module — assesses the scientific quality of
+# an already-published paper in the user's bibliography. Distinct from peer
+# review (unpublished manuscripts) and from analysis validation (meta-review
+# of LLM output). 10 dimensions cover the standard scientific quality criteria.
+
+_PAPER_QUALITY = ReviewTemplate(
+    id="paper-quality",
+    name="Paper Quality Assessment",
+    journal="Personal scientific quality grading",
+    description="Reviewer's own scientific quality judgement of a published paper. "
+                "10 dimensions on a 1-5 scale plus overall grade and free-text assessment.",
+    dimensions=[
+        TemplateField(
+            "research_question",
+            "Research question and motivation",
+            description="Is the research question clearly stated, well motivated, and meaningful?",
+        ),
+        TemplateField(
+            "literature_review",
+            "Literature review and state of the art",
+            description="Does the paper situate itself adequately in the prior literature? Are key references cited?",
+        ),
+        TemplateField(
+            "methodology_rigor",
+            "Methodology and rigor",
+            description="Are methods sound, appropriate for the question, and described in sufficient detail?",
+        ),
+        TemplateField(
+            "results_validity",
+            "Results and analysis validity",
+            description="Are the results correctly derived, statistically sound, and adequately presented?",
+        ),
+        TemplateField(
+            "discussion_depth",
+            "Discussion and interpretation",
+            description="Is the discussion well grounded in the results? Are alternative explanations considered?",
+        ),
+        TemplateField(
+            "limitations",
+            "Limitations acknowledgement",
+            description="Are the limitations of the study honestly stated and discussed?",
+        ),
+        TemplateField(
+            "reproducibility",
+            "Reproducibility",
+            description="Are data, code, and procedures available enough to reproduce the work?",
+        ),
+        TemplateField(
+            "originality",
+            "Originality of contribution",
+            description="How original is the contribution relative to the existing literature?",
+        ),
+        TemplateField(
+            "significance",
+            "Significance and impact",
+            description="How important is this work? Will it influence the field?",
+        ),
+        TemplateField(
+            "writing_clarity",
+            "Writing clarity and organization",
+            description="Is the paper clearly written, well organized, and accessible?",
+        ),
+    ],
+    # No "recommendation" in the publish/reject sense — for already-published papers
+    # we use an overall quality grade instead, captured separately.
+    recommendations=[
+        ("excellent",   "Excellent — exemplary work, recommended without reservations"),
+        ("good",        "Good — solid contribution with minor issues only"),
+        ("adequate",    "Adequate — acceptable but with notable limitations"),
+        ("weak",        "Weak — significant flaws, use with caution"),
+        ("unreliable",  "Unreliable — methodologically unsound or potentially misleading"),
+    ],
+    extras=[
+        TemplateField(
+            "data_availability",
+            "Data availability",
+            type="choice",
+            choices=[
+                ("public", "Public repository (cited in paper)"),
+                ("on_request", "Available on request"),
+                ("partial", "Partially available"),
+                ("none", "Not available"),
+                ("not_applicable", "Not applicable"),
+            ],
+        ),
+        TemplateField(
+            "code_availability",
+            "Code availability",
+            type="choice",
+            choices=[
+                ("public", "Public repository (cited in paper)"),
+                ("on_request", "Available on request"),
+                ("none", "Not available"),
+                ("not_applicable", "Not applicable"),
+            ],
+        ),
+        TemplateField(
+            "ethics_disclosure",
+            "Ethics statement / IRB disclosure",
+            type="choice",
+            choices=[
+                ("clear", "Clearly stated"),
+                ("partial", "Partial disclosure"),
+                ("missing", "Missing"),
+                ("not_applicable", "Not applicable"),
+            ],
+        ),
+        TemplateField(
+            "conflict_of_interest",
+            "Conflict of interest declared",
+            type="boolean",
+        ),
+        TemplateField(
+            "use_in_my_work",
+            "Plan to cite or use in my own work",
+            type="choice",
+            choices=[
+                ("primary", "Primary reference"),
+                ("supporting", "Supporting reference"),
+                ("background", "Background only"),
+                ("not_useful", "Not useful for my work"),
+            ],
+        ),
+    ],
+)
+
+
 # Registry — keyed by template_id
 TEMPLATES: dict[str, ReviewTemplate] = {
     _GENERIC.id: _GENERIC,
     _IEEE_TAI.id: _IEEE_TAI,
+    _PAPER_QUALITY.id: _PAPER_QUALITY,
 }
 
 

@@ -50,6 +50,7 @@ class PaperSummary(BaseModel):
     on_zotero: bool = False
     zotero_key: str | None = None
     rating: int | None = None
+    quality_grade: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

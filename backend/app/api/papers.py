@@ -47,7 +47,7 @@ def _count_pdf_pages(pdf_path: str | None) -> int | None:
         return None
 
 
-def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None, has_note: bool = False) -> PaperSummary:
+def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None, has_note: bool = False, quality_grade: str | None = None) -> PaperSummary:
     return PaperSummary(
         id=paper.id,
         doi=paper.doi,
@@ -68,6 +68,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         on_zotero=paper.zotero_key is not None,
         zotero_key=paper.zotero_key,
         rating=paper.rating,
+        quality_grade=quality_grade,
         created_at=paper.created_at,
     )
 
@@ -150,6 +151,7 @@ async def list_papers(
     dataset: str | None = None,
     method_tag: str | None = None,
     validation: str | None = None,  # any, validated, pending, rejected, needs_revision
+    quality: str | None = None,  # any, excellent, good, adequate, weak, unreliable, none
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -253,6 +255,24 @@ async def list_papers(
             query = query.where(Paper.id.in_(
                 select(_AQ.paper_id).where(*_EXT_ONLY, _AQ.validation_status == validation)
             ))
+    if quality:
+        from app.models.paper_quality_review import PaperQualityReview as _PQR
+        if quality == "any":
+            query = query.where(Paper.id.in_(
+                select(_PQR.paper_id).where(_PQR.is_current.is_(True))
+            ))
+        elif quality == "none":
+            # Papers without any current quality review
+            query = query.where(Paper.id.notin_(
+                select(_PQR.paper_id).where(_PQR.is_current.is_(True))
+            ))
+        elif quality in ("excellent", "good", "adequate", "weak", "unreliable"):
+            query = query.where(Paper.id.in_(
+                select(_PQR.paper_id).where(
+                    _PQR.is_current.is_(True),
+                    _PQR.overall_grade == quality,
+                )
+            ))
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -325,8 +345,31 @@ async def list_papers(
         for (pid,) in notes_result.all():
             paper_has_note.add(pid)
 
+    # Fetch CURRENT quality review grade per paper (single bulk query)
+    from app.models.paper_quality_review import PaperQualityReview
+    quality_grade_map: dict[int, str | None] = {}
+    if paper_ids:
+        qr_result = await db.execute(
+            select(PaperQualityReview.paper_id, PaperQualityReview.overall_grade)
+            .where(
+                PaperQualityReview.paper_id.in_(paper_ids),
+                PaperQualityReview.is_current.is_(True),
+            )
+        )
+        for pid, grade in qr_result.all():
+            quality_grade_map[pid] = grade
+
     return PaperListResponse(
-        items=[_paper_to_summary(p, paper_labels_map.get(p.id, []), paper_analyses_map.get(p.id, []), p.id in paper_has_note) for p in papers],
+        items=[
+            _paper_to_summary(
+                p,
+                paper_labels_map.get(p.id, []),
+                paper_analyses_map.get(p.id, []),
+                p.id in paper_has_note,
+                quality_grade_map.get(p.id),
+            )
+            for p in papers
+        ],
         total=total,
         page=page,
         per_page=per_page,

@@ -107,6 +107,21 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             </a>
           </>
         )}
+        {/* spacer pushes Quality Review to the far right */}
+        <div className="ml-auto" />
+        <Link
+          href={`/paper-quality/${paperId}`}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
+          style={{
+            backgroundColor: "#fde047",          // bright lime/yellow background
+            color: "#1e1b4b",                    // very dark indigo text
+            border: "3px solid #7c3aed",         // bold purple border
+            boxShadow: "0 2px 8px rgba(124, 58, 237, 0.4)",
+          }}
+          title="Open the scientific quality assessment for this paper"
+        >
+          Quality Review
+        </Link>
       </div>
 
       {/* Labels & Notes */}

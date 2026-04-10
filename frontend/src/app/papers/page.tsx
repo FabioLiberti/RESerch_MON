@@ -40,6 +40,7 @@ export default function PapersPage() {
   const [datasetFilter, setDatasetFilter] = useState("");
   const [methodTagFilter, setMethodTagFilter] = useState("");
   const [validationFilter, setValidationFilter] = useState("");
+  const [qualityFilter, setQualityFilter] = useState("");
 
   // Sync URL params with state
   useEffect(() => {
@@ -124,6 +125,7 @@ export default function PapersPage() {
   if (datasetFilter) params.dataset = datasetFilter;
   if (methodTagFilter) params.method_tag = methodTagFilter;
   if (validationFilter) params.validation = validationFilter;
+  if (qualityFilter) params.quality = qualityFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -402,6 +404,20 @@ export default function PapersPage() {
           <option value="pending">Pending review</option>
         </select>
         <select
+          value={qualityFilter}
+          onChange={(e) => { setQualityFilter(e.target.value); setPage(1); }}
+          className={`${cls(qualityFilter)} max-w-44`}
+        >
+          <option value="">Quality: All</option>
+          <option value="any">Has assessment (any grade)</option>
+          <option value="excellent">Excellent</option>
+          <option value="good">Good</option>
+          <option value="adequate">Adequate</option>
+          <option value="weak">Weak</option>
+          <option value="unreliable">Unreliable</option>
+          <option value="none">Not assessed yet</option>
+        </select>
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -417,10 +433,10 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -670,6 +686,30 @@ export default function PapersPage() {
                               >
                                 R
                               </span>
+                            );
+                          })()}
+                          {/* Quality circle: Q inside a colored circle reflecting the paper-quality grade */}
+                          {(() => {
+                            const g = paper.quality_grade;
+                            const bg = !g
+                              ? "bg-white text-gray-800 border-gray-400"
+                              : g === "excellent" || g === "good"
+                              ? "bg-emerald-500 text-white border-emerald-700"
+                              : g === "adequate" || g === "weak"
+                              ? "bg-orange-500 text-white border-orange-700"
+                              : "bg-red-600 text-white border-red-800";
+                            const title = !g
+                              ? "Paper Quality not yet assessed — click to start"
+                              : `Paper Quality: ${g}`;
+                            return (
+                              <Link
+                                href={`/paper-quality/${paper.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className={`inline-flex items-center justify-center w-4 h-4 rounded-full border-2 text-[10px] font-black leading-none ${bg} hover:opacity-80`}
+                                title={title}
+                              >
+                                Q
+                              </Link>
                             );
                           })()}
                         </div>
