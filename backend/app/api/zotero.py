@@ -96,8 +96,15 @@ async def sync_analysis(
             seen_modes.add(mode)
             analyses_to_sync.append(a)
 
+    # Only EXT.ABS and SUMMARY are shareable with academic tutors.
+    # Quick and Deep analyses are kept locally as working notes — they are
+    # too obviously LLM-generated and would compromise the academic framing
+    # of the validation report.
+    ZOTERO_SHAREABLE_MODES = {"extended", "summary"}
+    analyses_to_sync = [a for a in analyses_to_sync if (a.analysis_mode or "quick") in ZOTERO_SHAREABLE_MODES]
+
     if not analyses_to_sync:
-        raise HTTPException(status_code=404, detail="No analysis report found for this paper")
+        raise HTTPException(status_code=404, detail="No shareable analysis (extended/summary) found for this paper")
 
     # Order: extended first (becomes Zotero's main "PDF" attachment), then summary, quick, deep
     mode_order = {"extended": 0, "summary": 1, "quick": 2, "deep": 3}

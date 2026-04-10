@@ -380,7 +380,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       <SummaryCard paperId={paperId} />
 
       {/* Analysis History */}
-      <AnalysisHistory paperId={paperId} />
+      <AnalysisHistory paperId={paperId} hasZoteroKey={!!paper.zotero_key} hasPaperPdf={!!paper.has_pdf} />
     </div>
   );
 }
@@ -1103,7 +1103,7 @@ function SummaryCard({ paperId }: { paperId: number }) {
 }
 
 
-function AnalysisHistory({ paperId }: { paperId: number }) {
+function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: number; hasZoteroKey: boolean; hasPaperPdf: boolean }) {
   const { data: history, mutate: mutateHistory } = useSWR<AnalysisRun[]>(
     `/api/v1/analysis/${paperId}/history`,
     authFetcher,
@@ -1325,6 +1325,8 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
         <ReviewModal
           run={reviewing}
           paperId={paperId}
+          hasZoteroKey={hasZoteroKey}
+          hasPaperPdf={hasPaperPdf}
           onClose={() => setReviewing(null)}
           onSaved={() => { setReviewing(null); mutateHistory(); }}
         />
@@ -1343,9 +1345,11 @@ function AnalysisHistory({ paperId }: { paperId: number }) {
 
 // --- Review Modal (side-by-side: analysis on left, rubric on right) ---
 
-function ReviewModal({ run, paperId, onClose, onSaved }: {
+function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp, onClose, onSaved }: {
   run: AnalysisRun;
   paperId: number;
+  hasZoteroKey: boolean;
+  hasPaperPdf: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1354,12 +1358,26 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
   const [generalScore, setGeneralScore] = useState<number | null>(null);
   const [rubric, setRubric] = useState<RubricItem[]>([]);
   const [reviewerScore, setReviewerScore] = useState<number | null>(run.validation_score || null);
-  const [reviewerScoreEdited, setReviewerScoreEdited] = useState(false);
+  // If a saved validation_score exists, treat it as "manually set" so the auto-recompute
+  // useEffect doesn't overwrite it when re-opening an existing review.
+  const [reviewerScoreEdited, setReviewerScoreEdited] = useState(
+    run.validation_score !== null && run.validation_score !== undefined
+  );
+  const [statusEdited, setStatusEdited] = useState(!!run.validation_status);
   const [analysisHtml, setAnalysisHtml] = useState<string>("");
-  const [hasPaperPdf, setHasPaperPdf] = useState(true);
+  // Markdown split by section — source of truth for the inline section editor
+  const [sectionsMd, setSectionsMd] = useState<Record<string, string>>({});
+  // Pending edits keyed by section name. Empty = no pending edits.
+  const [editedSections, setEditedSections] = useState<Record<string, string>>({});
+  // Which section is currently being edited in the inline textarea
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [hasPaperPdf, setHasPaperPdf] = useState(hasPaperPdfProp);
+  const [paperPdfBlobUrl, setPaperPdfBlobUrl] = useState<string | null>(null);
+  const [paperPdfLoading, setPaperPdfLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"abstract" | "paper">("abstract");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   // Load rubric (existing or template) and analysis HTML in parallel
@@ -1370,20 +1388,66 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
     Promise.all([
       fetch(`/api/v1/analysis/queue/${run.id}/rubric-template`, { headers: auth }).then(r => r.json()),
       fetch(`/api/v1/analysis/${paperId}/html?queue_id=${run.id}`, { headers: auth }).then(r => r.text()),
+      fetch(`/api/v1/analysis/${paperId}/md?queue_id=${run.id}`, { headers: auth }).then(r => r.ok ? r.text() : ""),
     ])
-      .then(([rubricRes, html]) => {
+      .then(([rubricRes, html, md]) => {
         setRubric(rubricRes.items || []);
         setGeneralScore(rubricRes.general_score ?? null);
         setAnalysisHtml(html);
+        // Parse markdown into sections by H2 headers (## Section)
+        const parsed: Record<string, string> = {};
+        if (md) {
+          // Strip YAML front-matter
+          let body = md;
+          if (body.startsWith("---")) {
+            const end = body.indexOf("---", 3);
+            if (end > 0) body = body.slice(end + 3).replace(/^\n+/, "");
+          }
+          let current: string | null = null;
+          let buffer: string[] = [];
+          for (const line of body.split("\n")) {
+            if (line.startsWith("## ")) {
+              if (current !== null) parsed[current] = buffer.join("\n").trim();
+              current = line.slice(3).trim();
+              buffer = [];
+            } else if (current !== null) {
+              buffer.push(line);
+            }
+          }
+          if (current !== null) parsed[current] = buffer.join("\n").trim();
+        }
+        setSectionsMd(parsed);
       })
       .catch((e) => setError(`Load failed: ${e.message}`))
       .finally(() => setLoading(false));
 
-    // Check if the paper has a local PDF available
-    fetch(`/api/v1/papers/${paperId}/pdf-file`, { method: "HEAD" })
-      .then((r) => setHasPaperPdf(r.ok))
-      .catch(() => setHasPaperPdf(false));
+    // hasPaperPdf comes from the parent (paper.has_pdf). No HEAD probe needed:
+    // the /pdf-file endpoint doesn't expose HEAD (FastAPI only registered GET → 405).
   }, [run.id, paperId]);
+
+  // Lazy-load the paper PDF as blob URL the first time the user opens the tab
+  useEffect(() => {
+    if (activeTab !== "paper" || !hasPaperPdf || paperPdfBlobUrl || paperPdfLoading) return;
+    setPaperPdfLoading(true);
+    const token = localStorage.getItem("fl-token");
+    fetch(`/api/v1/papers/${paperId}/pdf-file`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => setPaperPdfBlobUrl(URL.createObjectURL(blob)))
+      .catch(() => setHasPaperPdf(false))
+      .finally(() => setPaperPdfLoading(false));
+  }, [activeTab, hasPaperPdf, paperPdfBlobUrl, paperPdfLoading, paperId]);
+
+  // Revoke blob URL on unmount to free memory
+  useEffect(() => {
+    return () => {
+      if (paperPdfBlobUrl) URL.revokeObjectURL(paperPdfBlobUrl);
+    };
+  }, [paperPdfBlobUrl]);
 
   // Auto score from rubric (per-item scores + general_score)
   const computedScore = (() => {
@@ -1405,6 +1469,15 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
     }
   }, [computedScore, reviewerScoreEdited]);
 
+  // Auto-suggest status from reviewer score (unless user has manually picked one)
+  // 5: validated · 4: validated · 3: needs_revision · 2: needs_revision · 1: rejected
+  useEffect(() => {
+    if (statusEdited || reviewerScore === null) return;
+    if (reviewerScore >= 4)      setStatus("validated");
+    else if (reviewerScore >= 2) setStatus("needs_revision");
+    else                          setStatus("rejected");
+  }, [reviewerScore, statusEdited]);
+
   const updateItem = (idx: number, patch: Partial<RubricItem>) => {
     setRubric(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   };
@@ -1414,12 +1487,34 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
     setError(null);
     try {
       const token = localStorage.getItem("fl-token");
-      const res = await fetch(`/api/v1/analysis/queue/${run.id}/validate`, {
+      const auth = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // Step 0: if there are pending in-place edits on the analysis sections,
+      // fork the analysis first and redirect the rest of the save to the new version.
+      let targetQueueId = run.id;
+      const editCount = Object.keys(editedSections).length;
+      if (editCount > 0) {
+        setSavePhase(`Forking analysis (v+1) with ${editCount} edit${editCount > 1 ? "s" : ""}...`);
+        const forkRes = await fetch(`/api/v1/analysis/queue/${run.id}/fork`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...auth },
+          body: JSON.stringify({
+            edits: Object.entries(editedSections).map(([section, text]) => ({ section, text })),
+          }),
+        });
+        if (!forkRes.ok) {
+          const err = await forkRes.json().catch(() => ({}));
+          throw new Error(err.detail || "Fork failed");
+        }
+        const forkData = await forkRes.json();
+        targetQueueId = forkData.queue_id;
+      }
+
+      // Step 1: persist the review on the (possibly new) target queue id
+      setSavePhase("Saving review...");
+      const res = await fetch(`/api/v1/analysis/queue/${targetQueueId}/validate`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify({
           status,
           notes: notes || null,
@@ -1432,11 +1527,48 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Save failed");
       }
+
+      // Step 2: ALWAYS sync to Zotero — create the paper if it isn't there yet,
+      // then upload the validation PDF + analysis attachments.
+      // The backend /zotero/sync calls add_paper() when zotero_key is null.
+      setSavePhase(hasZoteroKey ? "Updating metadata on Zotero..." : "Creating paper on Zotero...");
+      try {
+        const syncRes = await fetch(`/api/v1/zotero/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...auth },
+          body: JSON.stringify({ paper_ids: [paperId] }),
+        });
+        if (!syncRes.ok) {
+          const err = await syncRes.json().catch(() => ({}));
+          throw new Error(err.detail || `Zotero paper sync failed (${syncRes.status})`);
+        }
+
+        setSavePhase("Uploading validation PDF + attachments...");
+        const aRes = await fetch(`/api/v1/zotero/sync-analysis/${paperId}`, {
+          method: "POST",
+          headers: auth,
+        });
+        if (!aRes.ok) {
+          const err = await aRes.json().catch(() => ({}));
+          throw new Error(err.detail || `Zotero analysis sync failed (${aRes.status})`);
+        }
+
+        // Force the parent paper detail to re-fetch so zotero_key / badges update
+        mutate(`/api/v1/papers/${paperId}`);
+      } catch (zErr: any) {
+        // Review IS saved locally — surface Zotero failure but don't lose the save
+        setError(`Review saved, but Zotero sync failed: ${zErr.message}. You can retry from "Update Zotero" on the paper detail.`);
+        setSaving(false);
+        setSavePhase("");
+        return;
+      }
+
       onSaved();
     } catch (e: any) {
       setError(e.message || "Save failed");
     } finally {
       setSaving(false);
+      setSavePhase("");
     }
   };
 
@@ -1524,14 +1656,16 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                     sandbox="allow-same-origin"
                   />
                 )
-              ) : hasPaperPdf ? (
+              ) : !hasPaperPdf ? (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">No local PDF available for this paper</div>
+              ) : paperPdfLoading || !paperPdfBlobUrl ? (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Loading paper PDF...</div>
+              ) : (
                 <iframe
                   title="Original paper PDF"
-                  src={`/api/v1/papers/${paperId}/pdf-file#view=FitH`}
+                  src={`${paperPdfBlobUrl}#view=FitH`}
                   className="w-full h-full border-0"
                 />
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm">No local PDF available for this paper</div>
               )}
             </div>
           </div>
@@ -1550,13 +1684,16 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                   ].map(opt => (
                     <button
                       key={opt.v}
-                      onClick={() => setStatus(opt.v)}
+                      onClick={() => { setStatus(opt.v); setStatusEdited(true); }}
                       className={`px-3 py-2 rounded text-xs font-bold text-white ${opt.c} ${status === opt.v ? "ring-2 ring-white/60" : "opacity-60"}`}
                     >
                       {opt.l}
                     </button>
                   ))}
                 </div>
+                {!statusEdited && reviewerScore !== null && (
+                  <p className="text-[9px] text-[var(--muted-foreground)] mt-1 italic">auto-selected from reviewer score · click to override</p>
+                )}
               </div>
 
               {/* Computed + Reviewer scores */}
@@ -1573,10 +1710,10 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                     ) : "—"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between px-3 py-2 rounded bg-red-900/30 border-2 border-red-600">
+                <div className="flex items-center justify-between px-3 py-2 rounded bg-[var(--secondary)] border-2 border-red-600">
                   <div>
-                    <div className="text-xs font-bold text-red-400">Reviewer score</div>
-                    <div className="text-[9px] text-red-300/70">final · saved as validation_score</div>
+                    <div className="text-xs font-bold text-red-500">Reviewer score (saved)</div>
+                    <div className="text-[9px] text-[var(--muted-foreground)]">final · stored as validation_score</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex">
@@ -1590,11 +1727,11 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                         </button>
                       ))}
                     </div>
-                    <span className="text-sm text-red-400 font-bold">{reviewerScore || "—"}/5</span>
+                    <span className="text-sm text-red-500 font-bold">{reviewerScore || "—"}/5</span>
                     {reviewerScoreEdited && (
                       <button
                         onClick={() => { setReviewerScoreEdited(false); setReviewerScore(computedScore); }}
-                        className="text-[9px] text-red-300 hover:text-white underline"
+                        className="text-[9px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline"
                         title="Reset to computed"
                       >
                         reset
@@ -1607,13 +1744,21 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
               {/* Rubric */}
               <div>
                 <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
-                  Rubric ({rubric.filter(r => r.score !== null && !r.missing).length}/{rubric.length} scored · {rubric.filter(r => r.missing).length} missing)
+                  Rubric ({rubric.filter(r => r.score !== null && !r.missing).length}/{rubric.length} scored · {rubric.filter(r => r.missing).length} missing
+                  {Object.keys(editedSections).length > 0 && <> · <span className="text-fuchsia-400">{Object.keys(editedSections).length} edited</span></>})
                 </label>
                 <div className="space-y-1.5">
-                  {rubric.map((item, idx) => (
-                    <div key={item.section} className="rounded border border-[var(--border)] bg-[var(--secondary)] p-2">
+                  {rubric.map((item, idx) => {
+                    const hasEdit = editedSections[item.section] !== undefined;
+                    const sectionAvailable = sectionsMd[item.section] !== undefined;
+                    const isEditing = editingSection === item.section;
+                    return (
+                    <div key={item.section} className={`rounded border bg-[var(--secondary)] p-2 ${hasEdit ? "border-fuchsia-600" : "border-[var(--border)]"}`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-[var(--foreground)] flex-1">{item.section}</span>
+                        <span className="text-xs font-medium text-[var(--foreground)] flex-1">
+                          {item.section}
+                          {hasEdit && <span className="ml-1 text-[9px] text-fuchsia-400 font-bold">● EDITED</span>}
+                        </span>
                         {/* Per-item star score */}
                         <div className="flex">
                           {[1, 2, 3, 4, 5].map(n => (
@@ -1631,6 +1776,17 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                             </button>
                           ))}
                         </div>
+                        {sectionAvailable && (
+                          <button
+                            onClick={() => setEditingSection(isEditing ? null : item.section)}
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              isEditing ? "bg-fuchsia-700 text-white" : hasEdit ? "bg-fuchsia-900 text-fuchsia-200 border border-fuchsia-600" : "bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600"
+                            }`}
+                            title="Edit this section's markdown (creates a new version on save)"
+                          >
+                            ✏ EDIT
+                          </button>
+                        )}
                         <button
                           onClick={() => updateItem(idx, { missing: !item.missing, score: item.missing ? item.score : null })}
                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
@@ -1641,6 +1797,42 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                           MISSING
                         </button>
                       </div>
+                      {isEditing && (
+                        <div className="mt-2 space-y-1">
+                          <textarea
+                            value={editedSections[item.section] ?? sectionsMd[item.section] ?? ""}
+                            onChange={(e) => setEditedSections(prev => ({ ...prev, [item.section]: e.target.value }))}
+                            rows={10}
+                            className="w-full px-2 py-1 rounded bg-[var(--card)] border border-fuchsia-600 text-[11px] font-mono text-[var(--foreground)] resize-y"
+                            placeholder="Edit the markdown content of this section..."
+                          />
+                          <div className="flex gap-2 items-center">
+                            <button
+                              onClick={() => {
+                                // Discard: remove from editedSections
+                                setEditedSections(prev => {
+                                  const next = { ...prev };
+                                  delete next[item.section];
+                                  return next;
+                                });
+                                setEditingSection(null);
+                              }}
+                              className="text-[9px] px-2 py-0.5 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            >
+                              Discard
+                            </button>
+                            <button
+                              onClick={() => setEditingSection(null)}
+                              className="text-[9px] px-2 py-0.5 rounded bg-fuchsia-700 text-white font-bold hover:bg-fuchsia-600"
+                            >
+                              Keep edit (collapse)
+                            </button>
+                            <span className="text-[9px] text-[var(--muted-foreground)] italic">
+                              persisted as v+1 on Save Review
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <input
                         type="text"
                         value={item.note}
@@ -1649,7 +1841,8 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
                         className="mt-1.5 w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] text-[var(--foreground)]"
                       />
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1695,9 +1888,9 @@ function ReviewModal({ run, paperId, onClose, onSaved }: {
               <button
                 onClick={save}
                 disabled={saving || loading}
-                className="px-4 py-2 rounded bg-indigo-700 text-white text-xs font-bold hover:bg-indigo-600 disabled:opacity-50"
+                className="px-4 py-2 rounded bg-indigo-700 text-white text-xs font-bold hover:bg-indigo-600 disabled:opacity-50 min-w-[180px]"
               >
-                {saving ? "Saving..." : "Save Review"}
+                {saving ? (savePhase || "Saving...") : (hasZoteroKey ? "Save & Sync Zotero" : "Save & Push to Zotero")}
               </button>
             </div>
           </div>

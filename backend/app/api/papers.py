@@ -229,25 +229,29 @@ async def list_papers(
             )
         ))
     if validation:
+        # Review concept only applies to EXT.ABS. Quick/Deep/Summary are working
+        # notes that are never reviewed, so they must not influence this filter.
         from app.models.analysis import AnalysisQueue as _AQ
+        _EXT_ONLY = [_AQ.analysis_mode == "extended"]
         if validation == "any":
-            # Any validation status set (validated, rejected, needs_revision)
             query = query.where(Paper.id.in_(
                 select(_AQ.paper_id).where(
-                    _AQ.validation_status.in_(["validated", "rejected", "needs_revision"])
+                    *_EXT_ONLY,
+                    _AQ.validation_status.in_(["validated", "rejected", "needs_revision"]),
                 )
             ))
         elif validation == "pending":
-            # Has analyses, but none reviewed
-            from sqlalchemy import and_, not_
-            has_analysis = select(_AQ.paper_id).where(_AQ.status == "done")
+            # Has an EXT.ABS analysis, but it's never been reviewed
+            from sqlalchemy import and_
+            has_ext = select(_AQ.paper_id).where(*_EXT_ONLY, _AQ.status == "done")
             has_review = select(_AQ.paper_id).where(
-                _AQ.validation_status.in_(["validated", "rejected", "needs_revision"])
+                *_EXT_ONLY,
+                _AQ.validation_status.in_(["validated", "rejected", "needs_revision"]),
             )
-            query = query.where(and_(Paper.id.in_(has_analysis), Paper.id.notin_(has_review)))
+            query = query.where(and_(Paper.id.in_(has_ext), Paper.id.notin_(has_review)))
         elif validation in ("validated", "rejected", "needs_revision"):
             query = query.where(Paper.id.in_(
-                select(_AQ.paper_id).where(_AQ.validation_status == validation)
+                select(_AQ.paper_id).where(*_EXT_ONLY, _AQ.validation_status == validation)
             ))
 
     # Count
@@ -281,7 +285,14 @@ async def list_papers(
     # Fetch analyses for all papers (ordered by newest first to determine CURRENT per mode)
     from app.models.analysis import AnalysisQueue
     analyses_result = await db.execute(
-        select(AnalysisQueue.paper_id, AnalysisQueue.analysis_mode, AnalysisQueue.status, AnalysisQueue.zotero_synced)
+        select(
+            AnalysisQueue.paper_id,
+            AnalysisQueue.analysis_mode,
+            AnalysisQueue.status,
+            AnalysisQueue.zotero_synced,
+            AnalysisQueue.validation_status,
+            AnalysisQueue.validation_score,
+        )
         .where(AnalysisQueue.paper_id.in_(paper_ids), AnalysisQueue.status == "done")
         .order_by(AnalysisQueue.completed_at.desc())
     ) if paper_ids else None
@@ -289,13 +300,19 @@ async def list_papers(
     if analyses_result:
         # Keep only the most recent (CURRENT) entry per paper+mode
         seen_modes: dict[int, set[str]] = {}
-        for pid, mode, status, zsynced in analyses_result.all():
+        for pid, mode, status, zsynced, vstatus, vscore in analyses_result.all():
             m = mode or "quick"
             if pid not in seen_modes:
                 seen_modes[pid] = set()
             if m not in seen_modes[pid]:
                 seen_modes[pid].add(m)
-                paper_analyses_map.setdefault(pid, []).append({"mode": m, "status": status, "zotero_synced": bool(zsynced)})
+                paper_analyses_map.setdefault(pid, []).append({
+                    "mode": m,
+                    "status": status,
+                    "zotero_synced": bool(zsynced),
+                    "validation_status": vstatus,
+                    "validation_score": vscore,
+                })
 
     # Fetch notes for all papers
     from app.models.label import PaperNote

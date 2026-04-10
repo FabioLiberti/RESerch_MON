@@ -629,7 +629,7 @@ export default function PapersPage() {
                         </div>
                       )}
                       {paper.analyses && paper.analyses.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
                           {paper.analyses.map((a) => (
                             <span
                               key={a.mode}
@@ -641,6 +641,31 @@ export default function PapersPage() {
                               {a.zotero_synced && <span title="Synced to Zotero">✓Z</span>}
                             </span>
                           ))}
+                          {/* Review circle: R inside a colored circle reflecting the EXT.ABS review outcome. */}
+                          {(() => {
+                            const ext = paper.analyses.find(a => a.mode === "extended");
+                            if (!ext) return null;
+                            const s = ext.validation_status;
+                            const score = ext.validation_score;
+                            const bg = !s
+                              ? "bg-white text-gray-800 border-gray-400"
+                              : s === "validated"
+                              ? "bg-emerald-500 text-white border-emerald-700"
+                              : s === "needs_revision"
+                              ? "bg-orange-500 text-white border-orange-700"
+                              : "bg-red-600 text-white border-red-800";
+                            const title = !s
+                              ? "EXT.ABS not yet reviewed"
+                              : `EXT.ABS review: ${s}${score ? ` · score ${score}/5` : ""}`;
+                            return (
+                              <span
+                                className={`inline-flex items-center justify-center w-4 h-4 rounded-full border-2 text-[10px] font-black leading-none ${bg}`}
+                                title={title}
+                              >
+                                R
+                              </span>
+                            );
+                          })()}
                         </div>
                       )}
                       {(paper.rating || paper.on_zotero || paper.has_note || paper.disabled) && (

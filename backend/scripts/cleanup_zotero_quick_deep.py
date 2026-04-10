@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Cleanup quick/deep analysis PDFs from Zotero for all synced papers.
+
+These are working notes that should never be shared with tutors (Zotero is the
+sharing surface). The recurring sync already filters them out, but old uploads
+stay until the paper is touched again. This script removes them in one shot.
+
+Usage:
+    python scripts/cleanup_zotero_quick_deep.py            # dry-run
+    python scripts/cleanup_zotero_quick_deep.py --apply    # actually delete
+"""
+
+import asyncio
+import logging
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from sqlalchemy import select
+
+from app.clients.zotero import ZoteroClient
+from app.database import async_session
+from app.models.paper import Paper
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("cleanup_zotero_quick_deep")
+
+PREFIXES_TO_REMOVE = ("analysis_quick_", "analysis_deep_")
+
+
+async def main(apply: bool) -> None:
+    logger.info(f"Mode: {'APPLY' if apply else 'DRY-RUN'}")
+
+    async with async_session() as db:
+        r = await db.execute(
+            select(Paper).where(Paper.zotero_key.isnot(None))
+        )
+        papers = list(r.scalars().all())
+
+    logger.info(f"Scanning {len(papers)} papers on Zotero...")
+
+    client = ZoteroClient()
+    if not client.is_configured():
+        logger.error("Zotero not configured in .env")
+        return
+
+    total_scanned = 0
+    total_to_delete = 0
+    total_deleted = 0
+    papers_touched = 0
+
+    try:
+        for p in papers:
+            total_scanned += 1
+            try:
+                resp = await client._request(
+                    "GET",
+                    f"{client.user_prefix}/items/{p.zotero_key}/children",
+                    headers=client._headers(),
+                )
+                children = resp.json()
+            except Exception as e:
+                logger.warning(f"  paper {p.id} ({p.zotero_key}): failed to list children — {e}")
+                continue
+
+            targets = []
+            for ch in children:
+                data = ch.get("data", {})
+                if data.get("itemType") != "attachment":
+                    continue
+                fname = (data.get("filename") or "").lower()
+                if any(fname.startswith(pref) for pref in PREFIXES_TO_REMOVE):
+                    targets.append((data.get("key") or ch.get("key"), data.get("filename"), ch.get("version", 0)))
+
+            if not targets:
+                continue
+
+            papers_touched += 1
+            logger.info(f"Paper {p.id} ({p.zotero_key}): {[t[1] for t in targets]}")
+            for item_key, filename, version in targets:
+                total_to_delete += 1
+                if not apply:
+                    logger.info(f"  [DRY] would DELETE {filename} ({item_key})")
+                    continue
+                try:
+                    await client._request(
+                        "DELETE",
+                        f"{client.user_prefix}/items/{item_key}",
+                        headers={**client._headers(), "If-Unmodified-Since-Version": str(version)},
+                    )
+                    logger.info(f"  DELETED {filename} ({item_key})")
+                    total_deleted += 1
+                except Exception as e:
+                    logger.error(f"  FAILED to delete {filename} ({item_key}): {e}")
+    finally:
+        await client.close()
+
+    logger.info("")
+    logger.info(f"Scanned {total_scanned} papers")
+    logger.info(f"Papers with quick/deep attachments: {papers_touched}")
+    logger.info(f"Attachments to delete: {total_to_delete}")
+    if apply:
+        logger.info(f"Attachments actually deleted: {total_deleted}")
+    else:
+        logger.info("DRY-RUN complete. Re-run with --apply to actually delete.")
+
+
+if __name__ == "__main__":
+    apply = "--apply" in sys.argv
+    asyncio.run(main(apply))

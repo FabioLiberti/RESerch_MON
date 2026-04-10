@@ -924,21 +924,27 @@ async def validation_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Aggregate validation stats for the dashboard card."""
-    from sqlalchemy import func, and_
+    """Aggregate validation stats for the dashboard card.
+
+    Only counts EXT.ABS analyses — Quick/Deep/Summary are working notes that are
+    never reviewed, so including them would inflate the 'pending' count and
+    misrepresent progress.
+    """
+    from sqlalchemy import func
     from datetime import timedelta
 
-    # Total done analyses (latest version per paper+mode is too costly here, count rows)
+    EXT = AnalysisQueue.analysis_mode == "extended"
+
     total_done = (await db.execute(
-        select(func.count(AnalysisQueue.id)).where(AnalysisQueue.status == "done")
+        select(func.count(AnalysisQueue.id)).where(AnalysisQueue.status == "done", EXT)
     )).scalar() or 0
 
-    # By validation status
     by_status = {}
     for s in ("validated", "rejected", "needs_revision"):
         cnt = (await db.execute(
             select(func.count(AnalysisQueue.id)).where(
                 AnalysisQueue.status == "done",
+                EXT,
                 AnalysisQueue.validation_status == s,
             )
         )).scalar() or 0
@@ -947,22 +953,23 @@ async def validation_stats(
     pending = (await db.execute(
         select(func.count(AnalysisQueue.id)).where(
             AnalysisQueue.status == "done",
+            EXT,
             AnalysisQueue.validation_status.is_(None),
         )
     )).scalar() or 0
 
-    # This week (last 7 days)
     week_ago = datetime.utcnow() - timedelta(days=7)
     this_week = (await db.execute(
         select(func.count(AnalysisQueue.id)).where(
+            EXT,
             AnalysisQueue.validated_at >= week_ago,
         )
     )).scalar() or 0
 
-    # Average score
     avg_score_row = (await db.execute(
         select(func.avg(AnalysisQueue.validation_score)).where(
-            AnalysisQueue.validation_score.isnot(None)
+            EXT,
+            AnalysisQueue.validation_score.isnot(None),
         )
     )).scalar()
     avg_score = round(float(avg_score_row), 2) if avg_score_row else None
@@ -978,6 +985,185 @@ async def validation_stats(
     }
 
 
+class SectionEdit(BaseModel):
+    section: str
+    text: str
+
+
+class ForkRequest(BaseModel):
+    """Create a new analysis version by applying section edits from the reviewer."""
+    edits: list[SectionEdit]
+
+
+@router.post("/queue/{queue_id}/fork")
+async def fork_analysis(
+    queue_id: int,
+    body: ForkRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new analysis version applying reviewer's section edits.
+
+    Flow:
+        1. Load current analysis markdown from md_path
+        2. Split into sections by H2 headers
+        3. Replace edited sections with the reviewer's text
+        4. Reassemble markdown preserving order
+        5. Generate HTML / TEX / PDF via paper_report_generator
+        6. Insert new AnalysisQueue row with version+1, engine="reviewer_edit"
+        7. Return new queue_id so the caller can validate against it
+    """
+    from sqlalchemy.orm import selectinload
+    from app.models.paper import PaperAuthor
+    from app.services.paper_report_generator import (
+        render_paper_report,
+        save_report,
+        save_markdown,
+        save_latex,
+        generate_pdf,
+    )
+
+    # 1. Load original analysis row
+    original = await db.get(AnalysisQueue, queue_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if not original.md_path:
+        raise HTTPException(status_code=400, detail="Original analysis has no markdown file to edit")
+    md_file = Path(original.md_path)
+    if not md_file.exists():
+        raise HTTPException(status_code=404, detail="Original markdown file not found on disk")
+
+    # 2. Load and split markdown
+    raw = md_file.read_text(encoding="utf-8")
+    # Strip YAML front-matter if present
+    body_md = raw
+    if raw.startswith("---"):
+        end = raw.find("---", 3)
+        if end > 0:
+            body_md = raw[end + 3:].lstrip("\n")
+
+    sections = _split_md_sections(body_md)
+
+    # 3. Apply edits
+    edit_map = {e.section: e.text for e in body.edits}
+    edited_any = False
+    for sec_name, new_text in edit_map.items():
+        if sec_name in sections and sections[sec_name] != new_text:
+            sections[sec_name] = new_text
+            edited_any = True
+
+    if not edited_any:
+        raise HTTPException(status_code=400, detail="No effective edits provided")
+
+    # 4. Reassemble markdown (preamble first, then sections in original order)
+    lines: list[str] = []
+    # Re-build from the original to preserve ordering. Scan the original again
+    # and output each section with new content if edited.
+    buf: list[str] = []
+    current_section = "_preamble"
+    for line in body_md.splitlines():
+        if line.startswith("## "):
+            # Flush previous
+            if current_section == "_preamble":
+                lines.extend(buf)
+            else:
+                lines.append(sections.get(current_section, "\n".join(buf).strip()))
+                lines.append("")
+            current_section = line[3:].strip()
+            lines.append(line)
+            lines.append("")
+            buf = []
+        else:
+            buf.append(line)
+    # Flush last section
+    if current_section == "_preamble":
+        lines.extend(buf)
+    else:
+        lines.append(sections.get(current_section, "\n".join(buf).strip()))
+
+    new_markdown = "\n".join(lines).rstrip() + "\n"
+
+    # 5. Load paper + build paper_data expected by the generators
+    p_res = await db.execute(
+        select(Paper)
+        .where(Paper.id == original.paper_id)
+        .options(selectinload(Paper.authors).selectinload(PaperAuthor.author))
+    )
+    paper = p_res.unique().scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    authors_str = ", ".join(
+        pa.author.name for pa in sorted(paper.authors, key=lambda x: x.position) if pa.author
+    )
+    paper_data = {
+        "paper": paper,
+        "authors": authors_str,
+        "topics": [],
+        "sources": [],
+    }
+
+    mode = original.analysis_mode or "extended"
+    # 6. Determine new version number (max existing + 1 across queue AND disk)
+    max_v_row = await db.execute(
+        select(AnalysisQueue.version).where(
+            AnalysisQueue.paper_id == paper.id,
+            AnalysisQueue.analysis_mode == mode,
+        )
+    )
+    existing_versions = [v for (v,) in max_v_row.all() if v]
+    from app.services.paper_report_generator import _get_next_version
+    disk_next = _get_next_version(paper.id, mode)
+    new_version = max(max(existing_versions, default=0) + 1, disk_next)
+
+    # 7. Render and save the new artifacts
+    try:
+        html = render_paper_report(paper_data, new_markdown, engine="reviewer-edit", mode=mode)
+        html_path = save_report(html, paper.id, mode=mode, version=new_version)
+        md_path = save_markdown(new_markdown, paper.id, mode, paper_data, version=new_version)
+        tex_path = save_latex(new_markdown, paper.id, mode, paper_data, engine="reviewer-edit", version=new_version)
+        pdf_path = generate_pdf(html_path, tex_path)
+    except Exception as e:
+        logger.error(f"Fork analysis render failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Could not generate new version files: {e}")
+
+    # 8. Persist new AnalysisQueue entry
+    now = datetime.utcnow()
+    new_row = AnalysisQueue(
+        paper_id=paper.id,
+        analysis_mode=mode,
+        status="done",
+        error_message=f"engine:reviewer-edit|chars:{len(new_markdown)}|parent:{queue_id}",
+        html_path=str(html_path),
+        pdf_path=str(pdf_path) if pdf_path else None,
+        md_path=str(md_path),
+        tex_path=str(tex_path),
+        version=new_version,
+        zotero_synced=False,
+        created_at=now,
+        started_at=now,
+        completed_at=now,
+    )
+    db.add(new_row)
+    await db.flush()
+    await db.commit()
+    await db.refresh(new_row)
+
+    logger.info(
+        f"Fork: paper {paper.id} mode={mode} v{original.version} -> v{new_version} "
+        f"(edited sections: {list(edit_map.keys())}) new queue_id={new_row.id}"
+    )
+    return {
+        "queue_id": new_row.id,
+        "version": new_version,
+        "paper_id": paper.id,
+        "mode": mode,
+        "edited_sections": list(edit_map.keys()),
+        "pdf_path": str(pdf_path) if pdf_path else None,
+        "md_path": str(md_path),
+    }
+
+
 @router.get("/review-queue")
 async def review_queue(
     user: User = Depends(get_current_user),
@@ -985,19 +1171,38 @@ async def review_queue(
 ):
     """List analyses pending review (or marked needs_revision), ordered by paper rating desc."""
     from sqlalchemy import or_, desc
+    from app.models.label import Label, PaperLabel
+
+    # Review is currently only meaningful for EXT.ABS (the shareable artifact).
+    # Quick and Deep are working notes, Summary is auxiliary — none are reviewed.
     result = await db.execute(
         select(AnalysisQueue, Paper)
         .join(Paper, Paper.id == AnalysisQueue.paper_id)
         .where(
             AnalysisQueue.status == "done",
+            AnalysisQueue.analysis_mode == "extended",
             or_(
                 AnalysisQueue.validation_status.is_(None),
                 AnalysisQueue.validation_status == "needs_revision",
             ),
         )
-        .order_by(desc(Paper.rating).nulls_last(), AnalysisQueue.completed_at.asc())
+        # Order: highest-rated papers first. Within the same paper, NEWEST version
+        # first so the dedupe below keeps the current (not superseded) entry.
+        .order_by(desc(Paper.rating).nulls_last(), AnalysisQueue.completed_at.desc())
     )
     rows = result.all()
+
+    # Bulk-load labels for all papers in the queue (single query, no N+1)
+    paper_ids = list({p.id for _, p in rows})
+    labels_by_paper: dict[int, list[dict]] = {pid: [] for pid in paper_ids}
+    if paper_ids:
+        lbl_res = await db.execute(
+            select(PaperLabel.paper_id, Label.name, Label.color)
+            .join(Label, Label.id == PaperLabel.label_id)
+            .where(PaperLabel.paper_id.in_(paper_ids))
+        )
+        for pid, name, color in lbl_res.all():
+            labels_by_paper.setdefault(pid, []).append({"name": name, "color": color})
 
     # Keep only the latest version per (paper_id, mode) — older superseded entries skipped
     seen: set[tuple[int, str]] = set()
@@ -1015,6 +1220,7 @@ async def review_queue(
             "journal": paper.journal,
             "publication_date": paper.publication_date,
             "rating": paper.rating,
+            "labels": labels_by_paper.get(paper.id, []),
             "mode": aq.analysis_mode or "quick",
             "version": aq.version or 1,
             "validation_status": aq.validation_status,

@@ -86,10 +86,29 @@ def compute_rubric_score(rubric: list[dict], general_score: int | None = None) -
     return max(1, min(5, round(avg)))
 
 
-async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | None:
-    """Generate the formal validation report PDF for a paper.
+_TEMPLATE_MTIME: float | None = None
 
-    Returns the PDF path if generated, None if no validations exist or error.
+
+def _template_mtime() -> float:
+    """Mtime of this source file — used as a salt to invalidate the on-disk cache
+    whenever the template code changes."""
+    global _TEMPLATE_MTIME
+    if _TEMPLATE_MTIME is None:
+        _TEMPLATE_MTIME = Path(__file__).stat().st_mtime
+    return _TEMPLATE_MTIME
+
+
+async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | None:
+    """Generate (or serve from cache) the formal validation report PDF for a paper.
+
+    Cache strategy:
+        The PDF is regenerated only if any of these has changed since last build:
+            - latest validated_at among the paper's analyses
+            - any rubric/notes/score updated_at (we use validated_at as proxy)
+            - mtime of this source file (template code change)
+        Otherwise the existing PDF on disk is served as-is.
+
+    Returns the PDF path, or None if no validations exist / build failed.
     """
     paper = await db.get(Paper, paper_id)
     if not paper:
@@ -119,6 +138,22 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
     if not validated:
         # No validations at all — don't generate report
         return None
+
+    # ---------- Cache check ----------
+    reports_dir_chk = Path(settings.reports_path) / "analysis"
+    pdf_path_chk = reports_dir_chk / f"validation_{paper_id}.pdf"
+    latest_validation = max(
+        (a.validated_at.timestamp() for a in validated if a.validated_at),
+        default=0.0,
+    )
+    cache_floor = max(latest_validation, _template_mtime())
+    if pdf_path_chk.exists():
+        try:
+            if pdf_path_chk.stat().st_mtime >= cache_floor and pdf_path_chk.stat().st_size > 0:
+                logger.debug(f"Validation PDF cache hit: {pdf_path_chk}")
+                return pdf_path_chk
+        except OSError:
+            pass
 
     # Build LaTeX
     title = _esc(paper.title)
@@ -184,14 +219,14 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
                     rubric_table = (
                         "\\vspace{0.4em}\n"
                         "\\noindent\\textbf{Section-by-section rubric:}\n"
-                        "\\vspace{0.2em}\n"
-                        "\\begin{tabular}{@{}p{3.8cm}p{1.4cm}p{9.4cm}@{}}\n"
+                        "\\vspace{0.2em}\n\n"
+                        "\\noindent\\begin{tabularx}{\\linewidth}{@{}p{4.2cm}p{1.2cm}X@{}}\n"
                         "\\hline\n"
                         "\\textbf{Section} & \\textbf{Score} & \\textbf{Note} \\\\\n"
                         "\\hline\n"
                         + "".join(rows)
                         + "\\hline\n"
-                        "\\end{tabular}\n"
+                        "\\end{tabularx}\n"
                     )
                     if isinstance(general_score, int) and 1 <= general_score <= 5:
                         general_score_line = f"\\textbf{{General notes score}} & {general_score}/5 \\\\\n"
@@ -206,7 +241,7 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
         score_label = "Reviewer score" if a.validation_score is not None else "Score"
         block = (
             f"\\subsection*{{{mode_label} (v{version})}}\n"
-            f"\\begin{{tabular}}{{@{{}}p{{3.5cm}}p{{12cm}}@{{}}}}\n"
+            f"\\noindent\\begin{{tabularx}}{{\\linewidth}}{{@{{}}p{{3.5cm}}X@{{}}}}\n"
             f"\\textbf{{Status}}      & \\textcolor{{{status_color}}}{{\\textbf{{{status}}}}} \\\\\n"
             f"\\textbf{{{score_label}}} & {score} \\\\\n"
             f"{computed_line}"
@@ -214,7 +249,7 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
             f"\\textbf{{Date}}        & {date} \\\\\n"
             f"\\textbf{{Validator}}   & {validator} \\\\\n"
             f"\\textbf{{Notes}}       & {notes} \\\\\n"
-            f"\\end{{tabular}}\n"
+            f"\\end{{tabularx}}\n"
             f"{rubric_table}"
             f"\\vspace{{0.8em}}\n"
         )
@@ -236,6 +271,22 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
 
     generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
+    # Author signature from app settings (configurable from /settings UI)
+    from app.services.app_settings import (
+        get_setting_sync,
+        KEY_PDF_AUTHOR_SIGNATURE,
+        KEY_PDF_AUTHOR_AFFILIATION,
+    )
+    author_sig = get_setting_sync(KEY_PDF_AUTHOR_SIGNATURE, "").strip()
+    author_aff = get_setting_sync(KEY_PDF_AUTHOR_AFFILIATION, "").strip()
+    if author_sig:
+        author_line = _esc(author_sig)
+        if author_aff:
+            author_line += " --- " + _esc(author_aff)
+        footer_text = f"Reviewed by {author_line} \\quad\\textbar\\quad Generated by FL Research Monitor --- {generated_at}"
+    else:
+        footer_text = f"Generated by FL Research Monitor --- {generated_at}"
+
     tex = f"""\\documentclass[11pt,a4paper]{{article}}
 \\usepackage[utf8]{{inputenc}}
 \\usepackage[T1]{{fontenc}}
@@ -247,6 +298,7 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
 \\usepackage{{xcolor}}
 \\usepackage{{enumitem}}
 \\usepackage{{titlesec}}
+\\usepackage{{tabularx}}
 \\usepackage{{hyperref}}
 
 \\definecolor{{darkgreen}}{{RGB}}{{0,120,0}}
@@ -284,7 +336,7 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
 \\vfill
 \\hrule
 \\vspace{{0.4em}}
-{{\\footnotesize\\textcolor{{gray}}{{Generated by FL Research Monitor --- {generated_at}}}}}
+{{\\footnotesize\\textcolor{{gray}}{{{footer_text}}}}}
 
 \\end{{document}}
 """
@@ -299,6 +351,14 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
 
     tex_path.write_text(tex, encoding="utf-8")
     logger.info(f"Validation tex saved: {tex_path}")
+
+    # Delete the old PDF first so we never accidentally serve a stale file
+    # if pdflatex fails silently below.
+    if pdf_path.exists():
+        try:
+            pdf_path.unlink()
+        except OSError as e:
+            logger.warning(f"Could not remove stale validation PDF: {e}")
 
     # Compile with pdflatex
     try:
@@ -318,7 +378,12 @@ async def generate_validation_report(db: AsyncSession, paper_id: int) -> Path | 
             logger.info(f"Validation PDF generated: {pdf_path}")
             return pdf_path
         else:
-            logger.warning(f"pdflatex failed for validation report. Return: {result.returncode}")
+            # Compile failed. Log enough to diagnose (last 30 lines of stdout).
+            tail = "\n".join((result.stdout or "").splitlines()[-30:])
+            logger.error(
+                f"pdflatex FAILED for validation report (rc={result.returncode}). "
+                f"Last output:\n{tail}"
+            )
             return None
     except Exception as e:
         logger.error(f"Validation PDF generation error: {e}")

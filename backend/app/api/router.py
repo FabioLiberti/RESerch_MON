@@ -17,6 +17,8 @@ from app.api.labels import router as labels_router
 from app.api.bibliography import router as bibliography_router
 from app.api.comparison import router as comparison_router
 from app.api.zotero import router as zotero_router
+from app.api.app_settings import router as app_settings_router
+from app.api.peer_review import router as peer_review_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -40,3 +42,5 @@ api_router.include_router(labels_router, prefix="/labels", tags=["labels"], depe
 api_router.include_router(bibliography_router, prefix="/bibliography", tags=["bibliography"], dependencies=[Depends(get_current_user)])
 api_router.include_router(comparison_router, prefix="/comparison", tags=["comparison"], dependencies=[Depends(get_current_user)])
 api_router.include_router(zotero_router, prefix="/zotero", tags=["zotero"], dependencies=[Depends(get_current_user)])
+api_router.include_router(app_settings_router, prefix="/app-settings", tags=["app-settings"], dependencies=[Depends(get_current_user)])
+api_router.include_router(peer_review_router, prefix="/peer-review", tags=["peer-review"], dependencies=[Depends(get_current_user)])

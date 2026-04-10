@@ -1,0 +1,320 @@
+"""Peer review report generator — PDF (LaTeX) and plain-text formats.
+
+Produces a formal reviewer report suitable for:
+    - sharing with the journal editor (PDF)
+    - copy-pasting into journal submission systems (TXT)
+"""
+
+import json
+import logging
+import re
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+from app.config import settings
+from app.models.peer_review import PeerReview
+from app.services.app_settings import (
+    KEY_PDF_AUTHOR_AFFILIATION,
+    KEY_PDF_AUTHOR_SIGNATURE,
+    get_setting_sync,
+)
+
+logger = logging.getLogger(__name__)
+
+# Standard peer-review rubric dimensions (journal-agnostic).
+RUBRIC_DIMENSIONS: list[str] = [
+    "Originality",
+    "Significance",
+    "Technical quality",
+    "Clarity of presentation",
+    "Adequacy of references",
+    "Organization and language",
+]
+
+RECOMMENDATION_LABELS: dict[str, str] = {
+    "accept": "Accept",
+    "minor_revision": "Minor Revision",
+    "major_revision": "Major Revision",
+    "reject": "Reject",
+}
+
+
+def empty_rubric() -> list[dict]:
+    return [{"dimension": d, "score": None, "comment": ""} for d in RUBRIC_DIMENSIONS]
+
+
+def _esc(s: str | None) -> str:
+    if not s:
+        return ""
+    return (
+        s.replace("\\", "\\textbackslash{}")
+        .replace("&", "\\&")
+        .replace("%", "\\%")
+        .replace("#", "\\#")
+        .replace("_", "\\_")
+        .replace("$", "\\$")
+        .replace("{", "\\{")
+        .replace("}", "\\}")
+    )
+
+
+def _parse_rubric(rubric_json: str | None) -> list[dict]:
+    if not rubric_json:
+        return empty_rubric()
+    try:
+        data = json.loads(rubric_json)
+    except Exception:
+        return empty_rubric()
+    if isinstance(data, dict):
+        items = data.get("items") or []
+    elif isinstance(data, list):
+        items = data
+    else:
+        items = []
+    return items or empty_rubric()
+
+
+# ---------- TXT export ----------
+
+def build_txt(pr: PeerReview) -> str:
+    """Plain-text review report, suitable for pasting into journal systems."""
+    rubric = _parse_rubric(pr.rubric_json)
+    lines: list[str] = []
+    lines.append("=" * 72)
+    lines.append("PEER REVIEW REPORT")
+    lines.append("=" * 72)
+    lines.append("")
+    lines.append(f"Manuscript: {pr.title}")
+    if pr.authors:
+        lines.append(f"Authors: {pr.authors}")
+    if pr.target_journal:
+        lines.append(f"Journal: {pr.target_journal}")
+    if pr.manuscript_id:
+        lines.append(f"Manuscript ID: {pr.manuscript_id}")
+    if pr.reviewer_role:
+        lines.append(f"Reviewer role: {pr.reviewer_role}")
+    lines.append(f"Review date: {datetime.utcnow().strftime('%Y-%m-%d')}")
+    lines.append("")
+
+    # Recommendation
+    rec = RECOMMENDATION_LABELS.get(pr.recommendation or "", pr.recommendation or "— not set —")
+    lines.append("-" * 72)
+    lines.append(f"RECOMMENDATION: {rec.upper()}")
+    lines.append("-" * 72)
+    lines.append("")
+
+    # Rubric scores
+    lines.append("EVALUATION BY DIMENSION")
+    lines.append("-" * 72)
+    for it in rubric:
+        dim = it.get("dimension", "")
+        sc = it.get("score")
+        score_str = f"{sc}/5" if sc else "—"
+        lines.append(f"  {dim:<32s} {score_str}")
+        comment = (it.get("comment") or "").strip()
+        if comment:
+            for cline in comment.splitlines():
+                lines.append(f"      {cline}")
+        lines.append("")
+
+    # Comments to authors
+    if pr.comments_to_authors and pr.comments_to_authors.strip():
+        lines.append("=" * 72)
+        lines.append("COMMENTS TO AUTHORS")
+        lines.append("=" * 72)
+        lines.append("")
+        lines.append(pr.comments_to_authors.strip())
+        lines.append("")
+
+    # Confidential comments to editor
+    if pr.confidential_comments and pr.confidential_comments.strip():
+        lines.append("=" * 72)
+        lines.append("CONFIDENTIAL COMMENTS TO EDITOR")
+        lines.append("(not visible to authors)")
+        lines.append("=" * 72)
+        lines.append("")
+        lines.append(pr.confidential_comments.strip())
+        lines.append("")
+
+    # Footer
+    sig = get_setting_sync(KEY_PDF_AUTHOR_SIGNATURE, "").strip()
+    aff = get_setting_sync(KEY_PDF_AUTHOR_AFFILIATION, "").strip()
+    lines.append("-" * 72)
+    if sig:
+        lines.append(f"Reviewer: {sig}" + (f" — {aff}" if aff else ""))
+    lines.append(f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------- LaTeX / PDF export ----------
+
+def build_tex(pr: PeerReview) -> str:
+    rubric = _parse_rubric(pr.rubric_json)
+    sig = get_setting_sync(KEY_PDF_AUTHOR_SIGNATURE, "").strip()
+    aff = get_setting_sync(KEY_PDF_AUTHOR_AFFILIATION, "").strip()
+    generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    if sig:
+        footer_line = f"Reviewer: {_esc(sig)}" + (f" --- {_esc(aff)}" if aff else "")
+        footer_line += f" \\quad\\textbar\\quad Generated by FL Research Monitor --- {generated_at}"
+    else:
+        footer_line = f"Generated by FL Research Monitor --- {generated_at}"
+
+    rec_label = RECOMMENDATION_LABELS.get(pr.recommendation or "", "— not set —")
+    rec_color = {
+        "accept": "darkgreen",
+        "minor_revision": "orange",
+        "major_revision": "orange",
+        "reject": "darkred",
+    }.get(pr.recommendation or "", "gray")
+
+    # Build rubric rows
+    rubric_rows: list[str] = []
+    for it in rubric:
+        dim = _esc(it.get("dimension", ""))
+        sc = it.get("score")
+        score_cell = f"{sc}/5" if sc else "--"
+        comment = _esc((it.get("comment") or "").replace("\n", " \\newline "))
+        rubric_rows.append(f"{dim} & {score_cell} & {comment} \\\\\n")
+
+    # Body sections
+    def _text_block(title: str, content: str | None) -> str:
+        if not content or not content.strip():
+            return ""
+        # Preserve line breaks via \\
+        esc_content = _esc(content).replace("\n", " \\newline ")
+        return (
+            f"\\subsection*{{{title}}}\n"
+            f"\\noindent {esc_content}\n"
+            f"\\vspace{{0.6em}}\n\n"
+        )
+
+    authors_line = f"{{\\normalsize {_esc(pr.authors)}}}\\\\[0.4em]" if pr.authors else ""
+    journal_line_parts = []
+    if pr.target_journal:
+        journal_line_parts.append(f"Journal: {_esc(pr.target_journal)}")
+    if pr.manuscript_id:
+        journal_line_parts.append(f"ID: {_esc(pr.manuscript_id)}")
+    if pr.reviewer_role:
+        journal_line_parts.append(_esc(pr.reviewer_role))
+    journal_line = " \\quad\\textbar\\quad ".join(journal_line_parts)
+
+    tex = f"""\\documentclass[11pt,a4paper]{{article}}
+\\usepackage[utf8]{{inputenc}}
+\\usepackage[T1]{{fontenc}}
+\\usepackage[english]{{babel}}
+\\usepackage{{geometry}}
+\\geometry{{a4paper,top=2.5cm,bottom=2.5cm,left=2.8cm,right=2.8cm}}
+\\usepackage{{lmodern}}
+\\usepackage{{microtype}}
+\\usepackage{{xcolor}}
+\\usepackage{{enumitem}}
+\\usepackage{{titlesec}}
+\\usepackage{{tabularx}}
+\\usepackage{{hyperref}}
+
+\\definecolor{{darkgreen}}{{RGB}}{{0,120,0}}
+\\definecolor{{darkred}}{{RGB}}{{180,0,0}}
+\\definecolor{{orange}}{{RGB}}{{220,120,0}}
+
+\\hypersetup{{colorlinks=false,pdfborder={{0 0 0}}}}
+\\setcounter{{secnumdepth}}{{0}}
+
+\\titleformat{{\\subsection}}{{\\normalfont\\normalsize\\bfseries\\scshape}}{{}}{{0pt}}{{}}[\\vspace{{0.2em}}]
+\\titlespacing*{{\\subsection}}{{0pt}}{{1em}}{{0.4em}}
+
+\\pagestyle{{plain}}
+\\setlength{{\\parskip}}{{0.4em}}
+\\setlength{{\\parindent}}{{0pt}}
+\\newcommand{{\\newline}}{{\\\\}}
+
+\\begin{{document}}
+
+\\begin{{center}}
+{{\\Large\\bfseries\\scshape Peer Review Report}}\\\\[1em]
+{{\\large {_esc(pr.title)}}}\\\\[0.4em]
+{authors_line}
+{{\\small {journal_line}}}
+\\end{{center}}
+
+\\vspace{{1em}}
+\\hrule
+\\vspace{{1em}}
+
+\\noindent\\begin{{tabularx}}{{\\linewidth}}{{@{{}}p{{3.5cm}}X@{{}}}}
+\\textbf{{Recommendation}} & \\textcolor{{{rec_color}}}{{\\textbf{{{rec_label.upper()}}}}} \\\\
+\\textbf{{Review date}}    & {datetime.utcnow().strftime("%Y-%m-%d")} \\\\
+\\end{{tabularx}}
+
+\\vspace{{0.8em}}
+
+\\subsection*{{Evaluation by Dimension}}
+
+\\noindent\\begin{{tabularx}}{{\\linewidth}}{{@{{}}p{{4.8cm}}p{{1.4cm}}X@{{}}}}
+\\hline
+\\textbf{{Dimension}} & \\textbf{{Score}} & \\textbf{{Comment}} \\\\
+\\hline
+{''.join(rubric_rows)}\\hline
+\\end{{tabularx}}
+
+\\vspace{{0.8em}}
+
+{_text_block("Comments to Authors", pr.comments_to_authors)}
+{_text_block("Confidential Comments to Editor", pr.confidential_comments)}
+
+\\vfill
+\\hrule
+\\vspace{{0.4em}}
+{{\\footnotesize\\textcolor{{gray}}{{{footer_line}}}}}
+
+\\end{{document}}
+"""
+    return tex
+
+
+def generate_review_artifacts(pr: PeerReview) -> tuple[Path | None, Path | None]:
+    """Generate both PDF and TXT review artifacts. Returns (pdf_path, txt_path)."""
+    reports_dir = Path(settings.reports_path) / "peer-review"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    basename = f"peer_review_{pr.id}"
+    tex_path = reports_dir / f"{basename}.tex"
+    pdf_path = reports_dir / f"{basename}.pdf"
+    txt_path = reports_dir / f"{basename}.txt"
+
+    # TXT first (fast, always succeeds)
+    txt_path.write_text(build_txt(pr), encoding="utf-8")
+
+    # LaTeX
+    tex_path.write_text(build_tex(pr), encoding="utf-8")
+    # Remove stale PDF before compile
+    if pdf_path.exists():
+        try:
+            pdf_path.unlink()
+        except OSError:
+            pass
+
+    try:
+        result = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", tex_path.name],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=str(tex_path.parent),
+        )
+        if pdf_path.exists() and pdf_path.stat().st_size > 0:
+            for ext in [".aux", ".log", ".out"]:
+                aux = tex_path.with_suffix(ext)
+                if aux.exists():
+                    aux.unlink()
+            return pdf_path, txt_path
+        else:
+            tail = "\n".join((result.stdout or "").splitlines()[-30:])
+            logger.error(f"pdflatex FAILED for peer review {pr.id} (rc={result.returncode}): {tail}")
+            return None, txt_path
+    except Exception as e:
+        logger.error(f"Peer review PDF generation error: {e}")
+        return None, txt_path

@@ -12,7 +12,7 @@ export interface Paper {
   topics: string[];
   keywords: string[];
   labels: { id: number; name: string; color: string }[];
-  analyses: { mode: string; status: string; zotero_synced?: boolean }[];
+  analyses: { mode: string; status: string; zotero_synced?: boolean; validation_status?: string | null; validation_score?: number | null }[];
   has_note: boolean;
   disabled: boolean;
   on_zotero: boolean;
