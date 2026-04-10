@@ -17,10 +17,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.clients.zotero import ZoteroClient
 from app.database import async_session
+from app.models.analysis import AnalysisQueue
 from app.models.paper import Paper
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -102,7 +103,30 @@ async def main(apply: bool) -> None:
     logger.info(f"Attachments to delete: {total_to_delete}")
     if apply:
         logger.info(f"Attachments actually deleted: {total_deleted}")
-    else:
+
+    # Reset DB flag: any AnalysisQueue row of mode quick/deep marked zotero_synced=True
+    # is stale data — the corresponding file no longer exists on Zotero.
+    async with async_session() as db:
+        r = await db.execute(
+            select(AnalysisQueue.id).where(
+                AnalysisQueue.analysis_mode.in_(["quick", "deep"]),
+                AnalysisQueue.zotero_synced.is_(True),
+            )
+        )
+        stale_ids = [row[0] for row in r.all()]
+        logger.info(f"Stale zotero_synced=True flags on quick/deep AnalysisQueue rows: {len(stale_ids)}")
+        if apply and stale_ids:
+            await db.execute(
+                update(AnalysisQueue)
+                .where(AnalysisQueue.id.in_(stale_ids))
+                .values(zotero_synced=False)
+            )
+            await db.commit()
+            logger.info(f"Reset zotero_synced=False on {len(stale_ids)} rows.")
+        elif stale_ids:
+            logger.info(f"[DRY] would reset zotero_synced=False on {len(stale_ids)} rows.")
+
+    if not apply:
         logger.info("DRY-RUN complete. Re-run with --apply to actually delete.")
 
 

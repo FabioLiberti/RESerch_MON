@@ -101,7 +101,15 @@ async def sync_analysis(
     # too obviously LLM-generated and would compromise the academic framing
     # of the validation report.
     ZOTERO_SHAREABLE_MODES = {"extended", "summary"}
+    excluded = [a for a in analyses_to_sync if (a.analysis_mode or "quick") not in ZOTERO_SHAREABLE_MODES]
     analyses_to_sync = [a for a in analyses_to_sync if (a.analysis_mode or "quick") in ZOTERO_SHAREABLE_MODES]
+
+    # Any non-shareable analysis that was previously marked as synced is now
+    # stale data: the corresponding file no longer exists on Zotero. Reset the
+    # flag so the badge in the papers list reflects reality.
+    for a in excluded:
+        if a.zotero_synced:
+            a.zotero_synced = False
 
     if not analyses_to_sync:
         raise HTTPException(status_code=404, detail="No shareable analysis (extended/summary) found for this paper")

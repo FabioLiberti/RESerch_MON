@@ -630,17 +630,23 @@ export default function PapersPage() {
                       )}
                       {paper.analyses && paper.analyses.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1 mt-1">
-                          {paper.analyses.map((a) => (
-                            <span
-                              key={a.mode}
-                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5 ${
-                                a.mode === "deep" ? "bg-purple-700 text-white" : a.mode === "summary" ? "bg-amber-600 text-white" : a.mode === "extended" ? "bg-red-700 text-white" : "bg-blue-700 text-white"
-                              }`}
-                            >
-                              {a.mode === "extended" ? "EXT.ABS" : (a.mode || "quick").toUpperCase()}
-                              {a.zotero_synced && <span title="Synced to Zotero">✓Z</span>}
-                            </span>
-                          ))}
+                          {paper.analyses.map((a) => {
+                            // Quick and Deep are local-only working notes. Even if the
+                            // legacy DB flag still says zotero_synced, we never show ✓Z
+                            // for them because they have been deleted from Zotero.
+                            const shareable = a.mode === "extended" || a.mode === "summary";
+                            return (
+                              <span
+                                key={a.mode}
+                                className={`text-[9px] px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5 ${
+                                  a.mode === "deep" ? "bg-purple-700 text-white" : a.mode === "summary" ? "bg-amber-600 text-white" : a.mode === "extended" ? "bg-red-700 text-white" : "bg-blue-700 text-white"
+                                }`}
+                              >
+                                {a.mode === "extended" ? "EXT.ABS" : (a.mode || "quick").toUpperCase()}
+                                {shareable && a.zotero_synced && <span title="Synced to Zotero">✓Z</span>}
+                              </span>
+                            );
+                          })}
                           {/* Review circle: R inside a colored circle reflecting the EXT.ABS review outcome. */}
                           {(() => {
                             const ext = paper.analyses.find(a => a.mode === "extended");

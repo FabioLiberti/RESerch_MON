@@ -25,6 +25,9 @@ class PeerReview(Base):
     deadline = Column(String(10), nullable=True)   # YYYY-MM-DD
     reviewer_role = Column(String(50), nullable=True)    # e.g. "Reviewer 2"
 
+    # Which review template drives the rubric / recommendations / extras
+    template_id = Column(String(50), default="generic", nullable=False)
+
     # --- PDF file ---
     pdf_path = Column(Text, nullable=True)          # local path under data/peer-review/{id}/
 
@@ -35,9 +38,14 @@ class PeerReview(Base):
     confidential_comments = Column(Text, nullable=True)
     recommendation = Column(String(30), nullable=True)   # accept | minor_revision | major_revision | reject
 
-    # --- Generated artifacts (cached) ---
+    # --- Reviewer's private working notes (NEVER included in the review output) ---
+    private_notes = Column(Text, nullable=True)
+
+    # --- Generated artifacts (cached, all four formats kept in sync) ---
     review_pdf_path = Column(Text, nullable=True)
     review_txt_path = Column(Text, nullable=True)
+    review_md_path  = Column(Text, nullable=True)
+    review_tex_path = Column(Text, nullable=True)
 
     # --- Lifecycle ---
     status = Column(String(20), default="draft")   # draft | in_progress | submitted | archived
