@@ -131,14 +131,30 @@ async def list_quality_reviews(
     db: AsyncSession = Depends(get_db),
 ):
     """List all papers that have a CURRENT quality review, newest update first."""
+    from app.models.label import Label, PaperLabel
+
     r = await db.execute(
         select(PaperQualityReview, Paper)
         .join(Paper, Paper.id == PaperQualityReview.paper_id)
         .where(PaperQualityReview.is_current.is_(True))
         .order_by(desc(PaperQualityReview.updated_at))
     )
+    rows = r.all()
+
+    # Bulk-load labels for all papers in the result (single query, no N+1)
+    paper_ids = list({p.id for _, p in rows})
+    labels_by_paper: dict[int, list[dict]] = {pid: [] for pid in paper_ids}
+    if paper_ids:
+        lbl_res = await db.execute(
+            select(PaperLabel.paper_id, Label.name, Label.color)
+            .join(Label, Label.id == PaperLabel.label_id)
+            .where(PaperLabel.paper_id.in_(paper_ids))
+        )
+        for pid, name, color in lbl_res.all():
+            labels_by_paper.setdefault(pid, []).append({"name": name, "color": color})
+
     out: list[dict] = []
-    for pr, paper in r.all():
+    for pr, paper in rows:
         out.append({
             "paper_id": paper.id,
             "title": paper.title,
@@ -146,6 +162,7 @@ async def list_quality_reviews(
             "journal": paper.journal,
             "publication_date": paper.publication_date,
             "rating": paper.rating,
+            "labels": labels_by_paper.get(paper.id, []),
             "version": pr.version,
             "overall_grade": pr.overall_grade,
             "overall_score": pr.overall_score,

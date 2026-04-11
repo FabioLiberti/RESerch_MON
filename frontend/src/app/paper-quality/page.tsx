@@ -11,6 +11,7 @@ interface QualityListItem {
   journal: string | null;
   publication_date: string | null;
   rating: number | null;
+  labels: { name: string; color: string }[];
   version: number;
   overall_grade: string | null;
   overall_score: number | null;
@@ -123,6 +124,24 @@ export default function PaperQualityListPage() {
                     {it.journal && (
                       <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5 truncate">
                         {it.journal} {it.publication_date ? `· ${it.publication_date.slice(0, 7)}` : ""}
+                      </div>
+                    )}
+                    {it.labels && it.labels.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {it.labels.map((lbl) => (
+                          <span
+                            key={lbl.name}
+                            className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded font-medium"
+                            style={{
+                              backgroundColor: `${lbl.color}25`,
+                              color: lbl.color,
+                              border: `1px solid ${lbl.color}55`,
+                            }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: lbl.color }} />
+                            {lbl.name}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </td>

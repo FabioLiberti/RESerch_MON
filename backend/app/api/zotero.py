@@ -186,11 +186,13 @@ async def sync_analysis(
 
         # Update Extra field and tags with validation summary
         try:
-            # Rebuild extra: rating + validation
+            # Rebuild extra: rating (always shown, even when not yet set) + validation
             extra_lines: list[str] = []
             if paper.rating:
                 stars = "★" * paper.rating + "☆" * (5 - paper.rating)
                 extra_lines.append(f"Rating: {stars} ({paper.rating}/5)")
+            else:
+                extra_lines.append("Rating: ☆☆☆☆☆ (not yet rated)")
             extra_lines.append(f"Validation: {validation_summary['overall']}")
             if validation_summary["validated_modes"]:
                 extra_lines.append(f"Validated: {', '.join(validation_summary['validated_modes'])}")

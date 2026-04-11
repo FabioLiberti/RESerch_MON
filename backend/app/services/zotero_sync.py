@@ -92,11 +92,15 @@ class ZoteroSyncService:
             if label.name not in tags:
                 tags.append(label.name)
 
-        # Build extra field with rating + validation summary
+        # Build extra field with rating + validation summary.
+        # Rating is ALWAYS rendered (even when not yet set) so it stays visible
+        # in Zotero as a reminder to grade the paper.
         extra_lines = []
         if paper.rating:
             stars = "★" * paper.rating + "☆" * (5 - paper.rating)
             extra_lines.append(f"Rating: {stars} ({paper.rating}/5)")
+        else:
+            extra_lines.append("Rating: ☆☆☆☆☆ (not yet rated)")
 
         # Validation summary (latest analysis per mode)
         analysis_result = await db.execute(
