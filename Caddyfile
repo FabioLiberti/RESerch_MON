@@ -1,0 +1,37 @@
+# FL Research Monitor — local Caddy reverse proxy
+#
+# Routes:
+#   /api/*  -> backend:8000  (FastAPI)
+#   /*      -> frontend:3000 (Next.js standalone)
+#
+# Local dev only (plain HTTP on :8080). Production config will add TLS + domain.
+
+{
+    # Disable automatic HTTPS for local dev
+    auto_https off
+    admin off
+}
+
+:8080 {
+    # Backend API — matched first (Caddy evaluates handle blocks in order)
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Static data files served by backend (PDFs, reports, compendium data)
+    handle /data/* {
+        reverse_proxy backend:8000
+    }
+
+    # Everything else goes to Next.js
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    # Minimal request log to stdout
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

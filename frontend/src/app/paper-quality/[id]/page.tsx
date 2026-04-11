@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { authHeaders } from "@/lib/authHeaders";
 
 interface RubricItem {
   key?: string;
@@ -81,32 +82,27 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
   const [overallAssessment, setOverallAssessment] = useState("");
   const [privateNotes, setPrivateNotes] = useState("");
 
-  const auth = () => {
-    const t = localStorage.getItem("fl-token");
-    return t ? { Authorization: `Bearer ${t}` } : {};
-  };
-
   const reload = async () => {
     setLoading(true);
     try {
       // 1. Fetch paper minimal info
-      const pr = await fetch(`/api/v1/papers/${paperId}`, { headers: auth() });
+      const pr = await fetch(`/api/v1/papers/${paperId}`, { headers: authHeaders() });
       if (!pr.ok) throw new Error("Paper not found");
       const paperData = await pr.json();
       setPaperTitle(paperData.title);
       setPaperHasPdf(!!paperData.has_pdf);
 
       // 2. Try to fetch the current quality review (404 ⇒ no review yet)
-      const current = await fetch(`/api/v1/paper-quality/${paperId}`, { headers: auth() });
+      const current = await fetch(`/api/v1/paper-quality/${paperId}`, { headers: authHeaders() });
       if (current.status === 404) {
         // No review yet — create empty v1
-        const tplRes = await fetch("/api/v1/peer-review/templates", { headers: auth() });
+        const tplRes = await fetch("/api/v1/peer-review/templates", { headers: authHeaders() });
         const templates = await tplRes.json();
         const tpl = templates.find((t: any) => t.id === "paper-quality");
         // Create v1 with empty rubric server-side
         const create = await fetch(`/api/v1/paper-quality/${paperId}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...auth() },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({ template_id: "paper-quality" }),
         });
         if (!create.ok) {
@@ -124,7 +120,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
       }
 
       // 3. Fetch history
-      const h = await fetch(`/api/v1/paper-quality/${paperId}/history`, { headers: auth() });
+      const h = await fetch(`/api/v1/paper-quality/${paperId}/history`, { headers: authHeaders() });
       if (h.ok) setHistory(await h.json());
     } catch (e: any) {
       setError(e.message || "Load failed");
@@ -168,7 +164,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (!paperHasPdf || pdfBlobUrl || pdfLoading) return;
     setPdfLoading(true);
-    fetch(`/api/v1/papers/${paperId}/pdf-file`, { headers: auth() })
+    fetch(`/api/v1/papers/${paperId}/pdf-file`, { headers: authHeaders() })
       .then(r => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(blob => setPdfBlobUrl(URL.createObjectURL(blob)))
       .catch(() => setPaperHasPdf(false))
@@ -190,7 +186,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
     try {
       const r = await fetch(`/api/v1/paper-quality/${paperId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", ...auth() },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           rubric: { template_id: pqr?.template_id, items: rubric, extras },
           overall_grade: overallGrade || null,
@@ -227,7 +223,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
       await save();
       const r = await fetch(`/api/v1/paper-quality/${paperId}/new-version`, {
         method: "POST",
-        headers: auth(),
+        headers: authHeaders(),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -247,7 +243,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
   const switchVersion = async (version: number) => {
     if (!pqr || version === pqr.version) return;
     try {
-      const r = await fetch(`/api/v1/paper-quality/${paperId}/v/${version}`, { headers: auth() });
+      const r = await fetch(`/api/v1/paper-quality/${paperId}/v/${version}`, { headers: authHeaders() });
       if (!r.ok) throw new Error("Version not found");
       const data = await r.json();
       applyState(data);
@@ -259,7 +255,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
   const downloadFmt = async (fmt: "pdf" | "tex" | "md" | "txt") => {
     if (!pqr) return;
     await save();
-    const r = await fetch(`/api/v1/paper-quality/${paperId}/v/${pqr.version}/${fmt}`, { headers: auth() });
+    const r = await fetch(`/api/v1/paper-quality/${paperId}/v/${pqr.version}/${fmt}`, { headers: authHeaders() });
     if (!r.ok) {
       alert(`Could not generate ${fmt.toUpperCase()}`);
       return;
@@ -294,7 +290,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
     try {
       const r = await fetch(`/api/v1/paper-quality/${paperId}/llm-suggest`, {
         method: "POST",
-        headers: auth(),
+        headers: authHeaders(),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));

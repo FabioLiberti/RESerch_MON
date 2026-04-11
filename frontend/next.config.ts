@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 'standalone' builds a minimal server bundle for Docker images.
+  // Ignored by `next dev`, so local development is unaffected.
+  output: "standalone",
   turbopack: {
     root: ".",
   },

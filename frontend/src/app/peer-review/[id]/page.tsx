@@ -5,6 +5,7 @@ import { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { authHeaders } from "@/lib/authHeaders";
 
 interface RubricItem {
   key?: string;
@@ -111,9 +112,8 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const [status, setStatus] = useState<string>("draft");
 
   const reload = async () => {
-    const token = localStorage.getItem("fl-token");
     const r = await fetch(`/api/v1/peer-review/${id}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     });
     if (!r.ok) {
       setError("Not found");
@@ -166,9 +166,8 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   useEffect(() => {
     if (!pr?.has_pdf || pdfBlobUrl || pdfLoading) return;
     setPdfLoading(true);
-    const token = localStorage.getItem("fl-token");
     fetch(`/api/v1/peer-review/${id}/pdf`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     })
       .then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((blob) => setPdfBlobUrl(URL.createObjectURL(blob)))
@@ -189,12 +188,11 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
     setSaveMsg(null);
     setError(null);
     try {
-      const token = localStorage.getItem("fl-token");
       const r = await fetch(`/api/v1/peer-review/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...authHeaders(),
         },
         body: JSON.stringify({
           title,
@@ -237,12 +235,11 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
 
     setSwitchingTemplate(true);
     try {
-      const token = localStorage.getItem("fl-token");
       const r = await fetch(`/api/v1/peer-review/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...authHeaders(),
         },
         body: JSON.stringify({ template_id: newId }),
       });
@@ -282,10 +279,9 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
     setLlmSuggestionApplied(null);
     setError(null);
     try {
-      const token = localStorage.getItem("fl-token");
       const r = await fetch(`/api/v1/peer-review/${id}/llm-suggest`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -331,12 +327,11 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   };
 
   const uploadPdf = async (file: File) => {
-    const token = localStorage.getItem("fl-token");
     const fd = new FormData();
     fd.append("pdf", file);
     const r = await fetch(`/api/v1/peer-review/${id}/upload-pdf`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
       body: fd,
     });
     if (r.ok) {
@@ -352,9 +347,8 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const downloadReview = async (kind: "pdf" | "txt" | "md" | "tex") => {
     // Save first to persist any pending edits
     await save();
-    const token = localStorage.getItem("fl-token");
     const r = await fetch(`/api/v1/peer-review/${id}/review-${kind}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     });
     if (!r.ok) {
       alert(`Could not generate ${kind.toUpperCase()}`);

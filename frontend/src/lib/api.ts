@@ -1,3 +1,5 @@
+import { authHeaders } from "@/lib/authHeaders";
+
 const API_BASE = "/api/v1";
 
 function getAuthHeaders(): Record<string, string> {
@@ -109,10 +111,9 @@ export const api = {
   uploadPdf: (paperId: number, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
     return fetch(`/api/v1/analysis/${paperId}/upload-pdf`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
       body: formData,
     }).then((r) => {
       if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
