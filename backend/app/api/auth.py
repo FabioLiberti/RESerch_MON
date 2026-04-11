@@ -2,9 +2,11 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
+limiter = Limiter(key_func=get_remote_address)
 
 
 # --- Schemas ---
@@ -74,7 +77,7 @@ class RefreshRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     username: str
     email: str
-    password: str
+    password: str = Field(min_length=12, max_length=20)
     role: str = "viewer"
 
 
@@ -85,7 +88,7 @@ class UpdateUserRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(min_length=12, max_length=20)
 
 
 # --- Dependencies ---
@@ -134,7 +137,8 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
 # --- Endpoints ---
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await authenticate_user(db, body.username, body.password)
     if not user:
         raise HTTPException(
@@ -180,9 +184,6 @@ async def update_my_password(
     if not verify_password(body.current_password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
 
-    if len(body.new_password) < 6:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 6 characters")
-
     await change_password(db, user.id, body.new_password)
     return {"message": "Password updated"}
 
@@ -201,9 +202,6 @@ async def create_new_user(
 ):
     if body.role not in ("admin", "viewer"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role must be 'admin' or 'viewer'")
-
-    if len(body.password) < 6:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 6 characters")
 
     try:
         user = await create_user(db, body.username, body.email, body.password, body.role)

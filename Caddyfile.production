@@ -1,0 +1,63 @@
+# FL Research Monitor — production Caddy config for resmon.fabioliberti.com
+#
+# Caddy handles:
+#   - Automatic TLS via Let's Encrypt (ACME HTTP-01 challenge on :80)
+#   - HTTPS on :443
+#   - HTTP -> HTTPS redirect (implicit when a hostname is specified)
+#   - Reverse proxy: /api/* and /data/* to backend, everything else to frontend
+#
+# Prerequisites (handled externally):
+#   - DNS A record `resmon.fabioliberti.com` -> 188.213.166.153
+#   - UFW allows inbound tcp 80 and 443
+#   - Caddy container has `caddy_data` volume mounted so certs persist across restarts
+
+{
+    # Email used by Let's Encrypt for certificate renewal notifications
+    email fabioliberti.fl@gmail.com
+    admin off
+}
+
+resmon.fabioliberti.com {
+    # Security headers (sane defaults for a single-page app + REST API)
+    header {
+        # Strict-Transport-Security: force HTTPS for 1 year (production only)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+        # Prevent framing (clickjacking)
+        X-Frame-Options "DENY"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove default Server header leaking Caddy version
+        -Server
+    }
+
+    # Backend API — matched first, Caddy evaluates handle blocks in order
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            # Pass client IP to FastAPI for rate limiting (SlowAPI reads X-Forwarded-For)
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Static data files served by backend (PDFs, reports, compendium data)
+    handle /data/* {
+        reverse_proxy backend:8000 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Everything else goes to Next.js frontend
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    # Access log to stdout in JSON format (captured by docker logs)
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}

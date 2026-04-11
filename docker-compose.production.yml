@@ -1,0 +1,77 @@
+# FL Research Monitor — PRODUCTION stack for the Aruba VPS (resmon.fabioliberti.com)
+#
+# DIFFERENCES from docker-compose.yml (local dev stack):
+#   - Caddy binds to host ports 80 and 443 (not 8080) — the entry point for the public internet
+#   - Uses Caddyfile.production (with automatic HTTPS via Let's Encrypt)
+#   - Uses env_file .env.production instead of .env.docker
+#   - Bind-mounts ./data to /app/data (NOT data-docker/) — on the VPS this is the canonical runtime dir
+#   - APP_ENV=production activates the APScheduler (daily discovery at 06:00 UTC, citation refresh 07:00)
+#   - No host.docker.internal for Ollama — on the VPS Ollama is NOT used by default (see note below)
+#
+# OLLAMA:
+#   For now Ollama (Gemma4) is not deployed on the VPS. If/when needed, either:
+#     (a) add an `ollama` service to this file pulling `ollama/ollama:latest` image + GPU/CPU config
+#     (b) deploy Ollama on a separate machine and point OLLAMA_BASE_URL at it via .env.production
+#
+# USAGE (on the VPS, from /opt/reserch_mon/):
+#   docker compose -f docker-compose.production.yml up -d --build
+#   docker compose -f docker-compose.production.yml logs -f backend
+#   docker compose -f docker-compose.production.yml down
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: reserch-mon-backend:production
+    container_name: reserch-mon-backend
+    env_file:
+      - .env.production
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: reserch-mon-frontend:production
+    container_name: reserch-mon-frontend
+    env_file:
+      - .env.production
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: reserch-mon-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC) support
+    volumes:
+      - ./Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # Let's Encrypt certificates persist here
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

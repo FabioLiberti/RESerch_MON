@@ -52,6 +52,9 @@ DEPLOYMENT_OPERATIVE_DOCKER.md
 .env.docker
 data-docker/
 
+# Docker production — env with production secrets (VPS only)
+.env.production
+
 # Compendium build (already in frontend/public/compendium/)
 _fedcompendiumXL_CC/build/
 _fedcompendiumXL_CC/node_modules/
