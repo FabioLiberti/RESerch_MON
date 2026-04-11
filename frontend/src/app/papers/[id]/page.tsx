@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { usePaper } from "@/hooks/usePapers";
 import { api, authFetcher } from "@/lib/api";
+import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 
 export default function PaperDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -297,9 +298,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {paper.has_pdf ? (
           <button
             onClick={() => {
-              const token = localStorage.getItem("fl-token");
               fetch(`/api/v1/papers/${paperId}/pdf-file`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers: authHeaders(),
               }).then(r => r.blob()).then(blob => {
                 const url = URL.createObjectURL(blob);
                 window.open(url, "_blank");
@@ -732,9 +732,8 @@ function AnalysisButton({ paperId }: { paperId: number }) {
         </Link>
         <button
           onClick={() => {
-            const token = localStorage.getItem("fl-token");
             fetch(`/api/v1/analysis/${paperId}/pdf`, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              headers: authHeaders(),
             })
               .then((r) => r.blob())
               .then((blob) => {
@@ -976,9 +975,8 @@ function SummaryCard({ paperId }: { paperId: number }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              const token = localStorage.getItem("fl-token");
               fetch(`/api/v1/analysis/${paperId}/summary-card-pdf`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers: authHeaders(),
               }).then(r => r.blob()).then(blob => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -1242,9 +1240,8 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      const token = localStorage.getItem("fl-token");
                       fetch(`/api/v1/analysis/${paperId}/html?queue_id=${run.id}`, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        headers: authHeaders(),
                       }).then(r => r.text()).then(html => {
                         const blob = new Blob([html], { type: "text/html" });
                         window.open(URL.createObjectURL(blob), '_blank');
@@ -1259,10 +1256,9 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      const token = localStorage.getItem("fl-token");
                       const url = `/api/v1/analysis/${paperId}/pdf?queue_id=${run.id}`;
                       fetch(url, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        headers: authHeaders(),
                       }).then(r => r.blob()).then(blob => {
                         const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
@@ -1281,10 +1277,9 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      const token = localStorage.getItem("fl-token");
                       const url = `/api/v1/analysis/${paperId}/md?queue_id=${run.id}`;
                       fetch(url, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        headers: authHeaders(),
                       }).then(r => r.blob()).then(blob => {
                         const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
@@ -1303,10 +1298,9 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      const token = localStorage.getItem("fl-token");
                       const url = `/api/v1/analysis/${paperId}/tex?queue_id=${run.id}`;
                       fetch(url, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        headers: authHeaders(),
                       }).then(r => r.blob()).then(blob => {
                         const blobUrl = URL.createObjectURL(blob);
                         const a = document.createElement("a");
@@ -1400,8 +1394,7 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
 
   // Load rubric (existing or template) and analysis HTML in parallel
   useEffect(() => {
-    const token = localStorage.getItem("fl-token");
-    const auth = token ? { Authorization: `Bearer ${token}` } : {};
+    const auth = authHeaders();
 
     Promise.all([
       fetch(`/api/v1/analysis/queue/${run.id}/rubric-template`, { headers: auth }).then(r => r.json()),
@@ -1447,9 +1440,8 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
   useEffect(() => {
     if (activeTab !== "paper" || !hasPaperPdf || paperPdfBlobUrl || paperPdfLoading) return;
     setPaperPdfLoading(true);
-    const token = localStorage.getItem("fl-token");
     fetch(`/api/v1/papers/${paperId}/pdf-file`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1504,8 +1496,7 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
     setSaving(true);
     setError(null);
     try {
-      const token = localStorage.getItem("fl-token");
-      const auth = token ? { Authorization: `Bearer ${token}` } : {};
+      const auth = authHeaders();
 
       // Step 0: if there are pending in-place edits on the analysis sections,
       // fork the analysis first and redirect the rest of the save to the new version.
@@ -1599,9 +1590,8 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
 
   // Open the validation report PDF (regenerated server-side, only if at least one validated)
   const viewValidationReport = () => {
-    const token = localStorage.getItem("fl-token");
     fetch(`/api/v1/analysis/${paperId}/validation-report`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     })
       .then(r => {
         if (!r.ok) throw new Error("Validation report not available — save at least one review first");
@@ -1949,9 +1939,8 @@ function DiffModal({ run, paperId, onClose }: { run: AnalysisRun; paperId: numbe
   const [llmLoading, setLlmLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("fl-token");
     fetch(`/api/v1/analysis/${paperId}/diff?queue_id=${run.id}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     })
       .then(async (r) => {
         if (!r.ok) {
@@ -1969,12 +1958,11 @@ function DiffModal({ run, paperId, onClose }: { run: AnalysisRun; paperId: numbe
     if (llmSummaries[sec.section] || llmLoading === sec.section) return;
     setLlmLoading(sec.section);
     try {
-      const token = localStorage.getItem("fl-token");
       const r = await fetch("/api/v1/analysis/diff/llm-summary", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...authHeaders(),
         },
         body: JSON.stringify({
           section: sec.section,
@@ -2104,13 +2092,12 @@ function TutorCheckWidget({ paperId, initial }: { paperId: number; initial: stri
   const save = async (next: string | null) => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("fl-token");
       const url = next
         ? `/api/v1/papers/${paperId}/tutor-check?check=${next}`
         : `/api/v1/papers/${paperId}/tutor-check`;
       const r = await fetch(url, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
       });
       if (r.ok) {
         const data = await r.json();

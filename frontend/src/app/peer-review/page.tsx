@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
+import { authHeaders } from "@/lib/authHeaders";
 
 interface PeerReviewItem {
   id: number;
@@ -83,7 +84,6 @@ export default function PeerReviewPage() {
     setCreating(true);
     setError(null);
     try {
-      const token = localStorage.getItem("fl-token");
       const fd = new FormData();
       fd.append("title", title);
       fd.append("template_id", templateId);
@@ -97,7 +97,7 @@ export default function PeerReviewPage() {
 
       const r = await fetch("/api/v1/peer-review", {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: fd,
       });
       if (!r.ok) {
@@ -120,10 +120,9 @@ export default function PeerReviewPage() {
 
   const remove = async (id: number) => {
     if (!confirm(`Delete peer review #${id}? This also removes the uploaded PDF and generated review files.`)) return;
-    const token = localStorage.getItem("fl-token");
     const r = await fetch(`/api/v1/peer-review/${id}`, {
       method: "DELETE",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authHeaders(),
     });
     if (r.ok) mutate();
     else alert("Delete failed");

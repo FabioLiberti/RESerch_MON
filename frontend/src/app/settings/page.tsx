@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR, { mutate } from "swr";
 import { api, authFetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { authHeaders } from "@/lib/authHeaders";
 import type { Topic } from "@/lib/types";
 
 interface TopicFormData {
@@ -598,12 +599,11 @@ function PdfSignatureSection() {
     setSaving(true);
     setSavedMsg(null);
     try {
-      const token = localStorage.getItem("fl-token");
       const r = await fetch("/api/v1/app-settings", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...authHeaders(),
         },
         body: JSON.stringify({ key, value }),
       });

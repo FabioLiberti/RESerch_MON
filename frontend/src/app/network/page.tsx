@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
+import { authHeaders } from "@/lib/authHeaders";
 import { SOURCE_COLORS, SOURCE_LABELS, cn } from "@/lib/utils";
 import NetworkGraph from "@/components/charts/NetworkGraph";
 
@@ -68,9 +69,8 @@ export default function NetworkPage() {
     setCitationPaperId(paperId);
     setCitationLoading(true);
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
       const res = await fetch(`/api/v1/network/citations?paper_id=${paperId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
       });
       setCitationData(await res.json());
     } catch { setCitationData(null); }
@@ -82,9 +82,8 @@ export default function NetworkPage() {
     setCitationLoading(true);
     setCitationSearch("");
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
       const res = await fetch(`/api/v1/network/citations?paper_id=${paperId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
       });
       const newData = await res.json();
 

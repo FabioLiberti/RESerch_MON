@@ -4,12 +4,6 @@ const nextConfig: NextConfig = {
   // 'standalone' builds a minimal server bundle for Docker images.
   // Ignored by `next dev`, so local development is unaffected.
   output: "standalone",
-  // TEMPORARY — tracked in DEPLOYMENT_OPERATIVE_DOCKER.md §1.x.
-  // Latent TS typing issue on ~30 auth-header sites; runtime behaviour
-  // unaffected. MUST be removed + refactored before VPS deploy (Fase 2).
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   turbopack: {
     root: ".",
   },

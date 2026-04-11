@@ -3,13 +3,9 @@
 import { useState, useCallback } from "react";
 import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
+import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, cn } from "@/lib/utils";
 import type { AnalysisQueueItem } from "@/lib/types";
-
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 interface Report {
   id: number;
@@ -36,7 +32,7 @@ export default function ReportsPage() {
     setSelectedDate(date);
     setSelectedPaperId(null);
     try {
-      const res = await fetch(`/api/v1/reports/${date}/html`, { headers: getAuthHeaders() });
+      const res = await fetch(`/api/v1/reports/${date}/html`, { headers: authHeaders() });
       setReportHtml(await res.text());
     } catch {
       setReportHtml("<p>Error loading report</p>");
@@ -47,7 +43,7 @@ export default function ReportsPage() {
     setSelectedPaperId(paperId);
     setSelectedDate(null);
     try {
-      const res = await fetch(`/api/v1/analysis/${paperId}/html`, { headers: getAuthHeaders() });
+      const res = await fetch(`/api/v1/analysis/${paperId}/html`, { headers: authHeaders() });
       setReportHtml(await res.text());
     } catch {
       setReportHtml("<p>Error loading analysis report</p>");
@@ -57,7 +53,7 @@ export default function ReportsPage() {
   const generateReport = useCallback(async () => {
     setGenerating(true);
     try {
-      await fetch("/api/v1/reports/generate", { method: "POST", headers: getAuthHeaders() });
+      await fetch("/api/v1/reports/generate", { method: "POST", headers: authHeaders() });
       setTimeout(async () => {
         await mutate("/api/v1/reports");
         setGenerating(false);
@@ -232,9 +228,8 @@ export default function ReportsPage() {
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
-                            const token = localStorage.getItem("fl-token");
                             fetch(`/api/v1/analysis/${item.paper_id}/pdf`, {
-                              headers: token ? { Authorization: `Bearer ${token}` } : {},
+                              headers: authHeaders(),
                             }).then(r => r.blob()).then(blob => {
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");
