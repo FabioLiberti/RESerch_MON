@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Cleanup quick/deep analysis PDFs from Zotero for all synced papers.
+"""Cleanup quick/deep/summary analysis PDFs from Zotero for all synced papers.
 
-These are working notes that should never be shared with tutors (Zotero is the
-sharing surface). The recurring sync already filters them out, but old uploads
-stay until the paper is touched again. This script removes them in one shot.
+Only the Extended Abstract is shareable with academic tutors. Quick, Deep and
+Summary are local working notes that should never appear on Zotero. The
+recurring sync already filters them out, but old uploads stay until the paper
+is touched again. This script removes them in one shot.
 
 Usage:
     python scripts/cleanup_zotero_quick_deep.py            # dry-run
@@ -27,7 +28,12 @@ from app.models.paper import Paper
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cleanup_zotero_quick_deep")
 
-PREFIXES_TO_REMOVE = ("analysis_quick_", "analysis_deep_")
+PREFIXES_TO_REMOVE = (
+    "analysis_quick_",
+    "analysis_deep_",
+    "analysis_summary_",
+    "validation_",   # validation report stays local from now on
+)
 
 
 async def main(apply: bool) -> None:
@@ -104,17 +110,18 @@ async def main(apply: bool) -> None:
     if apply:
         logger.info(f"Attachments actually deleted: {total_deleted}")
 
-    # Reset DB flag: any AnalysisQueue row of mode quick/deep marked zotero_synced=True
-    # is stale data — the corresponding file no longer exists on Zotero.
+    # Reset DB flag: any AnalysisQueue row of mode quick/deep/summary marked
+    # zotero_synced=True is stale data — the corresponding file no longer
+    # exists on Zotero (only Extended Abstract is shareable now).
     async with async_session() as db:
         r = await db.execute(
             select(AnalysisQueue.id).where(
-                AnalysisQueue.analysis_mode.in_(["quick", "deep"]),
+                AnalysisQueue.analysis_mode.in_(["quick", "deep", "summary"]),
                 AnalysisQueue.zotero_synced.is_(True),
             )
         )
         stale_ids = [row[0] for row in r.all()]
-        logger.info(f"Stale zotero_synced=True flags on quick/deep AnalysisQueue rows: {len(stale_ids)}")
+        logger.info(f"Stale zotero_synced=True flags on quick/deep/summary AnalysisQueue rows: {len(stale_ids)}")
         if apply and stale_ids:
             await db.execute(
                 update(AnalysisQueue)

@@ -47,7 +47,7 @@ def _count_pdf_pages(pdf_path: str | None) -> int | None:
         return None
 
 
-def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None, has_note: bool = False, quality_grade: str | None = None) -> PaperSummary:
+def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: list[dict] | None = None, has_note: bool = False, quality_grade: str | None = None) -> PaperSummary:  # noqa: E501
     return PaperSummary(
         id=paper.id,
         doi=paper.doi,
@@ -68,6 +68,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         on_zotero=paper.zotero_key is not None,
         zotero_key=paper.zotero_key,
         rating=paper.rating,
+        tutor_check=paper.tutor_check,
         quality_grade=quality_grade,
         created_at=paper.created_at,
     )
@@ -94,6 +95,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         zotero_key=paper.zotero_key,
         disabled=paper.disabled or False,
         rating=paper.rating,
+        tutor_check=paper.tutor_check,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -152,6 +154,7 @@ async def list_papers(
     method_tag: str | None = None,
     validation: str | None = None,  # any, validated, pending, rejected, needs_revision
     quality: str | None = None,  # any, excellent, good, adequate, weak, unreliable, none
+    tutor_check: str | None = None,  # ok | review | no | none
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -173,6 +176,8 @@ async def list_papers(
         query = query.where(Paper.pdf_local_path.isnot(None))
     if on_zotero is True:
         query = query.where(Paper.zotero_key.isnot(None))
+    elif on_zotero is False:
+        query = query.where(Paper.zotero_key.is_(None))
     if disabled is True:
         query = query.where(Paper.disabled.is_(True))
     elif disabled is False:
@@ -273,6 +278,11 @@ async def list_papers(
                     _PQR.overall_grade == quality,
                 )
             ))
+    if tutor_check:
+        if tutor_check == "none":
+            query = query.where(Paper.tutor_check.is_(None))
+        elif tutor_check in ("ok", "review", "no"):
+            query = query.where(Paper.tutor_check == tutor_check)
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -815,10 +825,10 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
         except Exception:
             pass
 
-    if not enriched_from:
-        return {"status": "not_found", "message": "Could not enrich from any source"}
-
-    # 4. Extract keywords from PDF if available
+    # 4. Extract keywords from local PDF if available.
+    # This step runs BEFORE the `enriched_from` gate so a paper with complete
+    # metadata but poor keywords (e.g. only Semantic Scholar Fields of Study)
+    # still gets its author keywords extracted when the user clicks Enrich.
     pdf_keywords_extracted = False
     if paper.pdf_local_path:
         try:
@@ -843,6 +853,12 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
                     pdf_keywords_extracted = True
         except Exception:
             pass
+
+    # If the external APIs added nothing AND we didn't extract any new PDF
+    # keywords, there really is nothing to report. Otherwise we continue the
+    # enrichment pipeline (topic reclass + citation refs).
+    if not enriched_from and not pdf_keywords_extracted:
+        return {"status": "not_found", "message": "Could not enrich from any source"}
 
     # Reclassify into topics
     from app.services.topic_classifier import TopicClassifier
@@ -880,7 +896,11 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
             pass
 
     await db.flush()
-    result = {"status": "enriched", "source": enriched_from, "title": paper.title}
+    result = {
+        "status": "enriched",
+        "source": enriched_from or "pdf_only",
+        "title": paper.title,
+    }
     if pdf_keywords_extracted:
         result["pdf_keywords"] = True
     if refs_fetched:
@@ -912,15 +932,68 @@ async def rate_paper(paper_id: int, rating: int = Query(..., ge=0, le=5), db: As
     return {"rating": paper.rating}
 
 
-@router.post("/{paper_id}/toggle-disabled")
-async def toggle_disabled(paper_id: int, db: AsyncSession = Depends(get_db)):
-    """Toggle the disabled status of a paper."""
+@router.post("/{paper_id}/tutor-check")
+async def set_tutor_check(
+    paper_id: int,
+    check: str | None = Query(None, description="'ok' | 'review' | 'no' | null to clear"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set the tutor check flag on a paper.
+
+    This is a per-paper decision ('share with tutor' / 'discuss first' /
+    'do not share') that is surfaced on Zotero as a colored tag and as a
+    clickable badge in the papers list.
+    """
+    if check and check not in ("ok", "review", "no"):
+        raise HTTPException(status_code=400, detail="check must be 'ok', 'review', 'no' or null")
     paper = await db.get(Paper, paper_id)
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    paper.disabled = not (paper.disabled or False)
+    paper.tutor_check = check or None
     await db.flush()
-    return {"disabled": paper.disabled}
+    await db.commit()
+    return {"tutor_check": paper.tutor_check}
+
+
+@router.post("/{paper_id}/toggle-disabled")
+async def toggle_disabled(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Toggle the disabled status of a paper.
+
+    When disabling a paper that is currently on Zotero, also remove it from
+    Zotero so disabled work never stays on the tutor-facing surface.
+    """
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    new_disabled = not (paper.disabled or False)
+    paper.disabled = new_disabled
+
+    # If disabling AND the paper is currently on Zotero → remove it.
+    removed_from_zotero = False
+    zotero_error: str | None = None
+    if new_disabled and paper.zotero_key:
+        from app.clients.zotero import ZoteroClient
+        client = ZoteroClient()
+        if client.is_configured():
+            try:
+                deleted = await client.delete_item(paper.zotero_key)
+                if deleted:
+                    paper.zotero_key = None
+                    removed_from_zotero = True
+            except Exception as e:
+                zotero_error = str(e)
+            finally:
+                await client.close()
+
+    await db.flush()
+    await db.commit()
+
+    return {
+        "disabled": paper.disabled,
+        "removed_from_zotero": removed_from_zotero,
+        "zotero_error": zotero_error,
+    }
 
 
 

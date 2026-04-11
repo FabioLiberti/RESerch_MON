@@ -37,6 +37,10 @@ class Paper(Base):
     validated = Column(Boolean, default=False)
     disabled = Column(Boolean, default=False)
     rating = Column(Integer, nullable=True)  # 1-5 stars
+    # Tutor check: explicit OK/Review/No decision for sharing with the
+    # scientific tutor. Independent from rating (paper quality) and from
+    # validation_status (meta-validation of the LLM analysis).
+    tutor_check = Column(String(10), nullable=True)  # 'ok' | 'review' | 'no' | NULL
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

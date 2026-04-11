@@ -15,7 +15,7 @@ from app.models.user import User
 from app.api.auth import get_current_user, require_admin
 from app.clients.zotero import ZoteroClient
 from app.services.zotero_sync import ZoteroSyncService
-from app.services.validation_report import generate_validation_report, get_validation_summary, build_validation_zotero_tags
+from app.services.validation_report import get_validation_summary, build_validation_zotero_tags
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,26 @@ async def sync_analysis(
     paper = await db.get(Paper, paper_id)
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
+
+    # Disabled papers must never end up on Zotero. If we somehow got a stale
+    # zotero_key, remove the item there and clear the local key, then bail out.
+    if paper.disabled:
+        if paper.zotero_key:
+            client = ZoteroClient()
+            if client.is_configured():
+                try:
+                    if await client.delete_item(paper.zotero_key):
+                        paper.zotero_key = None
+                        await db.commit()
+                except Exception as e:
+                    logger.warning(f"Could not remove disabled paper {paper_id} from Zotero: {e}")
+                finally:
+                    await client.close()
+        raise HTTPException(
+            status_code=400,
+            detail="Paper is disabled — cannot push to Zotero. Re-enable the paper first.",
+        )
+
     if not paper.zotero_key:
         raise HTTPException(status_code=400, detail="Paper not synced to Zotero yet. Sync the paper first.")
 
@@ -96,11 +116,11 @@ async def sync_analysis(
             seen_modes.add(mode)
             analyses_to_sync.append(a)
 
-    # Only EXT.ABS and SUMMARY are shareable with academic tutors.
-    # Quick and Deep analyses are kept locally as working notes — they are
-    # too obviously LLM-generated and would compromise the academic framing
-    # of the validation report.
-    ZOTERO_SHAREABLE_MODES = {"extended", "summary"}
+    # Only the EXTENDED ABSTRACT is shareable with academic tutors.
+    # Quick, Deep and Summary are kept strictly local as working notes —
+    # they are too obviously LLM-generated and would compromise the
+    # rigorous academic framing of the validation report.
+    ZOTERO_SHAREABLE_MODES = {"extended"}
     excluded = [a for a in analyses_to_sync if (a.analysis_mode or "quick") not in ZOTERO_SHAREABLE_MODES]
     analyses_to_sync = [a for a in analyses_to_sync if (a.analysis_mode or "quick") in ZOTERO_SHAREABLE_MODES]
 
@@ -112,14 +132,24 @@ async def sync_analysis(
             a.zotero_synced = False
 
     if not analyses_to_sync:
-        raise HTTPException(status_code=404, detail="No shareable analysis (extended/summary) found for this paper")
+        # No Extended Abstract yet — that's not an error, just nothing to upload.
+        # Commit any flag resets we did above and return a benign success.
+        await db.commit()
+        return {
+            "status": "no_attachments",
+            "filenames": [],
+            "count": 0,
+            "message": "No Extended Abstract to upload (paper metadata still synced)",
+        }
 
-    # Order: extended first (becomes Zotero's main "PDF" attachment), then summary, quick, deep
-    mode_order = {"extended": 0, "summary": 1, "quick": 2, "deep": 3}
-    analyses_to_sync.sort(key=lambda a: mode_order.get(a.analysis_mode or "quick", 9))
+    # Sort to keep deterministic upload order even if more shareable modes are
+    # added in the future (currently only extended).
+    mode_order = {"extended": 0}
+    analyses_to_sync.sort(key=lambda a: mode_order.get(a.analysis_mode or "", 9))
 
-    # Generate dynamic validation report (only if at least one analysis is validated)
-    validation_pdf_path = await generate_validation_report(db, paper_id)
+    # The validation report is intentionally NOT uploaded to Zotero — it stays
+    # local as part of the scientific review process audit trail. We still
+    # compute the validation summary for the Extra field / tags below.
     validation_summary = get_validation_summary(analyses_to_sync)
 
     client = ZoteroClient()
@@ -127,16 +157,16 @@ async def sync_analysis(
         raise HTTPException(status_code=503, detail="Zotero not configured")
 
     try:
-        # Delete old analysis + validation attachments before uploading new ones
+        # Delete legacy analysis + validation attachments before uploading new ones.
+        # We still cleanup validation_*.pdf so any previously uploaded validation
+        # report gets removed from Zotero on the next sync.
         await client.delete_child_attachments(paper.zotero_key, f"analysis_")
         await client.delete_child_attachments(paper.zotero_key, f"validation_")
 
         uploaded = []
 
-        # Build ordered upload list:
-        # 1. extended.pdf  2. validation.pdf  3. summary.pdf  4. quick.pdf  5. deep.pdf
+        # Upload only the Extended Abstract analysis files.
         upload_queue: list[tuple[str, str, str, AnalysisQueue | None]] = []
-        extended_added = False
         for analysis in analyses_to_sync:
             mode = analysis.analysis_mode or "quick"
 
@@ -152,25 +182,6 @@ async def sync_analysis(
                 continue
 
             upload_queue.append((file_path, filename, content_type, analysis))
-
-            # Insert validation right after extended
-            if mode == "extended" and validation_pdf_path and validation_pdf_path.exists():
-                upload_queue.append((
-                    str(validation_pdf_path),
-                    f"validation_{paper_id}.pdf",
-                    "application/pdf",
-                    None,
-                ))
-                extended_added = True
-
-        # If no extended analysis, but we have a validation report, prepend it
-        if validation_pdf_path and validation_pdf_path.exists() and not extended_added:
-            upload_queue.insert(0, (
-                str(validation_pdf_path),
-                f"validation_{paper_id}.pdf",
-                "application/pdf",
-                None,
-            ))
 
         for file_path, filename, content_type, analysis in upload_queue:
             attachment_key = await client.upload_attachment(
@@ -207,6 +218,16 @@ async def sync_analysis(
             for vt in build_validation_zotero_tags(validation_summary):
                 if vt not in existing_tags:
                     existing_tags.append(vt)
+            # Tutor check tags (same as in ZoteroSyncService)
+            _TUTOR_CHECK_TAGS = {
+                "ok":     ("\u2705 Check OK",     "check-ok"),
+                "review": ("\u26a0\ufe0f Check Review", "check-review"),
+                "no":     ("\u274c Check NO",     "check-no"),
+            }
+            if paper.tutor_check in _TUTOR_CHECK_TAGS:
+                for vt in _TUTOR_CHECK_TAGS[paper.tutor_check]:
+                    if vt not in existing_tags:
+                        existing_tags.append(vt)
             await client.update_tags(paper.zotero_key, existing_tags)
         except Exception as e:
             logger.warning(f"Failed to update Zotero metadata with validation info: {e}")

@@ -1,6 +1,8 @@
 """Labels and Notes API endpoints."""
 
 import logging
+import re
+import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,6 +17,62 @@ from app.api.auth import get_current_user, require_admin
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# --- Label name normalization ---
+
+def normalize_label_name(raw: str) -> str:
+    """Sanitize a label name on input.
+
+    Steps:
+      1. Unicode NFKC normalization — reduces compatibility-composed chars
+         (e.g. ligatures, full-width variants) to a canonical form.
+      2. Replace en-dash / em-dash with ASCII hyphen.
+      3. Replace non-breaking / ideographic / em spaces with ASCII space.
+      4. Strip leading/trailing whitespace.
+      5. Collapse any run of internal whitespace to a single ASCII space.
+
+    The case is NOT touched — policy is "preserve user input + case-insensitive
+    dedup on lookup" (option B). So '  Smart  Healthcare ' → 'Smart Healthcare'
+    and 'smart  healthcare' → 'smart healthcare'; those two will still be
+    treated as the SAME label at lookup time, but the string originally saved
+    by the first user keeps its casing.
+    """
+    if not raw:
+        return ""
+    s = unicodedata.normalize("NFKC", raw)
+    # Replace dashes
+    s = s.replace("\u2013", "-").replace("\u2014", "-")
+    # Normalise exotic whitespace characters to plain space
+    s = re.sub(r"[\u00a0\u2002\u2003\u2007\u2009\u202f\u3000]", " ", s)
+    # Strip and collapse
+    s = s.strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+async def find_or_create_label(
+    db: AsyncSession,
+    raw_name: str,
+    color: str = "#6366f1",
+) -> Label:
+    """Return an existing label matching the normalized name (case-insensitive),
+    creating a new one only if none is found. Raises ValueError for empty input.
+    """
+    name = normalize_label_name(raw_name)
+    if not name:
+        raise ValueError("Label name cannot be empty")
+    # Case-insensitive lookup — LOWER() is ASCII-only but fine for label names
+    existing = await db.execute(
+        select(Label).where(func.lower(Label.name) == name.lower())
+    )
+    found = existing.scalar_one_or_none()
+    if found:
+        return found
+    label = Label(name=name, color=color)
+    db.add(label)
+    await db.flush()
+    return label
 
 
 # --- Schemas ---
@@ -67,11 +125,21 @@ async def create_label(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    existing = await db.execute(select(Label).where(Label.name == body.name))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Label already exists")
-
-    label = Label(name=body.name, color=body.color)
+    """Create a new label, or return the existing one with the same
+    normalized case-insensitive name (idempotent)."""
+    name = normalize_label_name(body.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Label name cannot be empty")
+    # Case-insensitive dedup: if a label with the same name already exists,
+    # return it instead of creating a duplicate. This is the explicit
+    # "preserve input + case-insensitive dedup" policy.
+    existing = await db.execute(
+        select(Label).where(func.lower(Label.name) == name.lower())
+    )
+    found = existing.scalar_one_or_none()
+    if found:
+        return found
+    label = Label(name=name, color=body.color)
     db.add(label)
     await db.flush()
     return label
@@ -87,7 +155,24 @@ async def update_label(
     label = await db.get(Label, label_id)
     if not label:
         raise HTTPException(status_code=404, detail="Label not found")
-    label.name = body.name
+    new_name = normalize_label_name(body.name)
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Label name cannot be empty")
+    # Case-insensitive dedup: don't allow renaming a label onto another
+    # existing label (would create a silent collision).
+    if new_name.lower() != (label.name or "").lower():
+        collision = await db.execute(
+            select(Label).where(
+                func.lower(Label.name) == new_name.lower(),
+                Label.id != label_id,
+            )
+        )
+        if collision.scalar_one_or_none():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Another label already exists with that name: '{new_name}'",
+            )
+    label.name = new_name
     label.color = body.color
     await db.flush()
     return label

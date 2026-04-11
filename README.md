@@ -132,8 +132,8 @@ Personal quality assessment of papers already in your bibliography, used to grad
 ### Zotero Integration (tutor-facing surface)
 - **Auto-sync** of selected papers to a Zotero collection (Web API v3) with label → sub-collection mapping
 - **Atomic sync flow**: a single Save button (in the Meta Review modal or on the paper detail page) creates the Zotero item if missing, updates metadata + tags + Extra field, and uploads attachments — all in one action
-- **Shareable filter**: only **Extended Abstract** and **Summary** modes are uploaded as attachments. Quick and Deep are working notes that stay strictly local — they are too obviously LLM-generated to share with tutors
-- **Validation report attached**: `validation_{id}.pdf` is generated dynamically and uploaded as the second attachment after `analysis_extended_{id}.pdf`
+- **Shareable filter**: only the **Extended Abstract** is uploaded as an attachment. Quick, Deep and Summary are working notes that stay strictly local — they are too obviously LLM-generated to share with tutors, and only the EXT.ABS goes through the rigorous Meta Review workflow before being released
+- **Validation report stays LOCAL**: `validation_{id}.pdf` is generated and stored on disk only — it is **not** uploaded to Zotero. The validation report is part of the internal scientific review audit trail and is not part of the tutor-facing surface. The Zotero Extra field still receives the validation summary (status, validated modes) as text so tutors can see at a glance whether the analysis has been reviewed
 - **Emoji-prefixed tags** visible in the Zotero Tags column: ✅ Validated · extended, 🟡 Partially Validated, ⚠️ Revision · extended, ❌ Rejected · extended, 🕒 Pending Review — plus short tag forms (`validated-extended`, `partially-validated`, …) so the user can configure Zotero colored tags 1–9 for those specific keywords
 - **Extra field** populated with rating + validation summary
 - **Deep links**: `zotero://select/library/items/{key}` and web view buttons on every paper detail
@@ -499,7 +499,7 @@ python scripts/merge_zotero_duplicate_collections.py --apply    # merge duplicat
 | v2.5.0 | 2026-04 | Perfect formula rendering, **Extended Abstract** mode, Zotero sync tracking |
 | v2.6.x | 2026-04 | Citation Network explorer, paper rating, Zotero notes+tags, import by DOI, sober unified LaTeX template, Elsevier source, method tags filter |
 | v2.7.x | 2026-04 | **Analysis Validation workflow** with rubric, side-by-side review, queue page, dual computed/reviewer scores, paper PDF tab |
-| v2.8.0 | 2026-04 | **Peer Review module**, configurable PDF signature, Zotero tutor-friendly sync (extended/summary only), emoji tags, deep links |
+| v2.8.0 | 2026-04 | **Peer Review module**, configurable PDF signature, Zotero tutor-friendly sync (filtered set), emoji tags, deep links |
 | v2.9.0 | 2026-04 | **Peer review templates** (Generic + IEEE T-AI verbatim), private notes, four-format synchronized export, **AI-assisted peer review** (Claude Opus 4.6 extended thinking, admin only) |
 | v2.10.0 | 2026-04 | **Paper Quality Review module** with native versioning (10 dimensions, 5 grades, AI-assist), Quality filter and Q badge in papers list, sidebar Quality Review entry, sidebar tooltips, Meta Review rename |
 

@@ -50,6 +50,7 @@ class PaperSummary(BaseModel):
     on_zotero: bool = False
     zotero_key: str | None = None
     rating: int | None = None
+    tutor_check: str | None = None
     quality_grade: str | None = None
     created_at: datetime
 
@@ -76,6 +77,7 @@ class PaperDetail(BaseModel):
     zotero_key: str | None = None
     disabled: bool = False
     rating: int | None = None
+    tutor_check: str | None = None
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

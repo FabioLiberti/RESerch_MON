@@ -41,6 +41,8 @@ export default function PapersPage() {
   const [methodTagFilter, setMethodTagFilter] = useState("");
   const [validationFilter, setValidationFilter] = useState("");
   const [qualityFilter, setQualityFilter] = useState("");
+  const [tutorCheckFilter, setTutorCheckFilter] = useState("");
+  const [zoteroSyncing, setZoteroSyncing] = useState(false);
 
   // Sync URL params with state
   useEffect(() => {
@@ -118,6 +120,7 @@ export default function PapersPage() {
   if (labelFilter) params.label = labelFilter;
   if (pdfFilter === "yes") params.has_pdf = "true";
   if (zoteroFilter === "yes") params.on_zotero = "true";
+  if (zoteroFilter === "no") params.on_zotero = "false";
   if (disabledFilter === "yes") params.disabled = "true";
   else if (disabledFilter === "no") params.disabled = "false";
   if (ratingFilter) params.min_rating = ratingFilter;
@@ -126,6 +129,7 @@ export default function PapersPage() {
   if (methodTagFilter) params.method_tag = methodTagFilter;
   if (validationFilter) params.validation = validationFilter;
   if (qualityFilter) params.quality = qualityFilter;
+  if (tutorCheckFilter) params.tutor_check = tutorCheckFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -333,6 +337,7 @@ export default function PapersPage() {
         >
           <option value="">Zotero: All</option>
           <option value="yes">On Zotero</option>
+          <option value="no">Not on Zotero</option>
         </select>
         <select
           value={disabledFilter}
@@ -418,6 +423,17 @@ export default function PapersPage() {
           <option value="none">Not assessed yet</option>
         </select>
         <select
+          value={tutorCheckFilter}
+          onChange={(e) => { setTutorCheckFilter(e.target.value); setPage(1); }}
+          className={`${cls(tutorCheckFilter)} max-w-44`}
+        >
+          <option value="">Tutor check: All</option>
+          <option value="ok">✓ OK</option>
+          <option value="review">? Review</option>
+          <option value="no">✗ NO</option>
+          <option value="none">Not checked</option>
+        </select>
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -433,10 +449,10 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter || tutorCheckFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -450,9 +466,23 @@ export default function PapersPage() {
 
       {/* Analysis message */}
       {analysisMsg && (
-        <div className="px-4 py-3 rounded-lg bg-[var(--primary)]/10 border border-[var(--primary)]/20 text-sm text-[var(--primary)] flex items-center justify-between">
-          <span>{analysisMsg}</span>
-          <button onClick={() => setAnalysisMsg(null)} className="text-xs opacity-60 hover:opacity-100">&times;</button>
+        <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${
+          zoteroSyncing
+            ? "bg-cyan-900/20 border-2 border-cyan-500 text-cyan-200"
+            : "bg-[var(--primary)]/10 border border-[var(--primary)]/20 text-[var(--primary)]"
+        }`}>
+          <span className="flex items-center gap-2">
+            {zoteroSyncing && (
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
+            {analysisMsg}
+          </span>
+          {!zoteroSyncing && (
+            <button onClick={() => setAnalysisMsg(null)} className="text-xs opacity-60 hover:opacity-100">&times;</button>
+          )}
         </div>
       )}
 
@@ -534,17 +564,33 @@ export default function PapersPage() {
             </button>
             <button
               onClick={async () => {
-                setAnalysisMsg(null);
+                const count = selectedIds.size;
+                if (!count) return;
+                setZoteroSyncing(true);
+                setAnalysisMsg(`Syncing ${count} paper${count > 1 ? "s" : ""} to Zotero — this may take a few minutes (metadata + tags + PDF upload per paper)...`);
                 try {
                   const res = await api.syncToZotero(Array.from(selectedIds));
-                  setAnalysisMsg(`Zotero: ${res.synced} synced${res.failed ? `, ${res.failed} failed` : ""}`);
+                  setAnalysisMsg(`Zotero: ${res.synced}/${count} synced${res.failed ? ` · ${res.failed} failed` : ""}`);
                 } catch (e: any) {
                   setAnalysisMsg(e.message || "Zotero sync failed");
+                } finally {
+                  setZoteroSyncing(false);
                 }
               }}
-              className="px-3 py-1.5 text-xs rounded-lg bg-cyan-700 text-white font-medium hover:bg-cyan-600"
+              disabled={zoteroSyncing}
+              className="px-3 py-1.5 text-xs rounded-lg bg-cyan-700 text-white font-medium hover:bg-cyan-600 disabled:opacity-50 flex items-center gap-1.5"
             >
-              Sync to Zotero
+              {zoteroSyncing ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Syncing {selectedIds.size}...
+                </>
+              ) : (
+                `Sync to Zotero (${selectedIds.size})`
+              )}
             </button>
           </div>
         </div>
@@ -647,10 +693,11 @@ export default function PapersPage() {
                       {paper.analyses && paper.analyses.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1 mt-1">
                           {paper.analyses.map((a) => {
-                            // Quick and Deep are local-only working notes. Even if the
-                            // legacy DB flag still says zotero_synced, we never show ✓Z
-                            // for them because they have been deleted from Zotero.
-                            const shareable = a.mode === "extended" || a.mode === "summary";
+                            // Only the Extended Abstract is shareable with tutors.
+                            // Quick, Deep and Summary are local-only working notes —
+                            // even if the legacy DB flag still says zotero_synced,
+                            // we never show ✓Z for them.
+                            const shareable = a.mode === "extended";
                             return (
                               <span
                                 key={a.mode}
@@ -685,6 +732,32 @@ export default function PapersPage() {
                                 title={title}
                               >
                                 R
+                              </span>
+                            );
+                          })()}
+                          {/* Tutor check circle: T inside a colored circle reflecting the tutor-check decision */}
+                          {(() => {
+                            const c = paper.tutor_check;
+                            const bg = !c
+                              ? "bg-white text-gray-800 border-gray-400"
+                              : c === "ok"
+                              ? "bg-emerald-500 text-white border-emerald-700"
+                              : c === "review"
+                              ? "bg-amber-500 text-white border-amber-700"
+                              : "bg-red-600 text-white border-red-800";
+                            const title = !c
+                              ? "Tutor check: not yet set"
+                              : c === "ok"
+                              ? "Tutor check: ✓ OK (share with tutor)"
+                              : c === "review"
+                              ? "Tutor check: ? Review before sharing"
+                              : "Tutor check: ✗ Do not share";
+                            return (
+                              <span
+                                className={`inline-flex items-center justify-center w-4 h-4 rounded-full border-2 text-[10px] font-black leading-none ${bg}`}
+                                title={title}
+                              >
+                                T
                               </span>
                             );
                           })()}

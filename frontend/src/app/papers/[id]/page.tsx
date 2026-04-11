@@ -387,6 +387,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Disable toggle */}
         <DisableToggle paperId={paperId} initialDisabled={paper.disabled || false} />
 
+        {/* Tutor check decision */}
+        <TutorCheckWidget paperId={paperId} initial={paper.tutor_check || null} />
+
         {/* Generate Analysis */}
         <AnalysisButton paperId={paperId} />
       </div>
@@ -1544,8 +1547,9 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
       }
 
       // Step 2: ALWAYS sync to Zotero — create the paper if it isn't there yet,
-      // then upload the validation PDF + analysis attachments.
+      // then upload the Extended Abstract analysis attachment.
       // The backend /zotero/sync calls add_paper() when zotero_key is null.
+      // The validation report is intentionally kept LOCAL only.
       setSavePhase(hasZoteroKey ? "Updating metadata on Zotero..." : "Creating paper on Zotero...");
       try {
         const syncRes = await fetch(`/api/v1/zotero/sync`, {
@@ -1558,14 +1562,18 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
           throw new Error(err.detail || `Zotero paper sync failed (${syncRes.status})`);
         }
 
-        setSavePhase("Uploading validation PDF + attachments...");
+        setSavePhase("Uploading Extended Abstract to Zotero...");
         const aRes = await fetch(`/api/v1/zotero/sync-analysis/${paperId}`, {
           method: "POST",
           headers: auth,
         });
         if (!aRes.ok) {
           const err = await aRes.json().catch(() => ({}));
-          throw new Error(err.detail || `Zotero analysis sync failed (${aRes.status})`);
+          // 404 "No Extended Abstract" is informational, not an error: the paper
+          // metadata has been synced regardless. Tolerate it silently.
+          if (aRes.status !== 404 || !String(err.detail || "").includes("Extended Abstract")) {
+            throw new Error(err.detail || `Zotero analysis sync failed (${aRes.status})`);
+          }
         }
 
         // Force the parent paper detail to re-fetch so zotero_key / badges update
@@ -2084,6 +2092,66 @@ function DiffModal({ run, paperId, onClose }: { run: AnalysisRun; paperId: numbe
 }
 
 
+// --- Tutor Check Widget ---
+// Four-state decision: ✓ OK / ? Review / ✗ No / — (not set).
+// Independent from rating (paper quality) and from validation (meta-validation
+// of the LLM analysis). Surfaces as colored Zotero tag and as a row badge.
+
+function TutorCheckWidget({ paperId, initial }: { paperId: number; initial: string | null }) {
+  const [value, setValue] = useState<string | null>(initial);
+  const [saving, setSaving] = useState(false);
+
+  const save = async (next: string | null) => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("fl-token");
+      const url = next
+        ? `/api/v1/papers/${paperId}/tutor-check?check=${next}`
+        : `/api/v1/papers/${paperId}/tutor-check`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setValue(data.tutor_check);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const options: { v: string | null; label: string; cls: string }[] = [
+    { v: "ok",     label: "✓ OK",     cls: "bg-emerald-700 hover:bg-emerald-600 border-emerald-400 text-white" },
+    { v: "review", label: "? Review", cls: "bg-amber-600 hover:bg-amber-500 border-amber-300 text-white" },
+    { v: "no",     label: "✗ NO",     cls: "bg-red-700 hover:bg-red-600 border-red-400 text-white" },
+    { v: null,     label: "—",        cls: "bg-[var(--secondary)] border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]" },
+  ];
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--secondary)] border border-[var(--border)]">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-bold mr-1">Tutor check</span>
+      {options.map((opt) => (
+        <button
+          key={opt.label}
+          onClick={() => save(opt.v)}
+          disabled={saving}
+          className={`px-2 py-1 rounded text-[10px] font-bold border-2 transition-transform hover:scale-105 disabled:opacity-50 ${opt.cls} ${value === opt.v ? "ring-2 ring-white/60" : "opacity-60"}`}
+          title={
+            opt.v === "ok" ? "Approved — share with tutor" :
+            opt.v === "review" ? "Discuss before sharing" :
+            opt.v === "no" ? "Do not share" :
+            "Clear (not checked)"
+          }
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+
 // --- Disable Toggle ---
 
 function DisableToggle({ paperId, initialDisabled }: { paperId: number; initialDisabled: boolean }) {
@@ -2187,7 +2255,7 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
         return;
       }
 
-      // Step 2: sync analysis attachments + dynamic validation report
+      // Step 2: sync the Extended Abstract attachment (if present)
       let analysisMsg = "";
       try {
         const ares = await api.syncAnalysisToZotero(paperId);
@@ -2196,11 +2264,16 @@ function SyncPaperToZotero({ paperId, hasZoteroKey }: { paperId: number; hasZote
           analysisMsg = ` · ${ares.count} attachment${ares.count > 1 ? "s" : ""}: ${files}`;
         } else if (ares.status === "already_synced") {
           analysisMsg = " · attachments already synced";
+        } else if (ares.status === "no_attachments") {
+          analysisMsg = " · no Extended Abstract yet (metadata only)";
         }
       } catch (e: any) {
         // Analysis sync failure is non-fatal — paper metadata still synced
-        if (!String(e?.message || "").includes("No analysis report")) {
-          analysisMsg = ` · attachments: ${e?.message || "failed"}`;
+        const msg = String(e?.message || "");
+        if (!msg.includes("No Extended Abstract") && !msg.includes("No analysis report")) {
+          analysisMsg = ` · attachments: ${msg || "failed"}`;
+        } else {
+          analysisMsg = " · no Extended Abstract yet (metadata only)";
         }
       }
 
