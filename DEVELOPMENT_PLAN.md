@@ -1,6 +1,6 @@
 # FL-RESEARCH-MONITOR — Development Plan
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-11
 
 ---
 
@@ -183,12 +183,107 @@
 
 ---
 
+## Phase 10: Docker Porting + VPS Deployment (v2.12.0 – v2.13.1) — COMPLETATA
+
+- [x] **Docker local stack (v2.12.0)**:
+  - [x] `backend/Dockerfile` multi-stage (Python 3.12-slim-bookworm + TeX Live + WeasyPrint libs, user appuser uid 1000, tini PID1, healthcheck)
+  - [x] `frontend/Dockerfile` three-stage (Node 22-alpine + Next.js standalone output)
+  - [x] `docker-compose.yml` (backend + frontend + Caddy :8080 on local)
+  - [x] `Caddyfile` reverse proxy locale (no TLS)
+  - [x] `.env.docker` isolato + `data-docker/` bind-mount separato dal dev nativo
+  - [x] Frontend `next.config.ts`: `output: "standalone"` (ignored in dev)
+- [x] **authHeaders helper + TS strict build (v2.12.1)**:
+  - [x] `frontend/src/lib/authHeaders.ts` — SSR-safe, `Record<string, string>`
+  - [x] Refactor 29 siti auth header in 8 file (reports, network, settings, peer-review, peer-review/[id], paper-quality/[id], papers/[id], lib/api)
+  - [x] Rimossi 4 helper locali duplicati (`auth()`, `getAuthHeaders()`, 2 × `const auth = ...`)
+  - [x] Rimosso flag temporaneo `typescript.ignoreBuildErrors`
+- [x] **Backend production hardening (v2.13.0)**:
+  - [x] `slowapi>=0.1.9` in requirements.txt
+  - [x] Pydantic `Field(min_length=12, max_length=20)` su `CreateUserRequest.password` e `ChangePasswordRequest.new_password`
+  - [x] Rate limit `@limiter.limit("5/minute")` su `POST /auth/login`
+  - [x] Removed legacy manual checks `len(password) < 6`
+  - [x] `app.state.limiter` + `RateLimitExceeded` exception handler in main.py
+- [x] **Production config files (v2.13.0)**:
+  - [x] `Caddyfile.production` — resmon.fabioliberti.com + Let's Encrypt + HSTS + security headers
+  - [x] `docker-compose.production.yml` — ports 80/443/tcp + 443/udp (HTTP/3), APP_ENV=production, `./data` bind-mount
+  - [x] `.env.production.example` committed (template), real `.env.production` solo sul VPS (gitignored, mode 600)
+- [x] **Dockerfile fix (v2.13.1)**:
+  - [x] Rimossa `COPY backend/alembic` (dir empty, untracked in git, bloccava build VPS)
+- [x] **Production secrets generation (local Mac, never committed)**:
+  - [x] `JWT_SECRET_KEY`, `ADMIN_PASSWORD` (20 char), `API_SERVICE_KEY` via `openssl rand`
+  - [x] Salvati nel password manager dell'utente
+- [x] **DNS Aruba**: A record `resmon.fabioliberti.com → 188.213.166.153`
+- [x] **VPS preparation**: UFW 80/443, `/opt/reserch_mon/`, git clone pubblico
+- [x] **Data transfer**: rsync di `backend/data/` → `/opt/reserch_mon/data/` (352 MB)
+- [x] **`.env.production`** creato sul VPS con heredoc SSH, permessi 600
+- [x] **Build production images** sul VPS (backend 990 MB, frontend 223 MB)
+- [x] **Admin password mutation**: one-shot container effimero che sovrascrive l'hash in DB con la password production (risolve il problema che `seed_admin_user` skippa se esistono già utenti)
+- [x] **Chown 1000:1000** di `/opt/reserch_mon/data/` per permessi container
+- [x] **Docker compose up** produzione: Caddy + Let's Encrypt TLS-ALPN-01 challenge OK, certificato emesso
+- [x] **HTTPS smoke test**: HTTP/2 200, HSTS attivo, `/api/v1/papers` → 401, login admin OK
+- [x] **Merge su main** + push (nessun branch feature residuo)
+- [x] **Documentazione Fase 2 completa** in `DEPLOYMENT_OPERATIVE_DOCKER.md` (gitignored, local only)
+
+**URL produzione:** https://resmon.fabioliberti.com
+
+---
+
+## Phase 11: Operational Hardening (v2.14.0) — PIANIFICATA
+
+**Obiettivo:** rendere il deploy produzione resiliente a guasti hardware, errori umani, e tentativi d'intrusione.
+
+### 11.1 Backup automatico (priorità alta)
+
+- [ ] Script cron notturno `/opt/reserch_mon/scripts/backup.sh`:
+  - `tar czf backup-YYYYMMDD.tgz data/` (esclude `data/reports/tmp/`)
+  - `gpg --symmetric --cipher-algo AES256` con passphrase nel password manager
+  - Upload su **Backblaze B2** (o Wasabi, o S3 Glacier) via `b2 upload-file` o `rclone`
+- [ ] Retention policy: 7 daily + 4 weekly + 3 monthly
+- [ ] `healthchecks.io` ping a fine script (alert se backup non avviene entro 36h)
+- [ ] Script di restore testato: `restore.sh backup-YYYYMMDD.tgz` ricrea `data/` vergine
+- [ ] Documentare nel `DEPLOYMENT_OPERATIVE_DOCKER.md` sezione Backup & Restore
+- **Tempo stimato:** 1-2 ore
+- **Costo:** ~€0.50/mese per 100 GB retention
+
+### 11.2 Uptime monitoring (priorità alta)
+
+- [ ] **UptimeRobot** (free tier, 50 monitor):
+  - Monitor HTTPS su `https://resmon.fabioliberti.com/health` via Caddy path routing (serve route Caddy dedicata `/health` → backend, attualmente intercettata da Next 404)
+  - Oppure monitor TCP su `resmon.fabioliberti.com:443`
+  - Check interval 5 min
+  - Email + SMS alert (se pro plan)
+- [ ] **Healthchecks.io** (free tier) per cron backup (vedi 11.1)
+- **Tempo stimato:** 15-30 min
+
+### 11.3 Caddy route `/health` bypass frontend
+
+- [ ] Aggiungere in `Caddyfile.production` un `handle /health` che fa `reverse_proxy backend:8000` prima del catch-all frontend, così `/health` diventa disponibile pubblicamente per i monitor esterni (oggi va sul frontend 404)
+- **Nota:** nessun rischio di leak perché `/health` espone solo `{"status":"ok","version":"0.1.0"}`
+
+---
+
 ## Future Enhancements
 
-- [ ] Deploy web (VPS con Docker Compose o Cloudflare Tunnel)
+### Deploy / Ops
+
+- [ ] **CI/CD GitHub Actions → VPS** — push su main tag `v*` triggera build+push GHCR + SSH deploy su VPS
+- [ ] **Staging environment** — terzo stack `staging.resmon.fabioliberti.com` per test pre-produzione
+- [ ] **Ollama/Gemma4 sul VPS** — containerizzato o su macchina dedicata, se serve analisi LLM in italiano anche da produzione (oggi Ollama è solo sul Mac dev)
+- [ ] **SSH port change 22 → 2222** — bonus sicurezza rimandato, da rivalutare se i log fail2ban crescono
+- [ ] **Base image upgrade** bookworm → trixie (Debian 13) quando i pacchetti TeX Live saranno stabili
+
+### Features funzionali
+
 - [ ] Citation network data from Semantic Scholar references
 - [ ] Author tracking and affiliation analytics
 - [ ] Full-text search via PostgreSQL tsvector
 - [ ] Webhook notifications for new high-relevance papers
 - [ ] Dashboard widgets per structured data aggregati
 - [ ] Comparison UI refinement dopo uso reale
+- [ ] Creazione primi tutor scientifici (ruolo `viewer`, account non admin via script CLI)
+- [ ] Comparison export/import tra localStorage di origini diverse (Mac `:3000` ↔ VPS `resmon.fabioliberti.com`)
+
+### Scalabilità condizionale
+
+- [ ] **PostgreSQL** migration da SQLite (solo quando serve per multi-utente concorrenti o >10k paper)
+- [ ] Email report integration (SendGrid/Gmail SMTP) per notifiche admin

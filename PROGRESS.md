@@ -1,12 +1,86 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.3.0 — Paper Comparison + Citations + Summary
-**Current Version:** v2.3.0
-**Status:** Full analysis pipeline with Claude Opus 4.6, comparison, citation refresh, summary cards
+**Current Phase:** v2.13.1 — Production deployment on VPS (Fase 2)
+**Current Version:** v2.13.1
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Docker stack con Caddy/Let's Encrypt HTTPS, backend hardening (rate limit 5/min login + password 12-20 char), admin password forte, 352 MB dati migrati dal Mac locale al VPS, APScheduler attivo (discovery 06:00 UTC + citations 07:00 UTC)
 
 ---
 
 ## Session Log
+
+### 2026-04-11 — Session Deployment Fase 1 + Fase 2
+
+Sessione lunga in un giorno solo per portare il framework online.
+
+**Fase 1 — Docker porting locale (v2.12.0):**
+- Creato stack Docker locale completo (`backend/Dockerfile` multi-stage, `frontend/Dockerfile` con Next.js standalone, `docker-compose.yml`, `Caddyfile` locale)
+- Isolamento totale dai dati veri: `data-docker/` separato + `.env.docker`
+- Prima build 20-40 min (TeX Live + WeasyPrint libs), smoke test su `localhost:8080` — tutte le rotte verdi
+- Dev locale nativo (`uvicorn :8000 + npm run dev :3000`) intatto e operativo in parallelo
+
+**authHeaders refactor (v2.12.1):**
+- `next build` strict ha rilevato 29 errori TS latenti nel pattern `headers: token ? { Authorization } : {}` distribuito su 8 file
+- Creato helper `frontend/src/lib/authHeaders.ts` SSR-safe (return `Record<string, string>`)
+- Refactor di tutti i 29 siti, rimossi 4 helper locali duplicati (`auth()`, `getAuthHeaders()`, 2 × `const auth = ...`)
+- Rimosso flag temporaneo `typescript.ignoreBuildErrors`, build strict TS ora passa senza scorciatoie
+- 1 callsite intenzionalmente non refattorizzata in `papers/[id]/page.tsx:614-616` (guard esplicito `if (!token) return Promise.reject(...)`, semantica diversa)
+- Merge feature branch in main (51b1e81)
+
+**Fase 2 — Deploy VPS produzione (v2.13.0 + v2.13.1):**
+
+Backend hardening:
+- `slowapi>=0.1.9` rate limiting
+- Pydantic `Field(min_length=12, max_length=20)` su password
+- `@limiter.limit("5/minute")` sul login endpoint
+- Rimossi legacy manual `len < 6` check
+- Test live: 5 × 401 → 6° 429, validazione Pydantic `< 12` e `> 20` → rejected
+
+Production config files (mai committato `.env.production` reale, solo `.example`):
+- `Caddyfile.production` con `resmon.fabioliberti.com` + Let's Encrypt + HSTS + security headers (X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, `-Server`)
+- `docker-compose.production.yml` porte 80/443/tcp + 443/udp (HTTP/3), APP_ENV=production, bind `./data`, no `host.docker.internal`
+
+Secrets production generati via `openssl rand` (JWT 62 char, ADMIN_PASSWORD 20 char, API_SERVICE_KEY 43 char) — salvati nel password manager dell'utente, mai nel repo.
+
+DNS Aruba: record A `resmon.fabioliberti.com → 188.213.166.153`, propagato su Google + Cloudflare in ~5 min.
+
+VPS preparation:
+- UFW allow 80/443 (tcp + udp per HTTP/3)
+- `/opt/reserch_mon/` creato con owner `fabio:fabio`
+- Git clone pubblico dalla main
+
+Data transfer:
+- `rsync -avz` di `backend/data/` (352 MB, 520 file) al VPS in ~12 sec a 29 MB/s
+
+`.env.production` creato sul VPS via SSH heredoc, permessi 600, gitignored.
+
+Build VPS (problemi risolti):
+1. **Bug v2.13.1**: `COPY backend/alembic` nel backend Dockerfile falliva perché la directory è vuota localmente e git non traccia dir empty → rimossa, DB creato via `Base.metadata.create_all` in lifespan
+2. **Permission mismatch**: container `appuser` uid 1000 vs `fabio` uid 1001 → `sudo chown -R 1000:1000 /opt/reserch_mon/data`
+
+Admin password mutation:
+- Problema: i dati rsync-ati includono la tabella `users` con admin/admin hash legacy. `seed_admin_user()` skippa se ci sono già utenti, quindi `ADMIN_PASSWORD` in `.env.production` sarebbe stato ignorato
+- Soluzione: one-shot container effimero `docker compose run --rm backend python -c "..."` che sovrascrive direttamente l'hash bcrypt del DB con la password production
+- Da quel momento `admin/admin` invalidato sul VPS
+
+Docker compose up -d production:
+- Caddy su 80/443 (tcp+udp), backend + frontend su network interno
+- Caddy log: `new ACME account registered` → `trying to solve challenge tls-alpn-01` → 5 verifiche multi-perspective da IP Let's Encrypt → `certificate obtained successfully`
+- Primo certificato TLS firmato
+
+Verifica end-to-end:
+- `curl -I https://resmon.fabioliberti.com/` → HTTP/2 200, HSTS, X-Frame-Options, via: Caddy, alt-svc: h3
+- `curl /api/v1/papers` → 401 (auth required, corretto)
+- Login manuale browser con password production → OK, dati visibili
+
+Documentazione:
+- `DEPLOYMENT_OPERATIVE_DOCKER.md` (gitignored, local only) aggiornato con Fase 2 completa + runbook operations (start/stop/logs/backup/password reset)
+- `DEVELOPMENT_PLAN.md` aggiornato con Phase 10 (VPS deployment) + Phase 11 (Operational hardening, pianificata) + Future Enhancements rivisti
+
+**Tag git rilasciati oggi:** v2.12.0 → v2.12.1 → v2.13.0 → v2.13.1 (4 versioni in una sessione).
+
+**Prossimo passo consigliato:** Phase 11.1 (backup automatico notturno + Backblaze B2) e 11.2 (uptime monitoring con UptimeRobot).
+
+---
 
 ### 2026-03-29 — Session 1
 
