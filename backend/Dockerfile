@@ -65,9 +65,10 @@ RUN pip install --no-index --find-links=/wheels -r /tmp/requirements.txt \
 RUN useradd --create-home --uid 1000 appuser
 WORKDIR ${APP_HOME}
 
-# Copy application code (excluded dirs handled by .dockerignore)
+# Copy application code (excluded dirs handled by .dockerignore).
+# Note: backend/alembic/ exists locally but is empty and not used at runtime
+# (tables created via Base.metadata.create_all in lifespan), so not copied here.
 COPY --chown=appuser:appuser backend/app ./app
-COPY --chown=appuser:appuser backend/alembic ./alembic
 COPY --chown=appuser:appuser backend/pyproject.toml ./pyproject.toml
 COPY --chown=appuser:appuser backend/scripts ./scripts
 
