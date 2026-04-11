@@ -1,0 +1,81 @@
+# FL Research Monitor — local Docker stack (Fase 1)
+#
+# SAFETY MODEL
+#   - Runtime data is bind-mounted from ./data-docker/ (isolated copy of ./data/).
+#     The live dev database in ./data/ is NEVER touched by this stack.
+#   - Only Caddy is exposed on the host (:8080). Backend (:8000) and frontend (:3000)
+#     are reachable only inside the Docker network, so they do not collide with
+#     the local dev servers running natively on the Mac.
+#   - No `version:` key — Compose v2 ignores it (deprecated).
+#
+# USAGE
+#   docker compose up --build        # foreground, shows all logs
+#   docker compose up -d --build     # detached
+#   docker compose down              # stop and remove containers (data-docker/ is preserved)
+#   docker compose logs -f backend   # follow backend logs
+#
+# ENV
+#   Secrets and API keys live in .env.docker (gitignored). Copy .env.docker.example
+#   and fill the values before the first build.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: reserch-mon-backend:local
+    container_name: reserch-mon-backend
+    env_file:
+      - .env.docker
+    environment:
+      # Point the app at the mounted volume, not the baked-in /app/data
+      DATA_DIR: /app/data
+      # Ollama runs on the Mac host, not in a container
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    volumes:
+      - ./data-docker:/app/data
+    extra_hosts:
+      # Allow `host.docker.internal` to resolve on Linux VPS too (no-op on Mac)
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: reserch-mon-frontend:local
+    container_name: reserch-mon-frontend
+    env_file:
+      - .env.docker
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: reserch-mon-caddy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

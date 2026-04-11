@@ -1,0 +1,37 @@
+# Exclude everything not needed for the frontend image build.
+
+node_modules/
+.next/
+out/
+.turbo/
+
+# Local env files (secrets via env_file at runtime)
+.env
+.env.*
+!.env.example
+
+# Build cache
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Tests
+coverage/
+.nyc_output/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Compendium build artifacts (source kept, generated build excluded)
+_fedcompendiumXL_CC/build/
+_fedcompendiumXL_CC/node_modules/
+
+# Dev logs
+*.log
+npm-debug.log*

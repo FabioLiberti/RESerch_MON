@@ -45,6 +45,13 @@ _SCAMBIO/
 # Claude Code
 .claude/
 
+# Operative deployment doc (contains infra details, kept local)
+DEPLOYMENT_OPERATIVE_DOCKER.md
+
+# Docker local stack — env with secrets and isolated runtime data
+.env.docker
+data-docker/
+
 # Compendium build (already in frontend/public/compendium/)
 _fedcompendiumXL_CC/build/
 _fedcompendiumXL_CC/node_modules/

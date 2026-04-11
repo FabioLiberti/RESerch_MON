@@ -1,0 +1,44 @@
+# Exclude everything not needed for the backend image build.
+# Keeps the build context small and the image reproducible.
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Runtime data — NEVER bake into the image.
+# The container mounts ./data-docker/ at runtime instead.
+data/
+backend/data/
+
+# Tests and dev-only files
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic runtime artifacts (migrations themselves are kept)
+alembic/versions/__pycache__/
+
+# Local env files — secrets must come via env_file at runtime, not baked in
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Git
+.git/
+.gitignore
