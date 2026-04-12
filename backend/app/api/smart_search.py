@@ -258,6 +258,7 @@ async def recent_searches(
             "sources": j.sources,
             "total_found": j.total_found,
             "already_in_db": j.already_in_db,
+            "error_message": j.error_message,
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "completed_at": j.completed_at.isoformat() if j.completed_at else None,
         }

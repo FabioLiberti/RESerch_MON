@@ -655,6 +655,7 @@ interface RecentJob {
   keywords: string[];
   total_found: number;
   already_in_db: number;
+  error_message?: string | null;
   created_at: string | null;
   completed_at: string | null;
 }
@@ -771,7 +772,9 @@ function RecentSearches() {
                         {((job as any).sources as string[]).map((s: string) => SOURCE_LABELS[s] || s).join(", ")}
                       </span>
                     )}
-                    {job.status === "done" && <span>&middot; {job.total_found} found ({job.total_found - job.already_in_db} new)</span>}
+                    {job.status === "done" && job.total_found > 0 && <span>&middot; {job.total_found} found ({job.total_found - job.already_in_db} new)</span>}
+                    {job.status === "done" && job.total_found === 0 && <span className="text-amber-400">&middot; no results</span>}
+                    {job.status === "failed" && job.error_message && <span className="text-red-400">&middot; {job.error_message}</span>}
                     {job.status === "running" && job.created_at && (
                       <span className="flex items-center gap-1">
                         <ElapsedTimer startTime={new Date(job.created_at).getTime()} />
@@ -1284,7 +1287,24 @@ function SmartSearchSection() {
       {/* Results */}
       {results && (
         <div className="mt-5 space-y-3">
-          {/* Results header */}
+          {/* Zero results feedback */}
+          {results.length === 0 && (
+            <div className="px-4 py-6 rounded-xl bg-[var(--secondary)] border border-[var(--border)] text-center space-y-2">
+              <p className="text-sm font-medium">No papers found</p>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                No results were returned by the selected sources for this search.
+                {queriesUsed && Object.keys(queriesUsed).length > 0 && (
+                  <> Queries sent: {Object.entries(queriesUsed).map(([src, q]) => `${src}`).join(", ")}.</>
+                )}
+              </p>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Try different keywords, a broader search mode, or enable more sources.
+              </p>
+            </div>
+          )}
+
+          {/* Results header (only when results exist) */}
+          {results.length > 0 && (
           <div className="flex items-center justify-between">
             <div className="text-sm">
               <span className="font-medium">{results.length} papers</span>
@@ -1303,6 +1323,7 @@ function SmartSearchSection() {
               )}
             </div>
           </div>
+          )}
 
           {/* Results list */}
           <div className="space-y-1 max-h-[500px] overflow-y-auto overflow-x-hidden">
