@@ -221,17 +221,26 @@ def extract_keywords_from_pdf(pdf_path: str) -> dict[str, list[str]]:
                 logger.info(f"Extracted {len(keywords)} {cat_name} from PDF (single-line)")
 
     # STRATEGY 2 — block capture (multi-line with semantic terminator).
-    # Only run this for categories we did NOT already match with strategy 1,
-    # so we never upgrade a good single-line capture into a greedy block match.
+    # Run for ALL categories: if the block pattern finds MORE keywords than the
+    # single-line pattern did, the block result wins. This handles journals where
+    # keywords wrap across multiple lines (e.g. Frontiers, some Elsevier) — the
+    # single-line capture stops at the first newline and truncates the list, while
+    # the block capture correctly reads until the next section heading.
     for cat_name, pattern in BLOCK_PATTERNS:
-        if cat_name in seen_categories:
-            continue
         match = pattern.search(text)
         if match:
             keywords = _clean_and_split(match.group(1), force_single_line=False)
             if keywords:
-                result[cat_name] = keywords
-                seen_categories.add(cat_name)
-                logger.info(f"Extracted {len(keywords)} {cat_name} from PDF (block)")
+                existing = result.get(cat_name, [])
+                if len(keywords) > len(existing):
+                    if existing:
+                        logger.info(
+                            f"Block pattern found {len(keywords)} {cat_name} "
+                            f"(upgrading from {len(existing)} single-line)"
+                        )
+                    else:
+                        logger.info(f"Extracted {len(keywords)} {cat_name} from PDF (block)")
+                    result[cat_name] = keywords
+                    seen_categories.add(cat_name)
 
     return result

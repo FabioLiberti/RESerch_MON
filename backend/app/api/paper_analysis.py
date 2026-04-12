@@ -174,6 +174,15 @@ async def trigger_analysis(
                 # Determine version
                 version = _get_next_version(paper_id, body.mode)
 
+                # Save raw LLM text immediately (before rendering) to avoid losing
+                # expensive Claude output if the render pipeline crashes.
+                from pathlib import Path as _P
+                _raw_dir = _P(settings.reports_path) / "analysis"
+                _raw_dir.mkdir(parents=True, exist_ok=True)
+                _raw_path = _raw_dir / f"raw_{body.mode}_{paper_id}_v{version or 1}.txt"
+                _raw_path.write_text(analysis_text, encoding="utf-8")
+                logger.info(f"Raw LLM text saved: {_raw_path}")
+
                 html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.6", mode=body.mode)
                 html_path = save_report(html, paper_id, mode=body.mode, version=version)
                 md_path = save_markdown(analysis_text, paper_id, body.mode, paper_data, version=version)
