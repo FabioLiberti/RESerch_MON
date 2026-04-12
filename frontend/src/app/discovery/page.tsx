@@ -448,12 +448,12 @@ function ImportBibliography() {
                 </button>
               </div>
 
-              <div className="space-y-1 max-h-[400px] overflow-y-auto">
+              <div className="space-y-1 max-h-[400px] overflow-y-auto overflow-x-hidden">
                 {results.map((r, i) => (
                   <div
                     key={i}
                     className={cn(
-                      "flex items-start gap-3 p-3 rounded-lg transition-colors",
+                      "flex items-start gap-3 p-3 rounded-lg transition-colors overflow-hidden",
                       r.status === "already_in_db" ? "opacity-70" :
                       r.status === "not_found" || r.status === "error" ? "opacity-50" :
                       selectedPapers.has(i) ? "bg-[var(--primary)]/5" :
@@ -745,12 +745,12 @@ function RecentSearches() {
           {jobs.map((job) => (
             <div
               key={job.job_id}
-              className="flex items-center justify-between p-3 rounded-lg bg-[var(--secondary)]"
+              className="flex items-center justify-between p-3 rounded-lg bg-[var(--secondary)] overflow-hidden"
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
                 {statusIcon(job.status)}
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
+                <div className="min-w-0 overflow-hidden">
+                  <p className="text-sm font-medium truncate max-w-full">
                     {(job as any).mode && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded mr-1.5 font-semibold uppercase ${
                         (job as any).mode === "keywords" ? "bg-blue-700 text-white" :
@@ -1305,12 +1305,12 @@ function SmartSearchSection() {
           </div>
 
           {/* Results list */}
-          <div className="space-y-1 max-h-[500px] overflow-y-auto">
+          <div className="space-y-1 max-h-[500px] overflow-y-auto overflow-x-hidden">
             {results.map((r, i) => (
               <div
                 key={i}
                 className={cn(
-                  "flex items-start gap-3 p-3 rounded-lg transition-colors",
+                  "flex items-start gap-3 p-3 rounded-lg transition-colors overflow-hidden",
                   r.already_in_db
                     ? "opacity-70"
                     : selectedPapers.has(i)

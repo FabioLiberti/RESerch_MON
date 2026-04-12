@@ -165,7 +165,7 @@ export const api = {
 
   // Paper Analysis
   triggerAnalysis: (paperIds: number[], mode: string = "quick") =>
-    fetch("http://localhost:8000/api/v1/analysis/trigger", {
+    fetch("/api/v1/analysis/trigger", {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ paper_ids: paperIds, mode }),
@@ -231,7 +231,7 @@ export const api = {
 
   // Bibliography Import
   bibliographyExtract: (text: string) =>
-    fetch("http://localhost:8000/api/v1/bibliography/extract", {
+    fetch("/api/v1/bibliography/extract", {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ text }),
