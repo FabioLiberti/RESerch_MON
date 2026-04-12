@@ -116,9 +116,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 function NavItem({
   item,
   isActive,
+  onNavigate,
 }: {
   item: { href: string; label: string; icon: string; tooltip: string };
   isActive: boolean;
+  onNavigate?: () => void;
 }) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const [show, setShow] = useState(false);
@@ -152,6 +154,7 @@ function NavItem({
       <Link
         ref={linkRef}
         href={item.href}
+        onClick={onNavigate}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
         onFocus={onEnter}
@@ -373,7 +376,7 @@ function LearningPathSection() {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [isDark, setIsDark] = useState(true);
@@ -414,7 +417,7 @@ export default function Sidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
-            <NavItem key={item.href} item={item} isActive={isActive} />
+            <NavItem key={item.href} item={item} isActive={isActive} onNavigate={onNavigate} />
           );
         })}
 

@@ -72,14 +72,94 @@ button:active, a:active, input:focus, select:focus {
   background: var(--secondary-foreground);
 }
 
-/* Responsive sidebar */
+/* Responsive sidebar + mobile hamburger menu */
+
+/* Mobile top bar: hidden on desktop, visible on mobile */
+.mobile-topbar {
+  display: none;
+}
+
+/* Mobile drawer: hidden by default */
+.mobile-drawer {
+  display: none;
+}
+
+/* Mobile overlay: hidden by default */
+.mobile-overlay {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  /* Hide desktop sidebar */
   .sidebar-desktop {
     display: none;
   }
+
+  /* Remove sidebar margin from main content, add top padding for the mobile bar */
   .main-content {
     margin-left: 0 !important;
+    padding-top: 4.5rem !important;
   }
+
+  /* Show mobile top bar */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3.5rem;
+    padding: 0 1rem;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    z-index: 40;
+  }
+
+  /* Show mobile overlay when drawer is open */
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    animation: fade-in 0.2s ease-out;
+  }
+
+  /* Mobile drawer (slide from left) */
+  .mobile-drawer {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 16rem;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-out;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .mobile-drawer-open {
+    transform: translateX(0);
+  }
+
+  /* Inside mobile drawer, the Sidebar <aside> should not be fixed-position */
+  .mobile-drawer aside {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100vh;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Line clamp utility */
