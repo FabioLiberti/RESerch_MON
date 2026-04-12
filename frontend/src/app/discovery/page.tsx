@@ -750,7 +750,7 @@ function RecentSearches() {
               <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
                 {statusIcon(job.status)}
                 <div className="min-w-0 overflow-hidden">
-                  <p className="text-sm font-medium truncate max-w-full">
+                  <p className="text-sm font-medium line-clamp-2">
                     {(job as any).mode && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded mr-1.5 font-semibold uppercase ${
                         (job as any).mode === "keywords" ? "bg-blue-700 text-white" :
