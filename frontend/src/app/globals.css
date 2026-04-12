@@ -72,6 +72,14 @@ button:active, a:active, input:focus, select:focus {
   background: var(--secondary-foreground);
 }
 
+/* Prevent any page from expanding beyond the viewport */
+.main-content {
+  max-width: calc(100vw - 16rem); /* 100vw minus sidebar width (w-64 = 16rem) */
+  overflow-x: hidden;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 /* Responsive sidebar + mobile hamburger menu */
 
 /* Mobile top bar: hidden on desktop, visible on mobile */
@@ -99,6 +107,7 @@ button:active, a:active, input:focus, select:focus {
   .main-content {
     margin-left: 0 !important;
     padding-top: 4.5rem !important;
+    max-width: 100vw !important;
   }
 
   /* Show mobile top bar */
