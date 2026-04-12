@@ -277,7 +277,7 @@ function LabelsSection() {
   }
 
   return (
-    <div>
+    <div className="max-h-96 overflow-y-auto">
       {[...labels].sort((a, b) => a.name.localeCompare(b.name)).map((label) => (
         <Link
           key={label.id}
