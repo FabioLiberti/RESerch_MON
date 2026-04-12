@@ -309,7 +309,7 @@ function TopicsSection() {
   }
 
   return (
-    <div>
+    <div className="max-h-96 overflow-y-auto">
       {topics.map((topic) => (
         <Link
           key={topic.id}
@@ -326,7 +326,7 @@ function TopicsSection() {
 
 function LearningPathSection() {
   return (
-    <div>
+    <div className="max-h-96 overflow-y-auto">
       {LEARNING_TOPICS.map((topic) => {
         const content = topic.available ? (
           <Link
