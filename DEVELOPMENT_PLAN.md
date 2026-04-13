@@ -274,58 +274,61 @@
 
 ---
 
-## Phase 12: Unified Paper Lifecycle (v2.15.0+) — PIANIFICATA
+## Phase 12: Unified Paper Lifecycle (v2.15.0 – v2.16.1) — IN CORSO
 
 **Obiettivo:** unificare paper pubblicati e non-pubblicati in un unico modello con ciclo
 di vita tracciabile, collegare Peer Review al DB papers, e introdurre un diario strutturato
 delle review ricevute — sia per paper da revieware per conto di journal, sia per paper
 propri sottomessi a journal con osservazioni dai reviewer.
 
-### 12.A — paper_role + collegamento peer_review → paper (~3h)
+### 12.A — paper_role + collegamento peer_review → paper — COMPLETATA (v2.15.0-1)
 
-- [ ] Nuova colonna `paper_role` su `papers`: `'bibliography'` (default) | `'reviewing'` | `'my_manuscript'`
-- [ ] Nuova FK `peer_reviews.paper_id → papers.id` (nullable per retrocompatibilità)
-- [ ] Creazione Peer Review: crea automaticamente anche il paper nel DB con `role = reviewing` + titolo/autori/journal, oppure collega a paper esistente (autocomplete per titolo/DOI)
-- [ ] Titolo nella lista Peer Review → click apre `/papers/{id}` (pagina dettaglio standard)
-- [ ] Bottone "Open Review Form" in `/papers/{id}` → apre `/peer-review/{id}` (la form rubric/export)
-- [ ] Filtro per ruolo nella papers list (All / Bibliography / Reviewing / My Manuscripts)
-- [ ] Badge ruolo nella papers list: nessuno per bibliography, `R` per reviewing, `MY` per my_manuscript
+- [x] Nuova colonna `paper_role` su `papers`: `'bibliography'` (default) | `'reviewing'` | `'my_manuscript'`
+- [x] Nuova FK `peer_reviews.paper_id → papers.id` (nullable per retrocompatibilità)
+- [x] Creazione Peer Review: crea automaticamente anche il paper nel DB con `role = reviewing` + titolo/journal
+- [x] Titolo nella lista Peer Review → click apre `/papers/{id}` (pagina dettaglio standard)
+- [x] Bottone "Peer Review" in `/papers/{id}` → apre `/peer-review/{id}` (allineato a destra accanto a Quality Review)
+- [x] Filtro per ruolo nella papers list (All / Bibliography / Reviewing / My Manuscripts)
+- [x] Badge ruolo nella papers list: REVIEWING (cyan) per reviewing, MY MANUSCRIPT (blu) per my_manuscript
+- [x] Badge ruolo nell'header della paper detail page (REVIEWING / MY MANUSCRIPT)
+- [x] Peer Review upload PDF → auto-link al paper record (`pdf_local_path`)
+- [x] `peer_review_id` nella risposta PaperDetail per collegamento bidirezionale
 
-### 12.B — Review Journal: diario delle review ricevute (~5h)
+### 12.B — Review Journal: diario delle review ricevute — COMPLETATA (v2.15.2-3)
 
-- [ ] Nuova tabella `review_journal`:
+- [x] Nuova tabella `reviewer_entries` (review_journal):
   - `id` PK, `paper_id` FK → papers
-  - `reviewer_label` TEXT (es. "Reviewer 1", "Editor", "Prof. Rossi (colloquio)")
-  - `source_type` ENUM: `email` | `pdf_annotated` | `editorial_letter` | `scholarone` | `verbal` | `other`
-  - `received_at` DATE
-  - `raw_text` TEXT (testo integrale copiato/incollato/trascritto — supporta qualsiasi formato input)
-  - `attachment_path` TEXT NULL (PDF o file allegato opzionale)
-  - `items` JSON array di osservazioni strutturate
-- [ ] Sotto-struttura `items` per ogni osservazione:
-  - `text`: l'osservazione del reviewer
-  - `section_ref`: sezione del paper di riferimento (opzionale)
-  - `severity`: `major` | `minor` | `suggestion` | `praise`
-  - `status`: `to_address` | `addressed` | `rejected_justified` | `not_applicable`
-  - `response`: la risposta/azione dell'utente (compilata dopo)
-- [ ] Backend API CRUD: `GET/POST /review-journal/{paper_id}`, `PUT/DELETE` per singolo reviewer/observation
-- [ ] Frontend: nuovo tab "Review Journal" in `/papers/{id}` — visibile per paper con `role ≠ bibliography` (o per tutti se configurato)
-  - Sezioni collapsable per reviewer (con label, source_type, data)
-  - Raw text area (read-only dopo salvataggio, edit button)
-  - Lista osservazioni con severity badge + status selector + campo response
-  - Bottone "+ Add Reviewer" e "+ Add Observation"
-  - Progress bar: `N/M observations addressed (X%)`
-- [ ] Il Review Journal serve per ENTRAMBI i ruoli:
-  - `reviewing`: indicazioni dal journal/editor che guidano la tua review (rare ma possibili)
-  - `my_manuscript`: review ricevute dai reviewer del journal con osservazioni da implementare (caso principale, tipicamente 2-3 reviewer per sottomissione)
+  - `reviewer_label` TEXT, `source_type` ENUM (email/pdf_annotated/editorial_letter/scholarone/verbal/other)
+  - `received_at` DATE, `raw_text` TEXT, `attachment_path` TEXT NULL
+  - `items_json` JSON array di osservazioni strutturate
+- [x] Sotto-struttura `items`: text, section_ref, severity (major/minor/suggestion/praise), status (to_address/addressed/rejected_justified/not_applicable), response
+- [x] Backend API CRUD: `GET/POST /review-journal/{paper_id}`, `PUT/DELETE /review-journal/entry/{id}`, `POST /entry/{id}/attachment`
+- [x] Aggregate progress stats: total_observations, addressed, progress_pct
+- [x] Frontend: ReviewJournal component (collapsible reviewer blocks, severity badges, status dropdown, response field, progress bar, add reviewer/observation forms)
+- [x] Integrated in paper detail page (for reviewing/my_manuscript papers)
+- [x] Integrated in peer review detail page (shared component, same data)
 
-### 12.C — My Manuscript + "Suggest & Confirm" match con published (~5h)
+### 12.C — My Manuscript + Submission Timeline — COMPLETATA (v2.15.4-9, v2.16.0-1)
 
-- [ ] Form "Add My Manuscript" (creazione paper non-pubblicato con `role = my_manuscript`):
-  - Titolo, autori, abstract, journal target, submission date
-  - Upload PDF del manoscritto
-  - Nessun DOI (non ancora pubblicato)
-- [ ] Revision History: versioni del manuscript (v1 submitted → v2 revised → v3 camera-ready)
-- [ ] Transizione unpublished → published: **semi-automatica con conferma umana ("Suggest & Confirm")**
+- [x] POST `/papers/my-manuscript`: create paper with `role=my_manuscript`, auto-create authors from comma-separated input
+- [x] New `/my-manuscripts` page: creation form (title, authors, journal, date, abstract) + list with badges
+- [x] New `/my-manuscripts/[id]` page: **side-by-side layout** — PDF viewer (left) + Submission Timeline + Review Journal (right), same pattern as Peer Review and Quality Review
+- [x] Sidebar: new "My Manuscripts" entry between Peer Review and Quality Review
+- [x] Paper detail: "My Manuscripts" button (blue, between Peer Review and Quality Review), links to `/my-manuscripts/{id}`
+- [x] POST `/papers/{id}/mark-published?doi=...`: transition my_manuscript/reviewing → bibliography with DOI assignment
+- [x] "Mark as Published" button in paper detail header (green pill, prompt for DOI)
+- [x] PUT `/papers/{id}/metadata`: update title, abstract, journal, date, type, conference_url, conference_notes, github_url
+- [x] EditableHeader component: inline edit form for non-bibliography papers
+- [x] Submission Timeline (`submission_rounds` table):
+  - round_number, label (standardized presets: Abstract/EA/Full Paper/Revised/Camera Ready/etc. + custom), document_type, submitted_at, deadline, decision (pending/accepted/accepted_with_revisions/minor/major/rejected), decision_at, decision_notes, document_path (per-round PDF)
+  - Deadline tracking with visual urgency indicator (red "overdue!", amber "Nd left")
+  - Full round editing: all fields editable after creation (label, doc type, dates, deadline, decision)
+  - Per-round PDF upload/replace
+  - Vertical timeline with colored dots (green=accepted, amber=revisions, red=rejected)
+- [x] Conference URL + Notes fields in paper metadata (model + API + edit form + header display)
+- [x] GitHub repository URL field in paper metadata (model + API + edit form + GitHub icon in header)
+
+### 12.C+ — "Suggest & Confirm" match with published — PIANIFICATA
   - Durante la daily discovery, il match engine confronta i paper scoperti con i paper unpublished nel DB
   - Match per DOI esatto (confidenza altissima), titolo identico dopo normalizzazione (alta), titolo Levenshtein > 90% (media), titolo simile + autore in comune (alta)
   - **Mai merge automatico** → crea una `match_suggestion` con livello di confidenza
@@ -362,8 +365,8 @@ propri sottomessi a journal con osservazioni dai reviewer.
 - [ ] Verificare retrocompatibilità: peer review esistenti senza paper_id continuano a funzionare
 - [ ] Verificare confidenzialità: viewer non vede paper con ruolo reviewing/my_manuscript quando setting è false
 
-**Tempo totale stimato:** ~16-17 ore (3-4 sessioni)
-**Priorità implementazione:** A → B → C → D → E (le fasi A+B da sole danno il 90% del valore in ~8h)
+**Completato:** Phase 12.A + 12.B + 12.C (~12h)
+**Residuo:** 12.C+ match engine (~3h) + 12.D confidenzialità (~1.5h) + 12.E test (~2h) = ~6.5h
 
 ---
 

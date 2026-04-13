@@ -1,12 +1,58 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.13.1 — Production deployment on VPS (Fase 2)
-**Current Version:** v2.13.1
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Docker stack con Caddy/Let's Encrypt HTTPS, backend hardening (rate limit 5/min login + password 12-20 char), admin password forte, 352 MB dati migrati dal Mac locale al VPS, APScheduler attivo (discovery 06:00 UTC + citations 07:00 UTC)
+**Current Phase:** v2.16.1 — Phase 12 Unified Paper Lifecycle (A+B+C complete)
+**Current Version:** v2.16.1
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Unified paper lifecycle with paper_role (bibliography/reviewing/my_manuscript), Review Journal, Submission Timeline with deadline tracking, My Manuscripts side-by-side detail page, conference/GitHub links, mobile hamburger menu, responsive tables
 
 ---
 
 ## Session Log
+
+### 2026-04-12/13 — Session Phase 12 + Production bug fixes
+
+Major session: 20+ releases (v2.13.4 → v2.16.1), production bug fixes + Phase 12 implementation.
+
+**Production bug fixes (v2.13.4 – v2.14.5):**
+- Fix hardcoded `localhost:8000` in `api.triggerAnalysis` and `api.bibliographyExtract` (broke Claude analysis + Zotero upload in production)
+- Mobile hamburger menu with slide-in drawer (sidebar accessible on mobile portrait)
+- Page overflow fix for long paper titles (desktop + mobile)
+- Discovery: "no results" feedback card + error messages in recent searches
+- Missing `markdown` dependency (broke Claude analysis render on VPS)
+- Raw LLM text safety net: save `raw_<mode>_<id>.txt` before render pipeline
+- PDF keyword extractor: block pattern upgrades single-line results when more keywords found
+- Sidebar: consistent `max-h-96` scroll on all 4 tabs (Labels, Keys, Topics, Paths)
+- Save-as-topic missing `db.commit()`, exact paper count (`formatNumber` → `toLocaleString`), Papers header mobile layout
+- Papers + Peer Review tables responsive (hide secondary columns on mobile)
+
+**Phase 12.A — paper_role + peer_review→paper link (v2.15.0-1):**
+- `paper_role` column: bibliography | reviewing | my_manuscript
+- `peer_reviews.paper_id` FK with idempotent ALTER TABLE migration
+- Peer Review creation auto-creates Paper with role=reviewing
+- Peer Review list: title links to `/papers/{id}`, R badge for linked PRs
+- Paper detail: "Peer Review" button (cyan), REVIEWING/MY MANUSCRIPT badges
+- Papers list: role dropdown filter + role badges in table rows
+- Existing PR #1 manually linked to Paper #1040 via one-shot script
+
+**Phase 12.B — Review Journal (v2.15.2-3):**
+- `reviewer_entries` table: reviewer_label, source_type, received_at, raw_text, attachment_path, items_json
+- Observations: text, section_ref, severity (major/minor/suggestion/praise), status (to_address/addressed/rejected_justified/not_applicable), response
+- ReviewJournal component: collapsible reviewer blocks, severity badges, status dropdown, response field, progress bar, add reviewer/observation forms
+- Shared component: integrated in paper detail AND peer review detail
+
+**Phase 12.C — My Manuscripts + Submission Timeline (v2.15.4-9, v2.16.0-1):**
+- POST `/papers/my-manuscript` + POST `/papers/{id}/mark-published`
+- PUT `/papers/{id}/metadata` with conference_url, conference_notes, github_url
+- New `/my-manuscripts` list page + `/my-manuscripts/[id]` side-by-side detail page (PDF left, Timeline + Review Journal right)
+- Sidebar: "My Manuscripts" entry
+- Submission Timeline: `submission_rounds` table with round_number, label (standardized presets), document_type, submitted_at, deadline, decision, decision_at, decision_notes, per-round PDF
+- Deadline tracking with visual urgency indicator (red overdue, amber within 7d)
+- Full round editing: all fields editable after creation
+- EditableHeader: inline metadata editing for non-bibliography papers
+- Conference URL + Notes + GitHub URL in paper metadata with header display
+
+**Tags released:** v2.13.4 → v2.16.1 (20 releases in one session)
+
+---
 
 ### 2026-04-11 — Session Deployment Fase 1 + Fase 2
 
