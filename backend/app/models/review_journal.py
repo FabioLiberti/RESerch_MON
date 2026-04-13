@@ -1,0 +1,55 @@
+"""ReviewJournal model — structured diary of reviews received for a paper.
+
+Used for both:
+- my_manuscript papers: reviews received from journal reviewers (2-3 per submission)
+- reviewing papers: editorial guidance received from the journal/editor
+
+Each ReviewerEntry represents one reviewer's feedback. Within each entry,
+individual observations are stored as a JSON array with severity, status,
+section reference, and the user's response/action.
+"""
+
+import json
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
+from app.models.paper import Base
+
+
+class ReviewerEntry(Base):
+    __tablename__ = "reviewer_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+
+    # Who gave this review
+    reviewer_label = Column(String(100), nullable=False)  # e.g. "Reviewer 1", "Editor", "Prof. Rossi (colloquio)"
+    source_type = Column(String(30), default="other")     # email | pdf_annotated | editorial_letter | scholarone | verbal | other
+
+    # When
+    received_at = Column(String(10), nullable=True)  # YYYY-MM-DD (nullable for verbal/undated)
+
+    # Raw text — the full review as received, copied/pasted/transcribed
+    raw_text = Column(Text, nullable=True)
+
+    # Optional attachment (e.g. annotated PDF, editorial letter)
+    attachment_path = Column(Text, nullable=True)
+
+    # Structured observations extracted from the raw text
+    # JSON array: [{"text": "...", "section_ref": "...", "severity": "major|minor|suggestion|praise",
+    #               "status": "to_address|addressed|rejected_justified|not_applicable",
+    #               "response": "..."}]
+    items_json = Column(Text, default="[]")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def items(self) -> list[dict]:
+        return json.loads(self.items_json) if self.items_json else []
+
+    @items.setter
+    def items(self, value: list[dict]):
+        self.items_json = json.dumps(value)

@@ -7,6 +7,7 @@ import { usePaper } from "@/hooks/usePapers";
 import { api, authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
+import ReviewJournal from "@/components/ReviewJournal";
 
 export default function PaperDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -425,6 +426,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Analysis History */}
       <AnalysisHistory paperId={paperId} hasZoteroKey={!!paper.zotero_key} hasPaperPdf={!!paper.has_pdf} />
+
+      {/* Review Journal — shown for reviewing/my_manuscript papers, or any paper that has entries */}
+      {(paper.paper_role !== "bibliography" || paper.peer_review_id) && (
+        <ReviewJournal paperId={paperId} />
+      )}
     </div>
   );
 }
