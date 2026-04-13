@@ -371,17 +371,17 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
+      <div className="space-y-3">
+        <div>
           <Link href="/peer-review" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
             ← Peer Review Queue
           </Link>
-          <h1 className="text-xl font-bold mt-1 truncate">{title || "Untitled peer review"}</h1>
+          <h1 className="text-xl font-bold mt-1 line-clamp-2">{title || "Untitled peer review"}</h1>
           <p className="text-xs text-[var(--muted-foreground)]">
             #{id} · {journal || "no journal"} {deadline ? `· deadline ${deadline}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && (
             <button
               onClick={llmSuggestReview}
