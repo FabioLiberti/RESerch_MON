@@ -80,6 +80,7 @@ class PaperDetail(BaseModel):
     rating: int | None = None
     tutor_check: str | None = None
     paper_role: str = "bibliography"
+    peer_review_id: int | None = None  # ID of linked PeerReview, if any
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

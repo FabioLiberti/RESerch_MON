@@ -682,7 +682,17 @@ async def get_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     paper = result.unique().scalar_one_or_none()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    return _paper_to_detail(paper)
+
+    # Find linked peer review (if any)
+    from app.models.peer_review import PeerReview
+    pr_result = await db.execute(
+        select(PeerReview.id).where(PeerReview.paper_id == paper_id).limit(1)
+    )
+    pr_id = pr_result.scalar_one_or_none()
+
+    detail = _paper_to_detail(paper)
+    detail.peer_review_id = pr_id
+    return detail
 
 
 @router.post("/{paper_id}/enrich")
