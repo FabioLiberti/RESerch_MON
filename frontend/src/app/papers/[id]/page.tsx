@@ -1845,7 +1845,7 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
         {/* Body: side-by-side on desktop, stacked on mobile */}
         <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
           {/* LEFT: Tabbed preview (Extended Abstract / Paper PDF) */}
-          <div className="lg:flex-1 lg:border-r border-b lg:border-b-0 border-[var(--border)] flex flex-col overflow-hidden bg-white min-h-[300px] lg:min-h-0">
+          <div className="lg:flex-1 lg:border-r border-b lg:border-b-0 border-[var(--border)] flex flex-col overflow-hidden bg-white min-h-[60vh] lg:min-h-0">
             {/* Tab bar */}
             <div className="flex shrink-0 border-b border-gray-300 bg-gray-100">
               <button
