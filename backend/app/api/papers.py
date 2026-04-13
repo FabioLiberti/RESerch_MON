@@ -711,6 +711,40 @@ async def create_my_manuscript(
     return {"status": "created", "paper_id": paper.id, "title": paper.title}
 
 
+class UpdatePaperMetadataRequest(BaseModel):
+    title: str | None = None
+    abstract: str | None = None
+    journal: str | None = None
+    publication_date: str | None = None
+    paper_type: str | None = None
+
+
+@router.put("/{paper_id}/metadata")
+async def update_paper_metadata(
+    paper_id: int,
+    body: UpdatePaperMetadataRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update basic metadata fields of a paper (title, abstract, journal, date, type)."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    if body.title is not None:
+        paper.title = body.title
+    if body.abstract is not None:
+        paper.abstract = body.abstract
+    if body.journal is not None:
+        paper.journal = body.journal
+    if body.publication_date is not None:
+        paper.publication_date = body.publication_date
+    if body.paper_type is not None:
+        paper.paper_type = body.paper_type
+
+    await db.commit()
+    return {"status": "updated", "paper_id": paper.id}
+
+
 @router.post("/{paper_id}/mark-published")
 async def mark_as_published(
     paper_id: int,

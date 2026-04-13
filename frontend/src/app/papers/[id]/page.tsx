@@ -9,6 +9,92 @@ import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 import ReviewJournal from "@/components/ReviewJournal";
 
+// --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
+function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(paper.title);
+  const [journal, setJournal] = useState(paper.journal || "");
+  const [pubDate, setPubDate] = useState(paper.publication_date || "");
+  const [abstract, setAbstract] = useState(paper.abstract || "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/v1/papers/${paperId}/metadata`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          title: title.trim() || null,
+          journal: journal.trim() || null,
+          publication_date: pubDate || null,
+          abstract: abstract.trim() || null,
+        }),
+      });
+      if (r.ok) {
+        mutate(`/api/v1/papers/${paperId}`);
+        setEditing(false);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-3">
+        <div>
+          <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Title</label>
+          <input value={title} onChange={e => setTitle(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Journal / Conference</label>
+            <input value={journal} onChange={e => setJournal(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Submission / Publication Date</label>
+            <input type="date" value={pubDate} onChange={e => setPubDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Abstract</label>
+          <textarea value={abstract} onChange={e => setAbstract(e.target.value)} rows={3}
+            className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none resize-y" />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving}
+            className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-600 disabled:opacity-50">
+            {saving ? "..." : "Save"}
+          </button>
+          <button onClick={() => setEditing(false)}
+            className="px-4 py-2 rounded-lg bg-[var(--secondary)] text-xs hover:bg-[var(--muted)]">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <h1 className="text-2xl font-bold leading-snug flex-1">{paper.title}</h1>
+      {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && (
+        <button
+          onClick={() => setEditing(true)}
+          className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0 mt-1"
+          title="Edit paper metadata"
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function PaperDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const paperId = Number(id);
@@ -40,8 +126,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       </Link>
 
       {/* Header */}
+      <EditableHeader paper={paper} paperId={paperId} />
       <div>
-        <h1 className="text-2xl font-bold leading-snug">{paper.title}</h1>
         <div className="flex flex-wrap items-center gap-3 mt-3">
           {paper.doi && (
             <a
