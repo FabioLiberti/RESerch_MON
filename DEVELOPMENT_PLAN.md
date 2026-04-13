@@ -365,13 +365,29 @@ propri sottomessi a journal con osservazioni dai reviewer.
 - [ ] Verificare retrocompatibilità: peer review esistenti senza paper_id continuano a funzionare
 - [ ] Verificare confidenzialità: viewer non vede paper con ruolo reviewing/my_manuscript quando setting è false
 
-**Completato:** Phase 12.A + 12.B + 12.C (~12h)
+**Completato:** Phase 12.A + 12.B + 12.C + mobile responsive + uniform navigation (~16h)
 **Residuo:** 12.C+ match engine (~3h) + 12.D confidenzialità (~1.5h) + 12.E test (~2h) = ~6.5h
+
+### 12.F — Mobile Responsive + Uniform Navigation — COMPLETATA (v2.16.4 – v2.16.18)
+
+- [x] All side-by-side pages responsive: Peer Review, Quality Review, My Manuscripts, Meta Review modal
+  - Stack vertically on mobile (`flex-col lg:flex-row`), PDF fallback "Open PDF" button on mobile
+  - Meta Review modal: full-screen on mobile (no overlay), EXT.ABS iframe `min-h-[60vh]`
+- [x] All review list pages responsive: hide secondary columns on mobile, `table-fixed`, `break-words`
+- [x] All header sections responsive: title `line-clamp-2`, buttons `flex-wrap`
+- [x] Uniform navigation across all review menus:
+  - Title click → paper detail page (Papers, Meta Review, Peer Review, Quality Review, My Manuscripts)
+  - Paper detail page: 4 review buttons aligned right (Meta Review, Peer Review, My Manuscripts, Quality Review)
+  - All review lists: Open + Del buttons per row with consistent naming
+- [x] Hamburger menu on mobile with slide-in drawer (from Phase 10 session)
 
 ---
 
 ### Features funzionali
 
+- [ ] **Start Peer Review** button on any paper (create PR linked to existing paper) — ~1h
+- [ ] **My Manuscripts dedicated detail page** with full editing (currently side-by-side works, future: richer UI) — ~3h
+- [ ] **Response Letter Generator** — generate "Response to Reviewers" document from Review Journal observations + responses — ~4h
 - [ ] Citation network data from Semantic Scholar references
 - [ ] Author tracking and affiliation analytics
 - [ ] Full-text search via PostgreSQL tsvector

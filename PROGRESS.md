@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.16.1 — Phase 12 Unified Paper Lifecycle (A+B+C complete)
-**Current Version:** v2.16.1
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Unified paper lifecycle with paper_role (bibliography/reviewing/my_manuscript), Review Journal, Submission Timeline with deadline tracking, My Manuscripts side-by-side detail page, conference/GitHub links, mobile hamburger menu, responsive tables
+**Current Phase:** v2.16.18 — Phase 12 Unified Paper Lifecycle (A+B+C complete) + full mobile responsive
+**Current Version:** v2.16.18
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Unified paper lifecycle with paper_role (bibliography/reviewing/my_manuscript), Review Journal, Submission Timeline with deadline tracking, My Manuscripts side-by-side detail page, conference/GitHub links, mobile hamburger menu, all pages fully responsive on mobile with uniform navigation (title → paper detail, Open/Del buttons in all review lists)
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### 2026-04-12/13 — Session Phase 12 + Production bug fixes
 
-Major session: 20+ releases (v2.13.4 → v2.16.1), production bug fixes + Phase 12 implementation.
+Epic session: 35+ releases (v2.13.4 → v2.16.18), production bug fixes + Phase 12 implementation + full mobile responsive.
 
 **Production bug fixes (v2.13.4 – v2.14.5):**
 - Fix hardcoded `localhost:8000` in `api.triggerAnalysis` and `api.bibliographyExtract` (broke Claude analysis + Zotero upload in production)
@@ -50,7 +50,21 @@ Major session: 20+ releases (v2.13.4 → v2.16.1), production bug fixes + Phase 
 - EditableHeader: inline metadata editing for non-bibliography papers
 - Conference URL + Notes + GitHub URL in paper metadata with header display
 
-**Tags released:** v2.13.4 → v2.16.1 (20 releases in one session)
+**Mobile responsive (v2.16.4 – v2.16.18):**
+- Peer Review detail: stack vertically on mobile, PDF fallback button, header wraps
+- My Manuscripts detail: already responsive from creation
+- Quality Review detail: stack vertically, PDF fallback, header wraps
+- Meta Review modal: full-screen on mobile (no overlay), EXT.ABS iframe 60vh, PDF fallback
+- Quality Review list: hide Grade/Score/Version/Updated on mobile, inline grade badge, title break-words
+- Meta Review list: hide Rating/Last Generated, column widths, table-fixed + overflow-x-auto
+- Peer Review list: hide Journal/Deadline/Status/Recommendation on mobile (already done earlier)
+
+**Uniform navigation (v2.16.15 – v2.16.18):**
+- All review list pages: title click → paper detail page (uniform behavior)
+- Paper detail: 4 review buttons aligned right (Meta Review + Peer Review + My Manuscripts + Quality Review)
+- All review lists: Open + Del buttons per row (consistent naming)
+
+**Tags released:** v2.13.4 → v2.16.18 (35+ releases in one session)
 
 ---
 
