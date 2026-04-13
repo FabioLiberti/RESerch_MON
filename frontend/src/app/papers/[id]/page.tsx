@@ -282,6 +282,22 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             Peer Review
           </Link>
         )}
+        {/* My Manuscripts link — only shown for my_manuscript papers */}
+        {paper.paper_role === "my_manuscript" && (
+          <Link
+            href="/my-manuscripts"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
+            style={{
+              backgroundColor: "#2563eb",
+              color: "#ffffff",
+              border: "3px solid #1d4ed8",
+              boxShadow: "0 2px 8px rgba(37, 99, 235, 0.4)",
+            }}
+            title="Go to My Manuscripts list"
+          >
+            My Manuscripts
+          </Link>
+        )}
         <Link
           href={`/paper-quality/${paperId}`}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
