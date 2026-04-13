@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { authHeaders } from "@/lib/authHeaders";
+import ReviewJournal from "@/components/ReviewJournal";
 
 interface RubricItem {
   key?: string;
@@ -62,6 +63,7 @@ interface PeerReviewDetail {
   private_notes: string | null;
   recommendation: string | null;
   status: string;
+  paper_id: number | null;
 }
 
 // Recommendation button colors (keyed by recommendation value)
@@ -694,6 +696,13 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
           {error && <div className="text-xs text-red-400">{error}</div>}
         </div>
       </div>
+
+      {/* Review Journal — editorial guidance and reviewer feedback */}
+      {pr.paper_id && (
+        <div className="mt-6">
+          <ReviewJournal paperId={pr.paper_id} />
+        </div>
+      )}
     </div>
   );
 }
