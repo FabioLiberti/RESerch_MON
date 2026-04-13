@@ -82,6 +82,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
   const [newObsSection, setNewObsSection] = useState("");
   const [editingRawText, setEditingRawText] = useState<number | null>(null);
   const [editRawTextValue, setEditRawTextValue] = useState("");
+  const [editingRatingLabel, setEditingRatingLabel] = useState<Record<number, string>>({});
 
   const toggleExpanded = (id: number) => {
     setExpandedEntries(prev => {
@@ -388,7 +389,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   </div>
                   <input
                     type="text"
-                    defaultValue={entry.rating_label ?? ""}
+                    value={editingRatingLabel[entry.id] ?? entry.rating_label ?? ""}
+                    onChange={(e) => setEditingRatingLabel(prev => ({ ...prev, [entry.id]: e.target.value }))}
                     onBlur={async (e) => {
                       await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
                         method: "PUT",
