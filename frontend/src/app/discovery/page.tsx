@@ -1229,8 +1229,8 @@ function SmartSearchSection() {
         )}
 
         {/* Sources + max */}
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-[var(--muted-foreground)]">Sources:</span>
             {ALL_SOURCES.map((src) => {
               const unsupported: Record<string, string[]> = {

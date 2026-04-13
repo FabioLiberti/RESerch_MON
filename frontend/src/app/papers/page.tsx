@@ -500,11 +500,11 @@ export default function PapersPage() {
 
       {/* Selection bar */}
       {selectedIds.size > 0 && isAdmin && (
-        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-[var(--primary)]/10 border border-[var(--primary)]/20">
-          <span className="text-sm font-medium">
+        <div className="px-4 py-3 rounded-xl bg-[var(--primary)]/10 border border-[var(--primary)]/20 space-y-2">
+          <span className="text-sm font-medium block">
             {selectedIds.size} paper selezionat{selectedIds.size === 1 ? "o" : "i"}
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setSelectedIds(new Set())}
               className="px-3 py-1.5 text-xs rounded-lg bg-[var(--secondary)] hover:bg-[var(--border)] transition-colors"
