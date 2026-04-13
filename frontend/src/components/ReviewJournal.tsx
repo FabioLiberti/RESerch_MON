@@ -387,13 +387,36 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
                       onClick={() => setAddingObsTo(entry.id)}
                       className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
                     >
                       + Add Observation
                     </button>
+                    <label className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white hover:bg-amber-600 cursor-pointer transition-colors">
+                      {entry.has_attachment ? "Replace attachment" : "Attach file"}
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          const fd = new FormData();
+                          fd.append("file", f);
+                          await fetch(`/api/v1/review-journal/entry/${entry.id}/attachment`, {
+                            method: "POST",
+                            headers: authHeaders(),
+                            body: fd,
+                          });
+                          mutate(`/api/v1/review-journal/${paperId}`);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {entry.has_attachment && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-800 text-white">Attached</span>
+                    )}
                     <button
                       onClick={() => deleteEntry(entry.id)}
                       className="text-xs px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
