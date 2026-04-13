@@ -40,6 +40,9 @@ class CreateReviewerEntryRequest(BaseModel):
     source_type: str = "other"
     received_at: str | None = None
     raw_text: str | None = None
+    rating: int | None = None
+    rating_max: int | None = None
+    rating_label: str | None = None
     items: list[ObservationItem] = []
 
 
@@ -48,6 +51,9 @@ class UpdateReviewerEntryRequest(BaseModel):
     source_type: str | None = None
     received_at: str | None = None
     raw_text: str | None = None
+    rating: int | None = None
+    rating_max: int | None = None
+    rating_label: str | None = None
     items: list[ObservationItem] | None = None
 
 
@@ -63,6 +69,9 @@ def _serialize(entry: ReviewerEntry) -> dict:
         "raw_text": entry.raw_text,
         "attachment_path": entry.attachment_path,
         "has_attachment": bool(entry.attachment_path and Path(entry.attachment_path).exists()),
+        "rating": entry.rating,
+        "rating_max": entry.rating_max,
+        "rating_label": entry.rating_label,
         "items": entry.items,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
         "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
@@ -123,6 +132,9 @@ async def create_entry(
         source_type=body.source_type,
         received_at=body.received_at,
         raw_text=body.raw_text,
+        rating=body.rating,
+        rating_max=body.rating_max,
+        rating_label=body.rating_label,
     )
     entry.items = [item.model_dump() for item in body.items]
     db.add(entry)
@@ -153,6 +165,12 @@ async def update_entry(
         entry.received_at = body.received_at
     if body.raw_text is not None:
         entry.raw_text = body.raw_text
+    if body.rating is not None:
+        entry.rating = body.rating
+    if body.rating_max is not None:
+        entry.rating_max = body.rating_max
+    if body.rating_label is not None:
+        entry.rating_label = body.rating_label
     if body.items is not None:
         entry.items = [item.model_dump() for item in body.items]
 

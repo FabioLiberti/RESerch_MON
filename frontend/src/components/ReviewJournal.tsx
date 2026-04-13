@@ -23,6 +23,9 @@ interface ReviewerEntry {
   raw_text: string | null;
   attachment_path: string | null;
   has_attachment: boolean;
+  rating: number | null;
+  rating_max: number | null;
+  rating_label: string | null;
   items: Observation[];
   created_at: string | null;
   updated_at: string | null;
@@ -279,6 +282,11 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {entry.rating != null && entry.rating_max != null && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold">
+                    {entry.rating}/{entry.rating_max}
+                  </span>
+                )}
                 {entryTotal > 0 && (
                   <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold",
                     entryAddressed === entryTotal ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
@@ -337,6 +345,64 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     </button>
                   </div>
                 )}
+
+                {/* Rating */}
+                <div className="flex items-center gap-3 flex-wrap p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
+                  <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Rating:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={entry.rating_max || 10}
+                    value={entry.rating ?? ""}
+                    onChange={async (e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : null;
+                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        body: JSON.stringify({ rating: val }),
+                      });
+                      mutate(`/api/v1/review-journal/${paperId}`);
+                    }}
+                    className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
+                    placeholder="—"
+                  />
+                  <span className="text-[10px] text-[var(--muted-foreground)]">out of</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={entry.rating_max ?? ""}
+                    onChange={async (e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : null;
+                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        body: JSON.stringify({ rating_max: val }),
+                      });
+                      mutate(`/api/v1/review-journal/${paperId}`);
+                    }}
+                    className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
+                    placeholder="5"
+                  />
+                  <input
+                    type="text"
+                    value={entry.rating_label ?? ""}
+                    onBlur={async (e) => {
+                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        body: JSON.stringify({ rating_label: e.target.value || null }),
+                      });
+                      mutate(`/api/v1/review-journal/${paperId}`);
+                    }}
+                    onChange={(e) => {
+                      // Local update via DOM, persist on blur
+                    }}
+                    defaultValue={entry.rating_label ?? ""}
+                    className="flex-1 min-w-32 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none"
+                    placeholder="Rating label (e.g. Overall contribution to IFKAD)"
+                  />
+                </div>
 
                 {/* Observations list */}
                 {entry.items.length > 0 && (

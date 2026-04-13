@@ -37,6 +37,11 @@ class ReviewerEntry(Base):
     # Optional attachment (e.g. annotated PDF, editorial letter)
     attachment_path = Column(Text, nullable=True)
 
+    # Reviewer's overall rating (e.g. 4 out of 5)
+    rating = Column(Integer, nullable=True)      # e.g. 4
+    rating_max = Column(Integer, nullable=True)   # e.g. 5 (scale: 1-5, 1-10, etc.)
+    rating_label = Column(String(200), nullable=True)  # e.g. "Overall rating for potential contribution to IFKAD"
+
     # Structured observations extracted from the raw text
     # JSON array: [{"text": "...", "section_ref": "...", "severity": "major|minor|suggestion|praise",
     #               "status": "to_address|addressed|rejected_justified|not_applicable",
