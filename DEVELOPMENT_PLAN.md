@@ -272,6 +272,101 @@
 - [ ] **SSH port change 22 → 2222** — bonus sicurezza rimandato, da rivalutare se i log fail2ban crescono
 - [ ] **Base image upgrade** bookworm → trixie (Debian 13) quando i pacchetti TeX Live saranno stabili
 
+---
+
+## Phase 12: Unified Paper Lifecycle (v2.15.0+) — PIANIFICATA
+
+**Obiettivo:** unificare paper pubblicati e non-pubblicati in un unico modello con ciclo
+di vita tracciabile, collegare Peer Review al DB papers, e introdurre un diario strutturato
+delle review ricevute — sia per paper da revieware per conto di journal, sia per paper
+propri sottomessi a journal con osservazioni dai reviewer.
+
+### 12.A — paper_role + collegamento peer_review → paper (~3h)
+
+- [ ] Nuova colonna `paper_role` su `papers`: `'bibliography'` (default) | `'reviewing'` | `'my_manuscript'`
+- [ ] Nuova FK `peer_reviews.paper_id → papers.id` (nullable per retrocompatibilità)
+- [ ] Creazione Peer Review: crea automaticamente anche il paper nel DB con `role = reviewing` + titolo/autori/journal, oppure collega a paper esistente (autocomplete per titolo/DOI)
+- [ ] Titolo nella lista Peer Review → click apre `/papers/{id}` (pagina dettaglio standard)
+- [ ] Bottone "Open Review Form" in `/papers/{id}` → apre `/peer-review/{id}` (la form rubric/export)
+- [ ] Filtro per ruolo nella papers list (All / Bibliography / Reviewing / My Manuscripts)
+- [ ] Badge ruolo nella papers list: nessuno per bibliography, `R` per reviewing, `MY` per my_manuscript
+
+### 12.B — Review Journal: diario delle review ricevute (~5h)
+
+- [ ] Nuova tabella `review_journal`:
+  - `id` PK, `paper_id` FK → papers
+  - `reviewer_label` TEXT (es. "Reviewer 1", "Editor", "Prof. Rossi (colloquio)")
+  - `source_type` ENUM: `email` | `pdf_annotated` | `editorial_letter` | `scholarone` | `verbal` | `other`
+  - `received_at` DATE
+  - `raw_text` TEXT (testo integrale copiato/incollato/trascritto — supporta qualsiasi formato input)
+  - `attachment_path` TEXT NULL (PDF o file allegato opzionale)
+  - `items` JSON array di osservazioni strutturate
+- [ ] Sotto-struttura `items` per ogni osservazione:
+  - `text`: l'osservazione del reviewer
+  - `section_ref`: sezione del paper di riferimento (opzionale)
+  - `severity`: `major` | `minor` | `suggestion` | `praise`
+  - `status`: `to_address` | `addressed` | `rejected_justified` | `not_applicable`
+  - `response`: la risposta/azione dell'utente (compilata dopo)
+- [ ] Backend API CRUD: `GET/POST /review-journal/{paper_id}`, `PUT/DELETE` per singolo reviewer/observation
+- [ ] Frontend: nuovo tab "Review Journal" in `/papers/{id}` — visibile per paper con `role ≠ bibliography` (o per tutti se configurato)
+  - Sezioni collapsable per reviewer (con label, source_type, data)
+  - Raw text area (read-only dopo salvataggio, edit button)
+  - Lista osservazioni con severity badge + status selector + campo response
+  - Bottone "+ Add Reviewer" e "+ Add Observation"
+  - Progress bar: `N/M observations addressed (X%)`
+- [ ] Il Review Journal serve per ENTRAMBI i ruoli:
+  - `reviewing`: indicazioni dal journal/editor che guidano la tua review (rare ma possibili)
+  - `my_manuscript`: review ricevute dai reviewer del journal con osservazioni da implementare (caso principale, tipicamente 2-3 reviewer per sottomissione)
+
+### 12.C — My Manuscript + "Suggest & Confirm" match con published (~5h)
+
+- [ ] Form "Add My Manuscript" (creazione paper non-pubblicato con `role = my_manuscript`):
+  - Titolo, autori, abstract, journal target, submission date
+  - Upload PDF del manoscritto
+  - Nessun DOI (non ancora pubblicato)
+- [ ] Revision History: versioni del manuscript (v1 submitted → v2 revised → v3 camera-ready)
+- [ ] Transizione unpublished → published: **semi-automatica con conferma umana ("Suggest & Confirm")**
+  - Durante la daily discovery, il match engine confronta i paper scoperti con i paper unpublished nel DB
+  - Match per DOI esatto (confidenza altissima), titolo identico dopo normalizzazione (alta), titolo Levenshtein > 90% (media), titolo simile + autore in comune (alta)
+  - **Mai merge automatico** → crea una `match_suggestion` con livello di confidenza
+  - L'admin vede un badge nella Dashboard ("N match suggestions") e un banner nel paper detail
+  - Click → modale side-by-side:
+    - Sinistra: paper unpublished (titolo, autori, abstract, review journal)
+    - Destra: paper scoperto (DOI, journal, abstract completo)
+    - Bottoni: [Confirm Match → merge] [Not the same → dismiss] [Skip for now]
+  - Caso raro (multipli candidati): modale con radio button per scegliere il match corretto
+  - Al "Confirm Match": aggiorna il paper esistente (DOI, publication_date, journal, abstract arricchito, keywords, sources mergiati, `role → bibliography`), tutto lo storico (review journal, peer review, analisi, labels, notes, tutor check) preservato
+  - Al "Not the same": paper scoperto creato come nuovo record `bibliography`, suggestion dismissed e mai riproposta
+- [ ] Nuova tabella `match_suggestions`:
+  - `id` PK
+  - `unpublished_paper_id` FK → papers (il paper my_manuscript o reviewing)
+  - `discovered_paper_data` JSON (snapshot dei dati del paper scoperto, prima di decidere)
+  - `confidence` ENUM: `very_likely` | `likely` | `possible`
+  - `match_reason` TEXT (es. "DOI exact match", "Title 95% similar + author overlap")
+  - `status` ENUM: `pending` | `confirmed` | `dismissed`
+  - `resolved_at` DATETIME NULL
+
+### 12.D — Confidenzialità configurabile + polish (~1.5h)
+
+- [ ] Nuova app_setting `review_papers_visible_to_viewers` (default: `true`)
+  - Se `false`: paper con `role = reviewing` o `my_manuscript` visibili solo all'admin nella papers list e non accessibili via API per viewer
+- [ ] Settings UI: toggle in sezione "Privacy"
+- [ ] Badge ruolo nella papers list con colori distinguibili
+
+### 12.E — Test end-to-end (~2h)
+
+- [ ] Creare un Peer Review e verificare che il paper appaia nel DB con ruolo `reviewing`
+- [ ] Creare un My Manuscript, aggiungere review journal con 2 reviewer e 5 osservazioni, verificare progress
+- [ ] Simulare una discovery che matcha un my_manuscript → verificare suggestion + confirm merge
+- [ ] Verificare che la pagina paper detail mostri correttamente tutti i tab (Abstract, Analysis, Review Journal, Quality)
+- [ ] Verificare retrocompatibilità: peer review esistenti senza paper_id continuano a funzionare
+- [ ] Verificare confidenzialità: viewer non vede paper con ruolo reviewing/my_manuscript quando setting è false
+
+**Tempo totale stimato:** ~16-17 ore (3-4 sessioni)
+**Priorità implementazione:** A → B → C → D → E (le fasi A+B da sole danno il 90% del valore in ~8h)
+
+---
+
 ### Features funzionali
 
 - [ ] Citation network data from Semantic Scholar references
@@ -282,6 +377,7 @@
 - [ ] Comparison UI refinement dopo uso reale
 - [ ] Creazione primi tutor scientifici (ruolo `viewer`, account non admin via script CLI)
 - [ ] Comparison export/import tra localStorage di origini diverse (Mac `:3000` ↔ VPS `resmon.fabioliberti.com`)
+- [ ] **Zotero Group Library Sync** — per-label mapping (label → Group Library ID + collection), artifact selection per-label (PDF, EXT.ABS, Summary, Quick, Deep, Validation, Quality), filtri globali (tutor_check=OK, exclude disabled). Design: tabella `label_group_sync` + `paper_group_sync`. **Prerequisito**: osservare per 2-3 settimane se i tutor scrivono nel Group Library o sono solo lettori — determina se serve sync unidirezionale semplice (~8h) o merge bidirezionale con protezione campi (~12h)
 
 ### Scalabilità condizionale
 
