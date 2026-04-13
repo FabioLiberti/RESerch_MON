@@ -16,9 +16,7 @@ export function formatDate(dateStr: string | null): string {
 }
 
 export function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
+  return num.toLocaleString("en-US");
 }
 
 export const SOURCE_COLORS: Record<string, string> = {

@@ -436,6 +436,7 @@ async def save_as_topic(
     topic.source_queries = queries
     db.add(topic)
     await db.flush()
+    await db.commit()
 
     return {
         "id": topic.id,
