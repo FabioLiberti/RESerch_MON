@@ -1871,7 +1871,7 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
                 📕 Original Paper PDF
               </button>
             </div>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-auto">
               {activeTab === "abstract" ? (
                 loading ? (
                   <div className="h-full flex items-center justify-center text-gray-500">Loading analysis...</div>
@@ -1879,7 +1879,8 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
                   <iframe
                     title="Analysis preview"
                     srcDoc={analysisHtml}
-                    className="w-full h-full border-0"
+                    className="w-full border-0 min-h-full"
+                    style={{ height: "calc(60vh - 40px)" }}
                     sandbox="allow-same-origin"
                   />
                 )
