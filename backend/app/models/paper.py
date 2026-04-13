@@ -41,6 +41,10 @@ class Paper(Base):
     # scientific tutor. Independent from rating (paper quality) and from
     # validation_status (meta-validation of the LLM analysis).
     tutor_check = Column(String(10), nullable=True)  # 'ok' | 'review' | 'no' | NULL
+    # Paper lifecycle role: bibliography (default, discovered/imported published papers),
+    # reviewing (paper received for peer review on behalf of a journal),
+    # my_manuscript (user's own paper submitted to a journal, not yet published).
+    paper_role = Column(String(20), default="bibliography")  # 'bibliography' | 'reviewing' | 'my_manuscript'
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

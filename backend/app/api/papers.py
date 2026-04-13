@@ -70,6 +70,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         rating=paper.rating,
         tutor_check=paper.tutor_check,
         quality_grade=quality_grade,
+        paper_role=paper.paper_role or "bibliography",
         created_at=paper.created_at,
     )
 
@@ -96,6 +97,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         disabled=paper.disabled or False,
         rating=paper.rating,
         tutor_check=paper.tutor_check,
+        paper_role=paper.paper_role or "bibliography",
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -155,6 +157,7 @@ async def list_papers(
     validation: str | None = None,  # any, validated, pending, rejected, needs_revision
     quality: str | None = None,  # any, excellent, good, adequate, weak, unreliable, none
     tutor_check: str | None = None,  # ok | review | no | none
+    paper_role: str | None = None,  # bibliography | reviewing | my_manuscript
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -283,6 +286,9 @@ async def list_papers(
             query = query.where(Paper.tutor_check.is_(None))
         elif tutor_check in ("ok", "review", "no"):
             query = query.where(Paper.tutor_check == tutor_check)
+    if paper_role:
+        if paper_role in ("bibliography", "reviewing", "my_manuscript"):
+            query = query.where(Paper.paper_role == paper_role)
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())

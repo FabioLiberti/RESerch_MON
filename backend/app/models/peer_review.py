@@ -1,13 +1,15 @@
-"""PeerReview model — isolated module for reviewing unpublished papers.
+"""PeerReview model — module for reviewing papers.
 
-Deliberately kept separate from the Paper model: peer reviews are confidential
-pre-publication assessments and must never mix with the public bibliography,
-Zotero sync, topic indexing, or dashboard statistics.
+Optionally linked to a Paper record via `paper_id`. When linked, the peer
+review's manuscript metadata (title, authors, journal) comes from the Paper
+record and the paper detail page shows an "Open Review Form" button. When
+not linked (legacy mode), the peer review carries its own standalone metadata.
 """
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.models.paper import Base
 
@@ -16,6 +18,10 @@ class PeerReview(Base):
     __tablename__ = "peer_reviews"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # --- Link to Paper (optional for backward compatibility with existing PRs) ---
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=True, index=True)
+    paper = relationship("Paper", foreign_keys=[paper_id])
 
     # --- Submission metadata (entered by the reviewer) ---
     title = Column(Text, nullable=False)

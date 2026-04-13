@@ -52,6 +52,7 @@ class PaperSummary(BaseModel):
     rating: int | None = None
     tutor_check: str | None = None
     quality_grade: str | None = None
+    paper_role: str = "bibliography"
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -78,6 +79,7 @@ class PaperDetail(BaseModel):
     disabled: bool = False
     rating: int | None = None
     tutor_check: str | None = None
+    paper_role: str = "bibliography"
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

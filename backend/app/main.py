@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import select
+from sqlalchemy import select, text as sqlalchemy_text
 
 from app.api.auth import limiter
 from app.config import settings
@@ -101,6 +101,18 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created")
+
+    # Lightweight column migrations (idempotent ALTER TABLE ADD COLUMN IF NOT EXISTS)
+    async with engine.begin() as conn:
+        for stmt in [
+            "ALTER TABLE papers ADD COLUMN paper_role VARCHAR(20) DEFAULT 'bibliography'",
+            "ALTER TABLE peer_reviews ADD COLUMN paper_id INTEGER REFERENCES papers(id)",
+        ]:
+            try:
+                await conn.execute(sqlalchemy_text(stmt))
+                logger.info(f"Migration applied: {stmt[:60]}...")
+            except Exception:
+                pass  # Column already exists
 
     # Seed defaults
     await seed_default_topics()

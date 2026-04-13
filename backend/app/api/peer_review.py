@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user, require_admin
 from app.config import settings
 from app.database import get_db
+from app.models.paper import Paper
 from app.models.peer_review import PeerReview
 from app.models.user import User
 from app.services.peer_review_report import generate_review_artifacts
@@ -81,6 +82,7 @@ def _serialize(pr: PeerReview) -> dict:
         "private_notes": pr.private_notes,
         "recommendation": pr.recommendation,
         "status": pr.status,
+        "paper_id": pr.paper_id,
         "created_at": pr.created_at.isoformat() if pr.created_at else None,
         "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
         "submitted_at": pr.submitted_at.isoformat() if pr.submitted_at else None,
@@ -132,6 +134,18 @@ async def create_peer_review(
     if template_id not in TEMPLATES:
         template_id = "generic"
 
+    # Auto-create a Paper record with role='reviewing' so the peer review
+    # appears in the papers list and has a standard detail page.
+    paper = Paper(
+        title=title,
+        abstract=None,
+        journal=target_journal,
+        paper_type="manuscript",
+        paper_role="reviewing",
+    )
+    db.add(paper)
+    await db.flush()  # obtain paper.id
+
     pr = PeerReview(
         title=title,
         authors=authors,
@@ -144,9 +158,10 @@ async def create_peer_review(
         status="draft",
         created_by=user.username,
         rubric_json=json.dumps(empty_rubric_for(template_id)),
+        paper_id=paper.id,
     )
     db.add(pr)
-    await db.flush()   # obtain id
+    await db.flush()   # obtain pr.id
 
     if pdf is not None:
         storage = _storage_dir(pr.id)
