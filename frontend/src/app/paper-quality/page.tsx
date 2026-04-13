@@ -116,7 +116,7 @@ export default function PaperQualityListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/paper-quality/${it.paper_id}`}
+                      href={`/papers/${it.paper_id}`}
                       className="font-medium text-[var(--foreground)] hover:text-[var(--primary)] line-clamp-2 break-words"
                     >
                       {it.title}
