@@ -71,6 +71,28 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               MY MANUSCRIPT
             </span>
           )}
+          {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && !paper.doi && (
+            <button
+              onClick={() => {
+                const doi = prompt("Enter the DOI assigned upon publication:");
+                if (!doi) return;
+                fetch(`/api/v1/papers/${paperId}/mark-published?doi=${encodeURIComponent(doi.trim())}`, {
+                  method: "POST",
+                  headers: authHeaders(),
+                }).then(r => {
+                  if (r.ok) {
+                    mutate(`/api/v1/papers/${paperId}`);
+                  } else {
+                    r.json().then(e => alert(e.detail || "Failed")).catch(() => alert("Failed"));
+                  }
+                });
+              }}
+              className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-700 text-white font-bold hover:bg-emerald-600 transition-colors cursor-pointer"
+              title="Mark this paper as published by assigning its DOI"
+            >
+              Mark as Published
+            </button>
+          )}
           {paper.validated && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
               Validated

@@ -666,6 +666,75 @@ async def refresh_citations_batch(
     return result
 
 
+class CreateMyManuscriptRequest(BaseModel):
+    title: str
+    abstract: str | None = None
+    journal: str | None = None
+    submission_date: str | None = None  # YYYY-MM-DD
+    authors: str | None = None  # comma-separated
+
+
+@router.post("/my-manuscript")
+async def create_my_manuscript(
+    body: CreateMyManuscriptRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a paper record with role='my_manuscript' for the user's own submitted paper."""
+    paper = Paper(
+        title=body.title,
+        abstract=body.abstract,
+        journal=body.journal,
+        publication_date=body.submission_date,
+        paper_type="manuscript",
+        paper_role="my_manuscript",
+    )
+    db.add(paper)
+    await db.flush()
+
+    # Add authors if provided (comma-separated)
+    if body.authors:
+        for i, name in enumerate(body.authors.split(",")):
+            name = name.strip()
+            if not name:
+                continue
+            # Find or create author
+            result = await db.execute(select(Author).where(Author.name == name))
+            author = result.scalar_one_or_none()
+            if not author:
+                author = Author(name=name)
+                db.add(author)
+                await db.flush()
+            pa = PaperAuthor(paper_id=paper.id, author_id=author.id, position=i)
+            db.add(pa)
+
+    await db.commit()
+    return {"status": "created", "paper_id": paper.id, "title": paper.title}
+
+
+@router.post("/{paper_id}/mark-published")
+async def mark_as_published(
+    paper_id: int,
+    doi: str = Query(..., description="The DOI assigned upon publication"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition a my_manuscript or reviewing paper to bibliography after publication."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if paper.paper_role == "bibliography":
+        raise HTTPException(status_code=400, detail="Paper is already in bibliography")
+
+    # Check DOI not already used by another paper
+    existing = await db.execute(select(Paper).where(Paper.doi == doi, Paper.id != paper_id))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail=f"DOI {doi} already exists in another paper")
+
+    paper.doi = doi
+    paper.paper_role = "bibliography"
+    await db.commit()
+    return {"status": "published", "paper_id": paper.id, "doi": doi, "paper_role": "bibliography"}
+
+
 @router.get("/{paper_id}", response_model=PaperDetail)
 async def get_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     """Get detailed paper information."""

@@ -46,6 +46,12 @@ const navItems: { href: string; label: string; icon: string; tooltip: string }[]
     tooltip: "Confidential review of unpublished manuscripts for journals (e.g. IEEE T-AI). Multi-template, isolated from the public bibliography.",
   },
   {
+    href: "/my-manuscripts",
+    label: "My Manuscripts",
+    icon: "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z",
+    tooltip: "Your own papers submitted to journals/conferences. Track reviewer feedback, manage revisions, and monitor publication progress.",
+  },
+  {
     href: "/paper-quality",
     label: "Quality Review",
     icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
