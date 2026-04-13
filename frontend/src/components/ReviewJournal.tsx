@@ -317,7 +317,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     {DECISION_OPTIONS.find(o => o.value === entry.decision)?.label || entry.decision}
                   </span>
                 )}
-                {entry.rating != null && entry.rating_max != null && (
+                {entry.rating != null && entry.rating_max != null && entry.rating_max > 0 && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold">
                     {entry.rating}/{entry.rating_max}
                   </span>
@@ -382,7 +382,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 )}
 
                 {/* Rating — collapsible, shown only if has data or user expands */}
-                {(entry.rating != null || entry.rating_max != null || entry.rating_label) ? (
+                {(entry.rating_max != null && entry.rating_max > 0) ? (
                 <div className="p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20 space-y-2">
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Rating:</span>
@@ -421,6 +421,20 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                       className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
                       placeholder="5"
                     />
+                    <button
+                      onClick={async () => {
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ rating: 0, rating_max: 0, rating_label: "" }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="text-[10px] text-red-400 hover:underline shrink-0"
+                      title="Remove rating"
+                    >
+                      Remove
+                    </button>
                   </div>
                   <input
                     type="text"
