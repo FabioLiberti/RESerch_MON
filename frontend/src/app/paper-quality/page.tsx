@@ -90,7 +90,7 @@ export default function PaperQualityListPage() {
                 <th className="text-left px-4 py-3 font-medium">Paper</th>
                 <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Version</th>
                 <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Updated</th>
-                <th className="text-right px-4 py-3 font-medium">Action</th>
+                <th className="text-right px-4 py-3 font-medium hidden sm:table-cell">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -117,15 +117,23 @@ export default function PaperQualityListPage() {
                   <td className="px-4 py-3">
                     <Link
                       href={`/paper-quality/${it.paper_id}`}
-                      className="font-medium text-[var(--foreground)] hover:text-[var(--primary)] line-clamp-2"
+                      className="font-medium text-[var(--foreground)] hover:text-[var(--primary)] line-clamp-2 break-words"
                     >
                       {it.title}
                     </Link>
-                    {it.journal && (
-                      <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5 truncate">
-                        {it.journal} {it.publication_date ? `· ${it.publication_date.slice(0, 7)}` : ""}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {/* Show grade inline on mobile (hidden on sm+ where it has its own column) */}
+                      {it.overall_grade && (
+                        <span className={`sm:hidden text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${GRADE_COLOR[it.overall_grade]}`}>
+                          {GRADE_LABEL[it.overall_grade]}
+                        </span>
+                      )}
+                      {it.journal && (
+                        <span className="text-[10px] text-[var(--muted-foreground)]">
+                          {it.journal} {it.publication_date ? `· ${it.publication_date.slice(0, 7)}` : ""}
+                        </span>
+                      )}
+                    </div>
                     {it.labels && it.labels.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {it.labels.map((lbl) => (
@@ -151,7 +159,7 @@ export default function PaperQualityListPage() {
                   <td className="px-4 py-3 whitespace-nowrap text-[10px] text-[var(--muted-foreground)] hidden lg:table-cell">
                     {it.updated_at ? new Date(it.updated_at).toLocaleDateString("it-IT") : "—"}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                  <td className="px-4 py-3 whitespace-nowrap text-right hidden sm:table-cell">
                     <Link
                       href={`/paper-quality/${it.paper_id}`}
                       className="inline-block text-[10px] px-3 py-1.5 rounded font-bold border-2"
