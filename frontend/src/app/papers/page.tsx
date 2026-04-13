@@ -42,6 +42,7 @@ export default function PapersPage() {
   const [validationFilter, setValidationFilter] = useState("");
   const [qualityFilter, setQualityFilter] = useState("");
   const [tutorCheckFilter, setTutorCheckFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [zoteroSyncing, setZoteroSyncing] = useState(false);
 
   // Sync URL params with state
@@ -130,6 +131,7 @@ export default function PapersPage() {
   if (validationFilter) params.validation = validationFilter;
   if (qualityFilter) params.quality = qualityFilter;
   if (tutorCheckFilter) params.tutor_check = tutorCheckFilter;
+  if (roleFilter) params.paper_role = roleFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -434,6 +436,16 @@ export default function PapersPage() {
           <option value="none">Not checked</option>
         </select>
         <select
+          value={roleFilter}
+          onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+          className={`${cls(roleFilter)} max-w-44`}
+        >
+          <option value="">Role: All</option>
+          <option value="bibliography">Bibliography</option>
+          <option value="reviewing">Reviewing</option>
+          <option value="my_manuscript">My Manuscript</option>
+        </select>
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -449,10 +461,10 @@ export default function PapersPage() {
           <option value="title:asc">Title A-Z</option>
           <option value="title:desc">Title Z-A</option>
         </select>
-        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter || tutorCheckFilter) && (
+        {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter || tutorCheckFilter || roleFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setRoleFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -688,6 +700,15 @@ export default function PapersPage() {
                               {l.name}
                             </span>
                           ))}
+                        </div>
+                      )}
+                      {paper.paper_role && paper.paper_role !== "bibliography" && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                            paper.paper_role === "reviewing" ? "bg-cyan-700 text-white" : "bg-blue-700 text-white"
+                          }`}>
+                            {paper.paper_role === "reviewing" ? "REVIEWING" : "MY MANUSCRIPT"}
+                          </span>
                         </div>
                       )}
                       {paper.analyses && paper.analyses.length > 0 && (

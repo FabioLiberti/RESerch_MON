@@ -19,6 +19,7 @@ interface PeerReviewItem {
   recommendation: string | null;
   status: string;
   has_pdf: boolean;
+  paper_id: number | null;
   updated_at: string | null;
 }
 
@@ -225,11 +226,19 @@ export default function PeerReviewPage() {
               {items.map(pr => (
                 <tr key={pr.id} className="border-b border-[var(--border)] hover:bg-[var(--secondary)]/50">
                   <td className="px-4 py-3">
-                    <Link href={`/peer-review/${pr.id}`} className="font-medium text-[var(--foreground)] hover:text-[var(--primary)] line-clamp-2">
+                    <Link
+                      href={pr.paper_id ? `/papers/${pr.paper_id}` : `/peer-review/${pr.id}`}
+                      className="font-medium text-[var(--foreground)] hover:text-[var(--primary)] line-clamp-2"
+                    >
                       {pr.title}
                     </Link>
                     {pr.authors && <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5 truncate">{pr.authors}</div>}
                     <div className="flex gap-1 mt-1 flex-wrap">
+                      {pr.paper_id && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-800 text-white font-bold" title="Linked to paper in database">
+                          R
+                        </span>
+                      )}
                       {pr.template && pr.template.id !== "generic" && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-700 text-white font-bold" title={pr.template.journal}>
                           {pr.template.name}

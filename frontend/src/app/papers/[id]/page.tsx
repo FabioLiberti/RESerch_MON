@@ -60,6 +60,16 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               {paper.journal}
             </span>
           )}
+          {paper.paper_role === "reviewing" && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-600 text-white font-bold">
+              REVIEWING
+            </span>
+          )}
+          {paper.paper_role === "my_manuscript" && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">
+              MY MANUSCRIPT
+            </span>
+          )}
           {paper.validated && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
               Validated
@@ -108,6 +118,23 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             </a>
           </>
         )}
+        {/* Peer Review link — only shown when this paper has a linked peer review */}
+        {paper.peer_review_id && (
+          <Link
+            href={`/peer-review/${paper.peer_review_id}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
+            style={{
+              backgroundColor: "#06b6d4",
+              color: "#ffffff",
+              border: "3px solid #0e7490",
+              boxShadow: "0 2px 8px rgba(14, 116, 144, 0.4)",
+            }}
+            title="Open the peer review form for this manuscript"
+          >
+            Open Review Form
+          </Link>
+        )}
+
         {/* spacer pushes Quality Review to the far right */}
         <div className="ml-auto" />
         <Link
