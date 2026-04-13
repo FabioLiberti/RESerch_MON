@@ -55,22 +55,26 @@ export default function PaperInfoBox({ createdAt, createdVia, sources }: PaperIn
         i
       </button>
       {open && (
-        <div className="absolute z-50 left-0 top-7 w-64 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-xl p-3 space-y-1.5 text-xs">
-          <div className="flex gap-2">
-            <span className="text-[var(--muted-foreground)] shrink-0">Added:</span>
-            <span className="font-medium">{formatted}</span>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-[var(--muted-foreground)] shrink-0">Via:</span>
-            <span className="font-medium">{viaLabel}</span>
-          </div>
-          {sources.length > 0 && (
-            <div className="flex gap-2">
-              <span className="text-[var(--muted-foreground)] shrink-0">Sources:</span>
-              <span className="font-medium">{sourceLabels}</span>
+        <>
+          {/* Mobile: fixed center overlay */}
+          <div className="sm:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
+            <div className="w-full max-w-xs rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-xl p-4 space-y-2 text-xs" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-bold uppercase text-[var(--muted-foreground)]">Paper Info</span>
+                <button onClick={() => setOpen(false)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">✕</button>
+              </div>
+              <div className="flex gap-2"><span className="text-[var(--muted-foreground)] shrink-0">Added:</span><span className="font-medium">{formatted}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--muted-foreground)] shrink-0">Via:</span><span className="font-medium">{viaLabel}</span></div>
+              {sources.length > 0 && <div className="flex gap-2"><span className="text-[var(--muted-foreground)] shrink-0">Sources:</span><span className="font-medium break-words">{sourceLabels}</span></div>}
             </div>
-          )}
-        </div>
+          </div>
+          {/* Desktop: absolute dropdown */}
+          <div className="hidden sm:block absolute z-50 right-0 top-7 w-64 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-xl p-3 space-y-1.5 text-xs">
+            <div className="flex gap-2"><span className="text-[var(--muted-foreground)] shrink-0">Added:</span><span className="font-medium">{formatted}</span></div>
+            <div className="flex gap-2"><span className="text-[var(--muted-foreground)] shrink-0">Via:</span><span className="font-medium">{viaLabel}</span></div>
+            {sources.length > 0 && <div className="flex gap-2"><span className="text-[var(--muted-foreground)] shrink-0">Sources:</span><span className="font-medium">{sourceLabels}</span></div>}
+          </div>
+        </>
       )}
     </div>
   );
