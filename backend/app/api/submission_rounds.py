@@ -26,6 +26,7 @@ class CreateRoundRequest(BaseModel):
     label: str
     document_type: str = "full_paper"
     submitted_at: str | None = None
+    deadline: str | None = None
     decision: str | None = None
     decision_at: str | None = None
     decision_notes: str | None = None
@@ -35,6 +36,7 @@ class UpdateRoundRequest(BaseModel):
     label: str | None = None
     document_type: str | None = None
     submitted_at: str | None = None
+    deadline: str | None = None
     decision: str | None = None
     decision_at: str | None = None
     decision_notes: str | None = None
@@ -52,6 +54,7 @@ def _serialize(r: SubmissionRound) -> dict:
         "document_path": r.document_path,
         "has_document": bool(r.document_path and Path(r.document_path).exists()),
         "submitted_at": r.submitted_at,
+        "deadline": r.deadline,
         "decision": r.decision,
         "decision_at": r.decision_at,
         "decision_notes": r.decision_notes,
@@ -101,6 +104,7 @@ async def create_round(
         label=body.label,
         document_type=body.document_type,
         submitted_at=body.submitted_at,
+        deadline=body.deadline,
         decision=body.decision,
         decision_at=body.decision_at,
         decision_notes=body.decision_notes,
@@ -131,6 +135,8 @@ async def update_round(
         r.document_type = body.document_type
     if body.submitted_at is not None:
         r.submitted_at = body.submitted_at
+    if body.deadline is not None:
+        r.deadline = body.deadline
     if body.decision is not None:
         r.decision = body.decision
     if body.decision_at is not None:

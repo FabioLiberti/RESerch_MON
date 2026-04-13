@@ -15,6 +15,7 @@ interface Round {
   document_path: string | null;
   has_document: boolean;
   submitted_at: string | null;
+  deadline: string | null;
   decision: string | null;
   decision_at: string | null;
   decision_notes: string | null;
@@ -52,6 +53,7 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
   const [label, setLabel] = useState("");
   const [docType, setDocType] = useState("full_paper");
   const [submittedAt, setSubmittedAt] = useState("");
+  const [deadlineVal, setDeadlineVal] = useState("");
   const [decision, setDecision] = useState("");
   const [decisionAt, setDecisionAt] = useState("");
   const [decisionNotes, setDecisionNotes] = useState("");
@@ -76,12 +78,13 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
           label: label.trim(),
           document_type: docType,
           submitted_at: submittedAt || null,
+          deadline: deadlineVal || null,
           decision: decision || null,
           decision_at: decisionAt || null,
           decision_notes: decisionNotes || null,
         }),
       });
-      setLabel(""); setDocType("full_paper"); setSubmittedAt(""); setDecision(""); setDecisionAt(""); setDecisionNotes("");
+      setLabel(""); setDocType("full_paper"); setSubmittedAt(""); setDeadlineVal(""); setDecision(""); setDecisionAt(""); setDecisionNotes("");
       setShowForm(false);
       mutate(apiUrl);
     } finally {
@@ -169,7 +172,16 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
               placeholder="Submitted date"
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Deadline</label>
+              <input
+                type="date"
+                value={deadlineVal}
+                onChange={e => setDeadlineVal(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none"
+              />
+            </div>
             <select
               value={decision}
               onChange={e => setDecision(e.target.value)}
@@ -249,6 +261,19 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
                       {round.submitted_at && (
                         <span className="text-[10px] text-[var(--muted-foreground)]">Submitted: {round.submitted_at}</span>
                       )}
+                      {round.deadline && (() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        const daysLeft = Math.ceil((new Date(round.deadline).getTime() - new Date(today).getTime()) / 86400000);
+                        const isOverdue = daysLeft < 0 && !round.submitted_at;
+                        const isUrgent = daysLeft >= 0 && daysLeft <= 7 && !round.submitted_at;
+                        return (
+                          <span className={`text-[10px] font-bold ${isOverdue ? "text-red-400" : isUrgent ? "text-amber-400" : "text-[var(--muted-foreground)]"}`}>
+                            ⏰ Deadline: {round.deadline}
+                            {isOverdue && " (overdue!)"}
+                            {isUrgent && ` (${daysLeft}d left)`}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {round.has_document && (

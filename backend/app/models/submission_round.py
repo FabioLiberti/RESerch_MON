@@ -26,8 +26,9 @@ class SubmissionRound(Base):
     document_type = Column(String(30), default="full_paper")  # abstract | extended_abstract | full_paper | camera_ready | other
     document_path = Column(Text, nullable=True)  # PDF file path
 
-    # Submission date
+    # Submission date and deadline
     submitted_at = Column(String(10), nullable=True)  # YYYY-MM-DD
+    deadline = Column(String(10), nullable=True)       # YYYY-MM-DD — when the submission is due
 
     # Decision received
     decision = Column(String(30), nullable=True)  # pending | accepted | accepted_with_revisions | minor_revisions | major_revisions | rejected
