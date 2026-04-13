@@ -21,6 +21,7 @@ from app.api.app_settings import router as app_settings_router
 from app.api.peer_review import router as peer_review_router
 from app.api.paper_quality import router as paper_quality_router
 from app.api.review_journal import router as review_journal_router
+from app.api.submission_rounds import router as submission_rounds_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -48,3 +49,4 @@ api_router.include_router(app_settings_router, prefix="/app-settings", tags=["ap
 api_router.include_router(peer_review_router, prefix="/peer-review", tags=["peer-review"], dependencies=[Depends(get_current_user)])
 api_router.include_router(paper_quality_router, prefix="/paper-quality", tags=["paper-quality"], dependencies=[Depends(get_current_user)])
 api_router.include_router(review_journal_router, prefix="/review-journal", tags=["review-journal"], dependencies=[Depends(get_current_user)])
+api_router.include_router(submission_rounds_router, prefix="/submission-rounds", tags=["submission-rounds"], dependencies=[Depends(get_current_user)])

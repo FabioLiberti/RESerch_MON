@@ -8,6 +8,7 @@ import { api, authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 import ReviewJournal from "@/components/ReviewJournal";
+import SubmissionTimeline from "@/components/SubmissionTimeline";
 
 // --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
 function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
@@ -531,6 +532,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Summary Card */}
       <SummaryCard paperId={paperId} />
+
+      {/* Submission Timeline — shown for my_manuscript and reviewing papers */}
+      {paper.paper_role !== "bibliography" && (
+        <SubmissionTimeline paperId={paperId} />
+      )}
 
       {/* Analysis History */}
       <AnalysisHistory paperId={paperId} hasZoteroKey={!!paper.zotero_key} hasPaperPdf={!!paper.has_pdf} />
