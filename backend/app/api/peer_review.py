@@ -170,6 +170,9 @@ async def create_peer_review(
         content = await pdf.read()
         out_path.write_bytes(content)
         pr.pdf_path = str(out_path)
+        # Also link the PDF to the auto-created Paper record so it appears
+        # in the paper detail page with the "View PDF" button.
+        paper.pdf_local_path = str(out_path)
 
     await db.commit()
     await db.refresh(pr)
@@ -282,6 +285,11 @@ async def upload_pdf(
     content = await pdf.read()
     out_path.write_bytes(content)
     pr.pdf_path = str(out_path)
+    # Keep the linked Paper record in sync
+    if pr.paper_id:
+        linked_paper = await db.get(Paper, pr.paper_id)
+        if linked_paper:
+            linked_paper.pdf_local_path = str(out_path)
     await db.commit()
     return {"pdf_path": pr.pdf_path, "size": len(content)}
 

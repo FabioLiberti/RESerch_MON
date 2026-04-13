@@ -118,6 +118,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             </a>
           </>
         )}
+        {/* spacer pushes review buttons to the far right */}
+        <div className="ml-auto" />
         {/* Peer Review link — only shown when this paper has a linked peer review */}
         {paper.peer_review_id && (
           <Link
@@ -131,12 +133,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             }}
             title="Open the peer review form for this manuscript"
           >
-            Open Review Form
+            Peer Review
           </Link>
         )}
-
-        {/* spacer pushes Quality Review to the far right */}
-        <div className="ml-auto" />
         <Link
           href={`/paper-quality/${paperId}`}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
