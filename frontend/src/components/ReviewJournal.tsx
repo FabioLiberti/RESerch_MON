@@ -77,6 +77,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
   const [newObsText, setNewObsText] = useState("");
   const [newObsSeverity, setNewObsSeverity] = useState("minor");
   const [newObsSection, setNewObsSection] = useState("");
+  const [editingRawText, setEditingRawText] = useState<number | null>(null);
+  const [editRawTextValue, setEditRawTextValue] = useState("");
 
   const toggleExpanded = (id: number) => {
     setExpandedEntries(prev => {
@@ -290,10 +292,49 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             {/* Expanded content */}
             {isExpanded && (
               <div className="border-t border-[var(--border)] px-4 py-3 space-y-3">
-                {/* Raw text */}
-                {entry.raw_text && (
-                  <div className="text-xs text-[var(--muted-foreground)] bg-[var(--secondary)] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">
-                    {entry.raw_text}
+                {/* Raw text — always editable */}
+                {editingRawText === entry.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editRawTextValue}
+                      onChange={e => setEditRawTextValue(e.target.value)}
+                      rows={6}
+                      className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs focus:outline-none resize-y"
+                      placeholder="Reviewer notes, feedback, comments..."
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json", ...authHeaders() },
+                            body: JSON.stringify({ raw_text: editRawTextValue }),
+                          });
+                          setEditingRawText(null);
+                          mutate(`/api/v1/review-journal/${paperId}`);
+                        }}
+                        className="text-[10px] px-3 py-1.5 rounded bg-emerald-700 text-white font-bold"
+                      >Save</button>
+                      <button onClick={() => setEditingRawText(null)} className="text-[10px] px-3 py-1.5 rounded hover:bg-[var(--muted)]">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative group">
+                    {entry.raw_text ? (
+                      <div className="text-xs text-[var(--muted-foreground)] bg-[var(--secondary)] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                        {entry.raw_text}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[var(--muted-foreground)] italic bg-[var(--secondary)] rounded-lg p-3">
+                        No notes yet — click Edit to add reviewer feedback text.
+                      </div>
+                    )}
+                    <button
+                      onClick={() => { setEditingRawText(entry.id); setEditRawTextValue(entry.raw_text || ""); }}
+                      className="text-[10px] text-[var(--primary)] hover:underline mt-1"
+                    >
+                      Edit notes
+                    </button>
                   </div>
                 )}
 
