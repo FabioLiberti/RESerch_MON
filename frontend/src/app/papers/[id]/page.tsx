@@ -17,6 +17,8 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
   const [journal, setJournal] = useState(paper.journal || "");
   const [pubDate, setPubDate] = useState(paper.publication_date || "");
   const [abstract, setAbstract] = useState(paper.abstract || "");
+  const [confUrl, setConfUrl] = useState(paper.conference_url || "");
+  const [confNotes, setConfNotes] = useState(paper.conference_notes || "");
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -30,6 +32,8 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
           journal: journal.trim() || null,
           publication_date: pubDate || null,
           abstract: abstract.trim() || null,
+          conference_url: confUrl.trim() || null,
+          conference_notes: confNotes.trim() || null,
         }),
       });
       if (r.ok) {
@@ -61,6 +65,20 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
               className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
           </div>
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Conference / Journal URL</label>
+            <input value={confUrl} onChange={e => setConfUrl(e.target.value)}
+              placeholder="https://ifkad2026.org"
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Conference Notes</label>
+            <input value={confNotes} onChange={e => setConfNotes(e.target.value)}
+              placeholder="e.g. Track 3 - Healthcare, June 25-27 Rome"
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
+        </div>
         <div>
           <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Abstract</label>
           <textarea value={abstract} onChange={e => setAbstract(e.target.value)} rows={3}
@@ -81,16 +99,34 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
   }
 
   return (
-    <div className="flex items-start gap-2">
-      <h1 className="text-2xl font-bold leading-snug flex-1">{paper.title}</h1>
-      {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && (
-        <button
-          onClick={() => setEditing(true)}
-          className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0 mt-1"
-          title="Edit paper metadata"
-        >
-          Edit
-        </button>
+    <div>
+      <div className="flex items-start gap-2">
+        <h1 className="text-2xl font-bold leading-snug flex-1">{paper.title}</h1>
+        {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0 mt-1"
+            title="Edit paper metadata"
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      {(paper.conference_url || paper.conference_notes) && (
+        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+          {paper.conference_url && (
+            <a href={paper.conference_url} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Conference website
+            </a>
+          )}
+          {paper.conference_notes && (
+            <span className="text-xs text-[var(--muted-foreground)] italic">{paper.conference_notes}</span>
+          )}
+        </div>
       )}
     </div>
   );

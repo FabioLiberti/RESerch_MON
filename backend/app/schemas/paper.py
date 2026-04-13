@@ -81,6 +81,8 @@ class PaperDetail(BaseModel):
     tutor_check: str | None = None
     paper_role: str = "bibliography"
     peer_review_id: int | None = None  # ID of linked PeerReview, if any
+    conference_url: str | None = None
+    conference_notes: str | None = None
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

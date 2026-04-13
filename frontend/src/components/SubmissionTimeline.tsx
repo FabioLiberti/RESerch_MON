@@ -45,6 +45,22 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+// Standard round labels in logical progression order.
+// The user selects from these but can also type a custom label.
+const ROUND_LABEL_PRESETS = [
+  "Abstract Submission",
+  "Extended Abstract Submission",
+  "Full Paper Submission",
+  "Revised Paper (Round 1)",
+  "Revised Paper (Round 2)",
+  "Revised Paper (Round 3)",
+  "Minor Revision",
+  "Major Revision",
+  "Camera Ready",
+  "Final Submission",
+  "Poster / Presentation",
+];
+
 export default function SubmissionTimeline({ paperId }: { paperId: number }) {
   const apiUrl = `/api/v1/submission-rounds/${paperId}`;
   const { data, isLoading } = useSWR<TimelineResponse>(apiUrl, authFetcher);
@@ -60,6 +76,10 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
   const [creating, setCreating] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editDocType, setEditDocType] = useState("");
+  const [editSubmittedAt, setEditSubmittedAt] = useState("");
+  const [editDeadline, setEditDeadline] = useState("");
   const [editDecision, setEditDecision] = useState("");
   const [editDecisionAt, setEditDecisionAt] = useState("");
   const [editDecisionNotes, setEditDecisionNotes] = useState("");
@@ -92,11 +112,15 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
     }
   };
 
-  const updateDecision = async (roundId: number) => {
+  const updateRound = async (roundId: number) => {
     await fetch(`/api/v1/submission-rounds/round/${roundId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
+        label: editLabel || null,
+        document_type: editDocType || null,
+        submitted_at: editSubmittedAt || null,
+        deadline: editDeadline || null,
         decision: editDecision || null,
         decision_at: editDecisionAt || null,
         decision_notes: editDecisionNotes || null,
@@ -149,12 +173,29 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
       {showForm && (
         <div className="p-4 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <input
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-              placeholder="Label (e.g. EA Submission)"
-              className="px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none"
-            />
+            <div>
+              <select
+                value={ROUND_LABEL_PRESETS.includes(label) ? label : "__custom__"}
+                onChange={e => {
+                  if (e.target.value === "__custom__") setLabel("");
+                  else setLabel(e.target.value);
+                }}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none"
+              >
+                {ROUND_LABEL_PRESETS.map(preset => (
+                  <option key={preset} value={preset}>{preset}</option>
+                ))}
+                <option value="__custom__">Custom label...</option>
+              </select>
+              {!ROUND_LABEL_PRESETS.includes(label) && (
+                <input
+                  value={label}
+                  onChange={e => setLabel(e.target.value)}
+                  placeholder="Custom label"
+                  className="w-full mt-1 px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none"
+                />
+              )}
+            </div>
             <select
               value={docType}
               onChange={e => setDocType(e.target.value)}
@@ -301,33 +342,54 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
                     </div>
                   </div>
 
-                  {/* Decision */}
+                  {/* Decision + Edit all fields */}
                   {isEditing ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <select
-                        value={editDecision}
-                        onChange={e => setEditDecision(e.target.value)}
-                        className="text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
-                      >
-                        <option value="">No decision</option>
-                        {Object.entries(DECISION_BADGE).map(([val, { label: lbl }]) => (
-                          <option key={val} value={val}>{lbl}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="date"
-                        value={editDecisionAt}
-                        onChange={e => setEditDecisionAt(e.target.value)}
-                        className="text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
-                      />
-                      <input
-                        value={editDecisionNotes}
-                        onChange={e => setEditDecisionNotes(e.target.value)}
-                        placeholder="Notes..."
-                        className="text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none flex-1 min-w-32"
-                      />
-                      <button onClick={() => updateDecision(round.id)} className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white font-bold">Save</button>
-                      <button onClick={() => setEditingId(null)} className="text-[10px] px-2 py-1 rounded hover:bg-[var(--muted)]">Cancel</button>
+                    <div className="space-y-2 p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)]">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Label</label>
+                          <select value={ROUND_LABEL_PRESETS.includes(editLabel) ? editLabel : "__custom__"} onChange={e => { if (e.target.value !== "__custom__") setEditLabel(e.target.value); else setEditLabel(""); }} className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none">
+                            {ROUND_LABEL_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+                            <option value="__custom__">Custom...</option>
+                          </select>
+                          {!ROUND_LABEL_PRESETS.includes(editLabel) && <input value={editLabel} onChange={e => setEditLabel(e.target.value)} placeholder="Custom label" className="w-full mt-1 text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none" />}
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Doc type</label>
+                          <select value={editDocType} onChange={e => setEditDocType(e.target.value)} className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none">
+                            {Object.entries(DOC_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Submitted</label>
+                          <input type="date" value={editSubmittedAt} onChange={e => setEditSubmittedAt(e.target.value)} className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Deadline</label>
+                          <input type="date" value={editDeadline} onChange={e => setEditDeadline(e.target.value)} className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Decision</label>
+                          <select value={editDecision} onChange={e => setEditDecision(e.target.value)} className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none">
+                            <option value="">No decision</option>
+                            {Object.entries(DECISION_BADGE).map(([v, { label: l }]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Decision date</label>
+                          <input type="date" value={editDecisionAt} onChange={e => setEditDecisionAt(e.target.value)} className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-[var(--muted-foreground)]">Notes</label>
+                          <input value={editDecisionNotes} onChange={e => setEditDecisionNotes(e.target.value)} placeholder="Decision notes..." className="w-full text-xs px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => updateRound(round.id)} className="text-[10px] px-3 py-1.5 rounded bg-emerald-700 text-white font-bold">Save</button>
+                        <button onClick={() => setEditingId(null)} className="text-[10px] px-3 py-1.5 rounded hover:bg-[var(--muted)]">Cancel</button>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 flex-wrap">
@@ -349,13 +411,17 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
                       <button
                         onClick={() => {
                           setEditingId(round.id);
+                          setEditLabel(round.label);
+                          setEditDocType(round.document_type);
+                          setEditSubmittedAt(round.submitted_at || "");
+                          setEditDeadline(round.deadline || "");
                           setEditDecision(round.decision || "");
                           setEditDecisionAt(round.decision_at || "");
                           setEditDecisionNotes(round.decision_notes || "");
                         }}
                         className="text-[10px] text-[var(--primary)] hover:underline ml-auto"
                       >
-                        {decBadge ? "Edit decision" : "Set decision"}
+                        Edit
                       </button>
                     </div>
                   )}

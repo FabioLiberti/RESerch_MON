@@ -98,6 +98,8 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         rating=paper.rating,
         tutor_check=paper.tutor_check,
         paper_role=paper.paper_role or "bibliography",
+        conference_url=paper.conference_url,
+        conference_notes=paper.conference_notes,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -717,6 +719,8 @@ class UpdatePaperMetadataRequest(BaseModel):
     journal: str | None = None
     publication_date: str | None = None
     paper_type: str | None = None
+    conference_url: str | None = None
+    conference_notes: str | None = None
 
 
 @router.put("/{paper_id}/metadata")
@@ -740,6 +744,10 @@ async def update_paper_metadata(
         paper.publication_date = body.publication_date
     if body.paper_type is not None:
         paper.paper_type = body.paper_type
+    if body.conference_url is not None:
+        paper.conference_url = body.conference_url
+    if body.conference_notes is not None:
+        paper.conference_notes = body.conference_notes
 
     await db.commit()
     return {"status": "updated", "paper_id": paper.id}

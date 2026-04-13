@@ -40,6 +40,8 @@ export interface PaperDetail extends Paper {
   zotero_key: string | null;
   disabled: boolean;
   peer_review_id: number | null;
+  conference_url: string | null;
+  conference_notes: string | null;
   authors: Author[];
   keyword_categories: Record<string, string[]>;
   source_details: PaperSource[];
