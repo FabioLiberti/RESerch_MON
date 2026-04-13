@@ -88,10 +88,10 @@ export default function ReviewPage() {
           <table className="w-full text-sm">
             <thead className="bg-[var(--secondary)] border-b border-[var(--border)]">
               <tr className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider">
-                <th className="text-left px-4 py-3 font-medium">Rating</th>
+                <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Rating</th>
                 <th className="text-left px-4 py-3 font-medium">Paper</th>
-                <th className="text-left px-4 py-3 font-medium">Pending Reviews</th>
-                <th className="text-left px-4 py-3 font-medium">Last Generated</th>
+                <th className="text-left px-4 py-3 font-medium">Reviews</th>
+                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Last Generated</th>
               </tr>
             </thead>
             <tbody>
@@ -103,7 +103,7 @@ export default function ReviewPage() {
                   .reverse()[0];
                 return (
                   <tr key={paper.paper_id} className="border-b border-[var(--border)] hover:bg-[var(--secondary)]/50 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-top hidden sm:table-cell">
                       {paper.rating ? (
                         <span className="text-amber-400 text-xs">
                           {"★".repeat(paper.rating)}{"☆".repeat(5 - paper.rating)}
@@ -169,7 +169,7 @@ export default function ReviewPage() {
                         })}
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[10px] text-[var(--muted-foreground)] align-top">
+                    <td className="px-4 py-3 whitespace-nowrap text-[10px] text-[var(--muted-foreground)] align-top hidden md:table-cell">
                       {lastDate ? new Date(lastDate).toLocaleDateString("it-IT") : "—"}
                     </td>
                   </tr>
