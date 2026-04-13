@@ -184,7 +184,7 @@ export default function MyManuscriptsPage() {
           {manuscripts.map(paper => (
             <Link
               key={paper.id}
-              href={`/papers/${paper.id}`}
+              href={`/my-manuscripts/${paper.id}`}
               className="block rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 hover:bg-[var(--secondary)] transition-colors"
             >
               <div className="flex items-start justify-between gap-4">

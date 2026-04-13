@@ -285,7 +285,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* My Manuscripts link — only shown for my_manuscript papers */}
         {paper.paper_role === "my_manuscript" && (
           <Link
-            href="/my-manuscripts"
+            href={`/my-manuscripts/${paperId}`}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
             style={{
               backgroundColor: "#2563eb",
