@@ -84,14 +84,14 @@ export default function ReviewPage() {
       )}
 
       {grouped.length > 0 && (
-        <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden overflow-x-auto max-w-[calc(100vw-2rem)]">
+          <table className="w-full text-sm table-fixed">
             <thead className="bg-[var(--secondary)] border-b border-[var(--border)]">
               <tr className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider">
-                <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Rating</th>
+                <th className="text-left px-4 py-3 font-medium hidden sm:table-cell w-20">Rating</th>
                 <th className="text-left px-4 py-3 font-medium">Paper</th>
-                <th className="text-left px-4 py-3 font-medium">Reviews</th>
-                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Last Generated</th>
+                <th className="text-left px-4 py-3 font-medium w-28 sm:w-40">Reviews</th>
+                <th className="text-left px-4 py-3 font-medium hidden md:table-cell w-28">Last Generated</th>
               </tr>
             </thead>
             <tbody>
@@ -112,10 +112,10 @@ export default function ReviewPage() {
                         <span className="text-[var(--muted-foreground)] text-xs">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="px-4 py-3 align-top overflow-hidden">
                       <Link
                         href={`/papers/${paper.paper_id}`}
-                        className="text-[var(--foreground)] hover:text-[var(--primary)] font-medium line-clamp-2"
+                        className="text-[var(--foreground)] hover:text-[var(--primary)] font-medium line-clamp-2 break-words"
                         title={paper.title}
                       >
                         {paper.title}
