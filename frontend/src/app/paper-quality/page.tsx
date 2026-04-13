@@ -85,18 +85,18 @@ export default function PaperQualityListPage() {
           <table className="w-full text-sm">
             <thead className="bg-[var(--secondary)] border-b border-[var(--border)]">
               <tr className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider">
-                <th className="text-left px-4 py-3 font-medium">Grade</th>
-                <th className="text-left px-4 py-3 font-medium">Score</th>
+                <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Grade</th>
+                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Score</th>
                 <th className="text-left px-4 py-3 font-medium">Paper</th>
-                <th className="text-left px-4 py-3 font-medium">Version</th>
-                <th className="text-left px-4 py-3 font-medium">Updated</th>
+                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Version</th>
+                <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Updated</th>
                 <th className="text-right px-4 py-3 font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
               {items.map(it => (
                 <tr key={it.paper_id} className="border-b border-[var(--border)] hover:bg-[var(--secondary)]/50">
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
                     {it.overall_grade ? (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${GRADE_COLOR[it.overall_grade]}`}>
                         {GRADE_LABEL[it.overall_grade]}
@@ -105,7 +105,7 @@ export default function PaperQualityListPage() {
                       <span className="text-[10px] text-[var(--muted-foreground)]">— not graded —</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">
                     {it.overall_score ? (
                       <span className="text-amber-400 text-xs">
                         {"★".repeat(it.overall_score)}{"☆".repeat(5 - it.overall_score)}
@@ -145,10 +145,10 @@ export default function PaperQualityListPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-[10px]">
+                  <td className="px-4 py-3 whitespace-nowrap text-[10px] hidden md:table-cell">
                     <span className="px-1.5 py-0.5 rounded bg-fuchsia-700 text-white font-bold">v{it.version}</span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-[10px] text-[var(--muted-foreground)]">
+                  <td className="px-4 py-3 whitespace-nowrap text-[10px] text-[var(--muted-foreground)] hidden lg:table-cell">
                     {it.updated_at ? new Date(it.updated_at).toLocaleDateString("it-IT") : "—"}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">
