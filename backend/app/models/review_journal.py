@@ -42,6 +42,13 @@ class ReviewerEntry(Base):
     rating_max = Column(Integer, nullable=True)   # e.g. 5 (scale: 1-5, 1-10, etc.)
     rating_label = Column(String(200), nullable=True)  # e.g. "Overall rating for potential contribution to IFKAD"
 
+    # Reviewer's decision (e.g. "Accepted with minor revision")
+    decision = Column(String(100), nullable=True)
+
+    # Structured rubric: JSON array of {dimension, score, score_max}
+    # e.g. [{"dimension": "Relevance to the proposed topic", "score": 4, "score_max": 5}]
+    rubric_json = Column(Text, nullable=True)
+
     # Structured observations extracted from the raw text
     # JSON array: [{"text": "...", "section_ref": "...", "severity": "major|minor|suggestion|praise",
     #               "status": "to_address|addressed|rejected_justified|not_applicable",
@@ -58,3 +65,11 @@ class ReviewerEntry(Base):
     @items.setter
     def items(self, value: list[dict]):
         self.items_json = json.dumps(value)
+
+    @property
+    def rubric(self) -> list[dict]:
+        return json.loads(self.rubric_json) if self.rubric_json else []
+
+    @rubric.setter
+    def rubric(self, value: list[dict]):
+        self.rubric_json = json.dumps(value)

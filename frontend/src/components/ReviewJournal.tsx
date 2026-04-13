@@ -26,6 +26,8 @@ interface ReviewerEntry {
   rating: number | null;
   rating_max: number | null;
   rating_label: string | null;
+  decision: string | null;
+  rubric: { dimension: string; score: number | null; score_max: number }[];
   items: Observation[];
   created_at: string | null;
   updated_at: string | null;
@@ -51,6 +53,33 @@ const STATUS_OPTIONS = [
   { value: "addressed", label: "Addressed", color: "text-emerald-400" },
   { value: "rejected_justified", label: "Rejected (justified)", color: "text-amber-400" },
   { value: "not_applicable", label: "N/A", color: "text-[var(--muted-foreground)]" },
+];
+
+const DECISION_OPTIONS = [
+  { value: "honours", label: "Honours quality" },
+  { value: "accepted", label: "Accepted" },
+  { value: "minor_revision", label: "Accepted with minor revision" },
+  { value: "major_revision", label: "Major revision needed" },
+  { value: "rejected", label: "Rejected" },
+];
+
+const DECISION_COLORS: Record<string, string> = {
+  honours: "bg-emerald-700 text-white",
+  accepted: "bg-emerald-600 text-white",
+  minor_revision: "bg-amber-600 text-white",
+  major_revision: "bg-orange-700 text-white",
+  rejected: "bg-red-700 text-white",
+};
+
+const DEFAULT_RUBRIC_DIMENSIONS = [
+  "Relevance to the proposed topic",
+  "Relevance of the scientific contribution",
+  "Relevance of managerial/practitioner implications",
+  "Appropriateness of research/study method",
+  "Relevance and novelty of the results",
+  "Structure (format, language, style)",
+  "Standard of English",
+  "Reference list, adequate and correctly cited",
 ];
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
@@ -283,6 +312,11 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {entry.decision && (
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold", DECISION_COLORS[entry.decision] || "bg-gray-600 text-white")}>
+                    {DECISION_OPTIONS.find(o => o.value === entry.decision)?.label || entry.decision}
+                  </span>
+                )}
                 {entry.rating != null && entry.rating_max != null && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold">
                     {entry.rating}/{entry.rating_max}
@@ -402,6 +436,114 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none"
                     placeholder="Rating label (e.g. Overall contribution to IFKAD)"
                   />
+                </div>
+
+                {/* Decision */}
+                <div className="flex items-center gap-3 p-2 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                  <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Decision:</span>
+                  <select
+                    value={entry.decision || ""}
+                    onChange={async (e) => {
+                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        body: JSON.stringify({ decision: e.target.value || null }),
+                      });
+                      mutate(`/api/v1/review-journal/${paperId}`);
+                    }}
+                    className="flex-1 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs focus:outline-none"
+                  >
+                    <option value="">— not set —</option>
+                    {DECISION_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  {entry.decision && (
+                    <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold", DECISION_COLORS[entry.decision] || "bg-gray-600 text-white")}>
+                      {DECISION_OPTIONS.find(o => o.value === entry.decision)?.label || entry.decision}
+                    </span>
+                  )}
+                </div>
+
+                {/* Rubric grid */}
+                <div className="rounded-lg border border-[var(--border)] overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-[var(--secondary)] border-b border-[var(--border)]">
+                    <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase">Evaluation Rubric</span>
+                    {entry.rubric.length === 0 && (
+                      <button
+                        onClick={async () => {
+                          const defaultRubric = DEFAULT_RUBRIC_DIMENSIONS.map(d => ({ dimension: d, score: null, score_max: 5 }));
+                          await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json", ...authHeaders() },
+                            body: JSON.stringify({ rubric: defaultRubric }),
+                          });
+                          mutate(`/api/v1/review-journal/${paperId}`);
+                        }}
+                        className="text-[9px] px-2 py-1 rounded bg-indigo-700 text-white font-bold hover:bg-indigo-600"
+                      >
+                        Load default dimensions
+                      </button>
+                    )}
+                  </div>
+                  {entry.rubric.length > 0 ? (
+                    <div className="divide-y divide-[var(--border)]">
+                      {entry.rubric.map((dim, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2">
+                          <span className="text-[10px] flex-1 min-w-0">{dim.dimension}</span>
+                          <div className="flex gap-1 shrink-0">
+                            {Array.from({ length: dim.score_max }, (_, i) => i + 1).map(val => (
+                              <button
+                                key={val}
+                                onClick={async () => {
+                                  const updated = [...entry.rubric];
+                                  updated[idx] = { ...updated[idx], score: val };
+                                  await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json", ...authHeaders() },
+                                    body: JSON.stringify({ rubric: updated }),
+                                  });
+                                  mutate(`/api/v1/review-journal/${paperId}`);
+                                }}
+                                className={cn(
+                                  "w-6 h-6 rounded text-[10px] font-bold transition-colors",
+                                  dim.score === val
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                                )}
+                              >
+                                {val}
+                              </button>
+                            ))}
+                            <button
+                              onClick={async () => {
+                                const updated = [...entry.rubric];
+                                updated[idx] = { ...updated[idx], score: null };
+                                await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json", ...authHeaders() },
+                                  body: JSON.stringify({ rubric: updated }),
+                                });
+                                mutate(`/api/v1/review-journal/${paperId}`);
+                              }}
+                              className={cn(
+                                "w-8 h-6 rounded text-[9px] font-bold transition-colors",
+                                dim.score === null
+                                  ? "bg-gray-600 text-white"
+                                  : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                              )}
+                            >
+                              N/A
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-4 text-center text-[10px] text-[var(--muted-foreground)]">
+                      No rubric dimensions. Click &quot;Load default dimensions&quot; or add observations below.
+                    </div>
+                  )}
                 </div>
 
                 {/* Observations list */}

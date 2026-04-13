@@ -35,6 +35,12 @@ class ObservationItem(BaseModel):
     response: str | None = None
 
 
+class RubricDimension(BaseModel):
+    dimension: str
+    score: int | None = None
+    score_max: int = 5
+
+
 class CreateReviewerEntryRequest(BaseModel):
     reviewer_label: str
     source_type: str = "other"
@@ -43,6 +49,8 @@ class CreateReviewerEntryRequest(BaseModel):
     rating: int | None = None
     rating_max: int | None = None
     rating_label: str | None = None
+    decision: str | None = None
+    rubric: list[RubricDimension] | None = None
     items: list[ObservationItem] = []
 
 
@@ -54,6 +62,8 @@ class UpdateReviewerEntryRequest(BaseModel):
     rating: int | None = None
     rating_max: int | None = None
     rating_label: str | None = None
+    decision: str | None = None
+    rubric: list[RubricDimension] | None = None
     items: list[ObservationItem] | None = None
 
 
@@ -72,6 +82,8 @@ def _serialize(entry: ReviewerEntry) -> dict:
         "rating": entry.rating,
         "rating_max": entry.rating_max,
         "rating_label": entry.rating_label,
+        "decision": entry.decision,
+        "rubric": entry.rubric,
         "items": entry.items,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
         "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
@@ -135,7 +147,10 @@ async def create_entry(
         rating=body.rating,
         rating_max=body.rating_max,
         rating_label=body.rating_label,
+        decision=body.decision,
     )
+    if body.rubric is not None:
+        entry.rubric = [r.model_dump() for r in body.rubric]
     entry.items = [item.model_dump() for item in body.items]
     db.add(entry)
     await db.flush()
@@ -171,6 +186,10 @@ async def update_entry(
         entry.rating_max = body.rating_max
     if body.rating_label is not None:
         entry.rating_label = body.rating_label
+    if body.decision is not None:
+        entry.decision = body.decision
+    if body.rubric is not None:
+        entry.rubric = [r.model_dump() for r in body.rubric]
     if body.items is not None:
         entry.items = [item.model_dump() for item in body.items]
 
