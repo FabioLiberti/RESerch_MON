@@ -182,14 +182,15 @@ export default function MyManuscriptsPage() {
       ) : (
         <div className="space-y-3">
           {manuscripts.map(paper => (
-            <Link
+            <div
               key={paper.id}
-              href={`/papers/${paper.id}`}
-              className="block rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 hover:bg-[var(--secondary)] transition-colors"
+              className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-bold line-clamp-2">{paper.title}</h3>
+                  <Link href={`/papers/${paper.id}`} className="text-sm font-bold line-clamp-2 hover:text-[var(--primary)]">
+                    {paper.title}
+                  </Link>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold">
                       MY MANUSCRIPT
@@ -221,11 +222,29 @@ export default function MyManuscriptsPage() {
                     </div>
                   )}
                 </div>
-                <svg className="w-4 h-4 text-[var(--muted-foreground)] shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Link
+                    href={`/my-manuscripts/${paper.id}`}
+                    className="text-[10px] px-2 py-1 rounded bg-blue-700 text-white font-bold hover:bg-blue-600"
+                  >
+                    Open
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Delete manuscript "${paper.title.slice(0, 50)}..."? This removes the paper from the database.`)) return;
+                      await fetch(`/api/v1/papers/${paper.id}/toggle-disabled`, {
+                        method: "POST",
+                        headers: authHeaders(),
+                      });
+                      mutate("/api/v1/papers?paper_role=my_manuscript&per_page=50&sort_by=created_at&sort_order=desc");
+                    }}
+                    className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700"
+                  >
+                    Del
+                  </button>
+                </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

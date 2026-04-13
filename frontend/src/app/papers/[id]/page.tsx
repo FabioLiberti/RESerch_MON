@@ -283,6 +283,20 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         )}
         {/* spacer pushes review buttons to the far right */}
         <div className="ml-auto" />
+        {/* Meta Review link — shown when paper has Extended Abstract analyses */}
+        <Link
+          href="/review"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
+          style={{
+            backgroundColor: "#059669",
+            color: "#ffffff",
+            border: "3px solid #047857",
+            boxShadow: "0 2px 8px rgba(5, 150, 105, 0.4)",
+          }}
+          title="Go to Meta Review queue"
+        >
+          Meta Review
+        </Link>
         {/* Peer Review link — only shown when this paper has a linked peer review */}
         {paper.peer_review_id && (
           <Link

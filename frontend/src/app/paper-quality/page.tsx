@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
+import { authHeaders } from "@/lib/authHeaders";
 
 interface QualityListItem {
   paper_id: number;
@@ -159,18 +160,33 @@ export default function PaperQualityListPage() {
                   <td className="px-4 py-3 whitespace-nowrap text-[10px] text-[var(--muted-foreground)] hidden lg:table-cell">
                     {it.updated_at ? new Date(it.updated_at).toLocaleDateString("it-IT") : "—"}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right hidden sm:table-cell">
-                    <Link
-                      href={`/paper-quality/${it.paper_id}`}
-                      className="inline-block text-[10px] px-3 py-1.5 rounded font-bold border-2"
-                      style={{
-                        backgroundColor: "#fde047",
-                        color: "#1e1b4b",
-                        borderColor: "#7c3aed",
-                      }}
-                    >
-                      Open
-                    </Link>
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Link
+                        href={`/paper-quality/${it.paper_id}`}
+                        className="inline-block text-[10px] px-2 py-1 rounded font-bold border-2"
+                        style={{
+                          backgroundColor: "#fde047",
+                          color: "#1e1b4b",
+                          borderColor: "#7c3aed",
+                        }}
+                      >
+                        Open
+                      </Link>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Delete quality review v${it.version} for this paper?`)) return;
+                          await fetch(`/api/v1/paper-quality/${it.paper_id}/v/${it.version}`, {
+                            method: "DELETE",
+                            headers: authHeaders(),
+                          });
+                          mutate("/api/v1/paper-quality");
+                        }}
+                        className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700"
+                      >
+                        Del
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
