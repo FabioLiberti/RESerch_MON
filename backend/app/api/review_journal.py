@@ -214,8 +214,14 @@ async def get_attachment(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
 
+    # Serve PDFs inline (opens in browser), other files as download
+    suffix = file_path.suffix.lower()
+    media_types = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+                   ".jpeg": "image/jpeg", ".txt": "text/plain", ".md": "text/markdown"}
+    media_type = media_types.get(suffix, "application/octet-stream")
+
     return FileResponse(
         path=str(file_path),
         filename=file_path.name,
-        media_type="application/octet-stream",
+        media_type=media_type,
     )
