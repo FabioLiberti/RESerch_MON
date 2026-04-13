@@ -381,7 +381,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   </div>
                 )}
 
-                {/* Rating */}
+                {/* Rating — collapsible, shown only if has data or user expands */}
+                {(entry.rating != null || entry.rating_max != null || entry.rating_label) ? (
                 <div className="p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20 space-y-2">
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Rating:</span>
@@ -437,6 +438,21 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     placeholder="Rating label (e.g. Overall contribution to IFKAD)"
                   />
                 </div>
+                ) : (
+                <button
+                  onClick={async () => {
+                    await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json", ...authHeaders() },
+                      body: JSON.stringify({ rating_max: 5 }),
+                    });
+                    mutate(`/api/v1/review-journal/${paperId}`);
+                  }}
+                  className="text-[10px] text-[var(--primary)] hover:underline"
+                >
+                  + Add rating
+                </button>
+                )}
 
                 {/* Decision */}
                 <div className="flex items-center gap-3 p-2 rounded-lg bg-purple-500/5 border border-purple-500/20">
@@ -465,28 +481,12 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   )}
                 </div>
 
-                {/* Rubric grid */}
+                {/* Rubric grid — only shown if has data */}
+                {entry.rubric.length > 0 ? (
                 <div className="rounded-lg border border-[var(--border)] overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-2 bg-[var(--secondary)] border-b border-[var(--border)]">
                     <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase">Evaluation Rubric</span>
-                    {entry.rubric.length === 0 && (
-                      <button
-                        onClick={async () => {
-                          const defaultRubric = DEFAULT_RUBRIC_DIMENSIONS.map(d => ({ dimension: d, score: null, score_max: 5 }));
-                          await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json", ...authHeaders() },
-                            body: JSON.stringify({ rubric: defaultRubric }),
-                          });
-                          mutate(`/api/v1/review-journal/${paperId}`);
-                        }}
-                        className="text-[9px] px-2 py-1 rounded bg-indigo-700 text-white font-bold hover:bg-indigo-600"
-                      >
-                        Load default dimensions
-                      </button>
-                    )}
                   </div>
-                  {entry.rubric.length > 0 ? (
                     <div className="divide-y divide-[var(--border)]">
                       {entry.rubric.map((dim, idx) => (
                         <div key={idx} className="flex items-center gap-2 px-3 py-2">
@@ -539,12 +539,23 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="px-3 py-4 text-center text-[10px] text-[var(--muted-foreground)]">
-                      No rubric dimensions. Click &quot;Load default dimensions&quot; or add observations below.
-                    </div>
-                  )}
                 </div>
+                ) : (
+                <button
+                  onClick={async () => {
+                    const defaultRubric = DEFAULT_RUBRIC_DIMENSIONS.map(d => ({ dimension: d, score: null, score_max: 5 }));
+                    await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json", ...authHeaders() },
+                      body: JSON.stringify({ rubric: defaultRubric }),
+                    });
+                    mutate(`/api/v1/review-journal/${paperId}`);
+                  }}
+                  className="text-[10px] text-[var(--primary)] hover:underline"
+                >
+                  + Add evaluation rubric
+                </button>
+                )}
 
                 {/* Observations list */}
                 {entry.items.length > 0 && (
