@@ -10,6 +10,7 @@ import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 import ReviewJournal from "@/components/ReviewJournal";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import PaperInfoBox from "@/components/PaperInfoBox";
+import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 
 // --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
 function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
@@ -633,6 +634,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       {/* Review Journal — shown for reviewing/my_manuscript papers, or any paper that has entries */}
       {(paper.paper_role !== "bibliography" || paper.peer_review_id) && (
         <ReviewJournal paperId={paperId} />
+      )}
+
+      {/* Bibliography — shown for my_manuscript and reviewing papers */}
+      {paper.paper_role !== "bibliography" && (
+        <ManuscriptBibliography paperId={paperId} />
       )}
     </div>
   );

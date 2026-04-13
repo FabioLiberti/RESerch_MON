@@ -8,6 +8,7 @@ import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import ReviewJournal from "@/components/ReviewJournal";
+import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 
 export default function MyManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -159,10 +160,11 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        {/* RIGHT: Submission Timeline + Review Journal */}
+        {/* RIGHT: Submission Timeline + Review Journal + Bibliography */}
         <div className="lg:w-1/2 overflow-y-auto space-y-4">
           <SubmissionTimeline paperId={paperId} />
           <ReviewJournal paperId={paperId} />
+          <ManuscriptBibliography paperId={paperId} />
         </div>
       </div>
     </div>

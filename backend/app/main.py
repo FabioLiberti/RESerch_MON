@@ -16,6 +16,7 @@ from app.models.paper import Base
 from app.models.topic import Topic
 from app.models.review_journal import ReviewerEntry  # noqa: F401 — register with metadata
 from app.models.submission_round import SubmissionRound  # noqa: F401 — register with metadata
+from app.models.paper_reference import PaperReference  # noqa: F401 — register with metadata
 from app.api.router import api_router
 
 logging.basicConfig(level=getattr(logging, settings.log_level))
