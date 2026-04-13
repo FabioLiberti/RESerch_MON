@@ -628,11 +628,11 @@ export default function PapersPage() {
                 </th>
               )}
               <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3">Title</th>
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-28">Date</th>
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-32">Sources</th>
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-24">Type</th>
-              <th className="text-center text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-20">Citations</th>
-              <th className="text-center text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-16">PDF</th>
+              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-28 hidden sm:table-cell">Date</th>
+              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-32 hidden md:table-cell">Sources</th>
+              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-24 hidden lg:table-cell">Type</th>
+              <th className="text-center text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-20 hidden sm:table-cell">Citations</th>
+              <th className="text-center text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-16 hidden md:table-cell">PDF</th>
             </tr>
           </thead>
           <tbody>
@@ -849,10 +849,10 @@ export default function PapersPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[var(--muted-foreground)]">
+                    <td className="px-4 py-3 text-xs text-[var(--muted-foreground)] hidden sm:table-cell">
                       {formatDate(paper.publication_date)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden md:table-cell">
                       <div className="flex flex-wrap gap-1">
                         {paper.sources.map((src) => (
                           <span
@@ -868,11 +868,11 @@ export default function PapersPage() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-[var(--muted-foreground)] capitalize">
+                    <td className="px-4 py-3 text-xs text-[var(--muted-foreground)] capitalize hidden lg:table-cell">
                       {paper.paper_type.replace("_", " ")}
                     </td>
-                    <td className="px-4 py-3 text-center text-xs">{paper.citation_count}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3 text-center text-xs hidden sm:table-cell">{paper.citation_count}</td>
+                    <td className="px-4 py-3 text-center hidden md:table-cell">
                       {paper.has_pdf ? (
                         <span className="text-[var(--success)]">&#10003;</span>
                       ) : paper.open_access ? (
