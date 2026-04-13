@@ -347,46 +347,48 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 )}
 
                 {/* Rating */}
-                <div className="flex items-center gap-3 flex-wrap p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
-                  <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Rating:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={entry.rating_max || 10}
-                    value={entry.rating ?? ""}
-                    onChange={async (e) => {
-                      const val = e.target.value ? parseInt(e.target.value) : null;
-                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json", ...authHeaders() },
-                        body: JSON.stringify({ rating: val }),
-                      });
-                      mutate(`/api/v1/review-journal/${paperId}`);
-                    }}
-                    className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
-                    placeholder="—"
-                  />
-                  <span className="text-[10px] text-[var(--muted-foreground)]">out of</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={entry.rating_max ?? ""}
-                    onChange={async (e) => {
-                      const val = e.target.value ? parseInt(e.target.value) : null;
-                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json", ...authHeaders() },
-                        body: JSON.stringify({ rating_max: val }),
-                      });
-                      mutate(`/api/v1/review-journal/${paperId}`);
-                    }}
-                    className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
-                    placeholder="5"
-                  />
+                <div className="p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Rating:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={entry.rating_max || 10}
+                      value={entry.rating ?? ""}
+                      onChange={async (e) => {
+                        const val = e.target.value ? parseInt(e.target.value) : null;
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ rating: val }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
+                      placeholder="—"
+                    />
+                    <span className="text-[10px] text-[var(--muted-foreground)]">out of</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={entry.rating_max ?? ""}
+                      onChange={async (e) => {
+                        const val = e.target.value ? parseInt(e.target.value) : null;
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ rating_max: val }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
+                      placeholder="5"
+                    />
+                  </div>
                   <input
                     type="text"
-                    value={entry.rating_label ?? ""}
+                    defaultValue={entry.rating_label ?? ""}
                     onBlur={async (e) => {
                       await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
                         method: "PUT",
@@ -395,11 +397,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                       });
                       mutate(`/api/v1/review-journal/${paperId}`);
                     }}
-                    onChange={(e) => {
-                      // Local update via DOM, persist on blur
-                    }}
-                    defaultValue={entry.rating_label ?? ""}
-                    className="flex-1 min-w-32 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none"
+                    className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none"
                     placeholder="Rating label (e.g. Overall contribution to IFKAD)"
                   />
                 </div>
