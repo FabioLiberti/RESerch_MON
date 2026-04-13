@@ -21,6 +21,7 @@ interface ReviewerEntry {
   source_type: string;
   received_at: string | null;
   raw_text: string | null;
+  attachment_path: string | null;
   has_attachment: boolean;
   items: Observation[];
   created_at: string | null;
@@ -414,8 +415,23 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                         }}
                       />
                     </label>
-                    {entry.has_attachment && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-800 text-white">Attached</span>
+                    {entry.has_attachment && entry.attachment_path && (
+                      <button
+                        onClick={async () => {
+                          const r = await fetch(`/api/v1/review-journal/entry/${entry.id}/attachment`, {
+                            headers: authHeaders(),
+                          });
+                          if (r.ok) {
+                            const blob = await r.blob();
+                            const url = URL.createObjectURL(blob);
+                            window.open(url, "_blank");
+                          }
+                        }}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-amber-800 text-white hover:bg-amber-700 flex items-center gap-1"
+                        title="Open attachment"
+                      >
+                        📎 {entry.attachment_path.split("/").pop()}
+                      </button>
                     )}
                     <button
                       onClick={() => deleteEntry(entry.id)}

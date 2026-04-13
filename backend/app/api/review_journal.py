@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -196,3 +197,25 @@ async def upload_attachment(
     entry.attachment_path = str(out_path)
     await db.commit()
     return {"path": str(out_path), "size_kb": round(len(content) / 1024)}
+
+
+@router.get("/entry/{entry_id}/attachment")
+async def get_attachment(
+    entry_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download the attachment for a reviewer entry."""
+    entry = await db.get(ReviewerEntry, entry_id)
+    if not entry or not entry.attachment_path:
+        raise HTTPException(status_code=404, detail="No attachment found")
+
+    file_path = Path(entry.attachment_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Attachment file not found on disk")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=file_path.name,
+        media_type="application/octet-stream",
+    )
