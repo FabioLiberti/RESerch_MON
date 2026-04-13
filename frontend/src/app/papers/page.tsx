@@ -10,6 +10,7 @@ import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { api, authFetcher } from "@/lib/api";
 import type { KeywordCount } from "@/lib/types";
+import PaperInfoBox from "@/components/PaperInfoBox";
 
 type SourceTab = "all" | "api" | "compendium";
 
@@ -686,9 +687,12 @@ export default function PapersPage() {
                       </td>
                     )}
                     <td className="px-4 py-3">
-                      <Link href={`/papers/${paper.id}`} className="text-sm hover:text-[var(--primary)]">
-                        <span className="line-clamp-2">{paper.title}</span>
-                      </Link>
+                      <div className="flex items-start gap-1.5">
+                        <Link href={`/papers/${paper.id}`} className="text-sm hover:text-[var(--primary)] flex-1">
+                          <span className="line-clamp-2">{paper.title}</span>
+                        </Link>
+                        <PaperInfoBox createdAt={paper.created_at} createdVia={paper.created_via} sources={paper.sources} />
+                      </div>
                       {paper.labels && paper.labels.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {[...paper.labels].sort((a, b) => a.name.localeCompare(b.name)).map((l) => (

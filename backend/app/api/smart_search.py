@@ -318,6 +318,7 @@ async def save_papers(
             continue
 
         # Create paper
+        _mode = job.search_mode or "keywords"
         paper = Paper(
             doi=normalize_doi(item.get("doi")),
             title=item["title"],
@@ -329,6 +330,7 @@ async def save_papers(
             pdf_url=item.get("pdf_url"),
             citation_count=item.get("citation_count", 0),
             validated=False,
+            created_via=f"smart_search_{_mode}",
         )
         paper.external_ids = item.get("external_ids", {})
         if item.get("keywords"):

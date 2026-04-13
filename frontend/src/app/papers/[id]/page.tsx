@@ -9,6 +9,7 @@ import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 import ReviewJournal from "@/components/ReviewJournal";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
+import PaperInfoBox from "@/components/PaperInfoBox";
 
 // --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
 function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
@@ -196,6 +197,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           <span className="text-xs text-[var(--muted-foreground)]">
             {formatDate(paper.publication_date)}
           </span>
+          <PaperInfoBox
+            createdAt={paper.created_at}
+            createdVia={(paper as any).created_via}
+            sources={paper.source_details?.map((s: any) => s.source_name) || []}
+          />
           {paper.journal && (
             <span className="text-xs text-[var(--muted-foreground)] italic">
               {paper.journal}

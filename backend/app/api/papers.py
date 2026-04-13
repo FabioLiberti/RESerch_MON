@@ -71,6 +71,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         tutor_check=paper.tutor_check,
         quality_grade=quality_grade,
         paper_role=paper.paper_role or "bibliography",
+        created_via=paper.created_via,
         created_at=paper.created_at,
     )
 
@@ -98,6 +99,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         rating=paper.rating,
         tutor_check=paper.tutor_check,
         paper_role=paper.paper_role or "bibliography",
+        created_via=paper.created_via,
         conference_url=paper.conference_url,
         conference_notes=paper.conference_notes,
         github_url=paper.github_url,
@@ -603,6 +605,7 @@ async def import_paper_by_doi(
                 publication_date=result.publication_date, journal=result.journal,
                 paper_type=result.paper_type, open_access=result.open_access,
                 pdf_url=result.pdf_url, citation_count=result.citation_count, validated=True,
+                created_via="import_doi",
             )
             paper.keywords = result.keywords or []
             paper.keyword_categories = result.keyword_categories or {}
@@ -690,6 +693,7 @@ async def create_my_manuscript(
         publication_date=body.submission_date,
         paper_type="manuscript",
         paper_role="my_manuscript",
+        created_via="my_manuscript",
     )
     db.add(paper)
     await db.flush()

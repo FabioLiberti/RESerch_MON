@@ -21,6 +21,7 @@ export interface Paper {
   tutor_check: string | null;
   quality_grade: string | null;
   paper_role: string;  // 'bibliography' | 'reviewing' | 'my_manuscript'
+  created_via: string | null;
   created_at: string;
 }
 
@@ -39,6 +40,7 @@ export interface PaperDetail extends Paper {
   validated: boolean;
   zotero_key: string | null;
   disabled: boolean;
+  created_via: string | null;
   peer_review_id: number | null;
   conference_url: string | null;
   conference_notes: string | null;

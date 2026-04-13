@@ -53,6 +53,7 @@ class PaperSummary(BaseModel):
     tutor_check: str | None = None
     quality_grade: str | None = None
     paper_role: str = "bibliography"
+    created_via: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -80,6 +81,7 @@ class PaperDetail(BaseModel):
     rating: int | None = None
     tutor_check: str | None = None
     paper_role: str = "bibliography"
+    created_via: str | None = None
     peer_review_id: int | None = None  # ID of linked PeerReview, if any
     conference_url: str | None = None
     conference_notes: str | None = None

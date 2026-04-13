@@ -223,6 +223,7 @@ class DiscoveryService:
             pdf_url=raw.pdf_url,
             citation_count=raw.citation_count,
             validated=False,
+            created_via="discovery",
         )
         paper.external_ids = raw.external_ids
         if raw.keywords:

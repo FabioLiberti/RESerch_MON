@@ -306,6 +306,7 @@ async def save_imported(
                     pdf_url=item.pdf_url,
                     citation_count=item.citation_count,
                     validated=True,
+                    created_via="bibliography_import",
                 )
                 paper.external_ids = item.external_ids
                 if item.keywords:
@@ -346,6 +347,7 @@ async def save_imported(
                 title=item.title or f"[Unresolved] DOI: {item.doi}",
                 paper_type="journal_article",
                 validated=False,
+                created_via="bibliography_import",
             )
             db.add(paper)
             await db.flush()

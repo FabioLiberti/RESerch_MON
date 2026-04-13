@@ -142,6 +142,7 @@ async def create_peer_review(
         journal=target_journal,
         paper_type="manuscript",
         paper_role="reviewing",
+        created_via="peer_review",
     )
     db.add(paper)
     await db.flush()  # obtain paper.id

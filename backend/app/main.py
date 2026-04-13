@@ -113,6 +113,7 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE papers ADD COLUMN conference_url TEXT",
             "ALTER TABLE papers ADD COLUMN conference_notes TEXT",
             "ALTER TABLE papers ADD COLUMN github_url TEXT",
+            "ALTER TABLE papers ADD COLUMN created_via VARCHAR(30)",
         ]:
             try:
                 await conn.execute(sqlalchemy_text(stmt))

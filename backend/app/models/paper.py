@@ -45,6 +45,10 @@ class Paper(Base):
     # reviewing (paper received for peer review on behalf of a journal),
     # my_manuscript (user's own paper submitted to a journal, not yet published).
     paper_role = Column(String(20), default="bibliography")  # 'bibliography' | 'reviewing' | 'my_manuscript'
+    # How this paper entered the DB: discovery | smart_search_keywords | smart_search_title |
+    # smart_search_author | smart_search_doi | import_doi | bibliography_import |
+    # my_manuscript | peer_review | manual | NULL (legacy, unknown)
+    created_via = Column(String(30), nullable=True)
     conference_url = Column(Text, nullable=True)   # Link to the conference/journal website
     conference_notes = Column(Text, nullable=True)  # Free-text notes about the venue
     github_url = Column(Text, nullable=True)        # Link to the paper's code repository
