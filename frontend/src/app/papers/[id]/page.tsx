@@ -11,6 +11,7 @@ import ReviewJournal from "@/components/ReviewJournal";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import PaperInfoBox from "@/components/PaperInfoBox";
 import ManuscriptBibliography from "@/components/ManuscriptBibliography";
+import CitedByManuscripts from "@/components/CitedByManuscripts";
 
 // --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
 function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
@@ -622,6 +623,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Summary Card */}
       <SummaryCard paperId={paperId} />
+
+      {/* Cited by my manuscripts — shown on any paper that is referenced */}
+      <CitedByManuscripts paperId={paperId} />
 
       {/* Submission Timeline — shown for my_manuscript and reviewing papers */}
       {paper.paper_role !== "bibliography" && (
