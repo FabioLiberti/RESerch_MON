@@ -42,6 +42,7 @@ export interface PaperDetail extends Paper {
   peer_review_id: number | null;
   conference_url: string | null;
   conference_notes: string | null;
+  github_url: string | null;
   authors: Author[];
   keyword_categories: Record<string, string[]>;
   source_details: PaperSource[];

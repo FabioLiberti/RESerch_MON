@@ -47,6 +47,7 @@ class Paper(Base):
     paper_role = Column(String(20), default="bibliography")  # 'bibliography' | 'reviewing' | 'my_manuscript'
     conference_url = Column(Text, nullable=True)   # Link to the conference/journal website
     conference_notes = Column(Text, nullable=True)  # Free-text notes about the venue
+    github_url = Column(Text, nullable=True)        # Link to the paper's code repository
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
