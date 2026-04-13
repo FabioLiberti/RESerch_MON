@@ -87,6 +87,12 @@ const navItems: { href: string; label: string; icon: string; tooltip: string }[]
     icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z",
     tooltip: "Topics management, API keys, PDF signature, app configuration.",
   },
+  {
+    href: "/about",
+    label: "About",
+    icon: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+    tooltip: "Project information, tech stack, GitHub repository, and version details.",
+  },
 ];
 
 // Sun icon path
@@ -415,7 +421,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
         <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
           FL Research Monitor
         </h1>
-        <p className="text-xs text-[var(--muted-foreground)] mt-1">v1.0.0</p>
+        <p className="text-xs text-[var(--muted-foreground)] mt-1">v2.16</p>
       </div>
 
       {/* Navigation */}
