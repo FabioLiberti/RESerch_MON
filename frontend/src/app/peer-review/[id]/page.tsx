@@ -415,9 +415,9 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       {/* Side-by-side layout */}
-      <div className="flex gap-4 h-[calc(100vh-200px)]">
+      <div className="flex flex-col lg:flex-row gap-4 h-auto lg:h-[calc(100vh-200px)]">
         {/* LEFT: Paper PDF */}
-        <div className="flex-1 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col">
+        <div className="lg:flex-1 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
           <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center justify-between">
             <span className="text-xs font-bold text-gray-800">Manuscript PDF</span>
             <label className="text-[10px] px-2 py-1 rounded bg-indigo-700 text-white font-bold cursor-pointer hover:bg-indigo-600">
@@ -444,17 +444,26 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
                 Loading manuscript PDF...
               </div>
             ) : (
-              <iframe
-                title="Manuscript PDF"
-                src={`${pdfBlobUrl}#view=FitH`}
-                className="w-full h-full border-0"
-              />
+              <>
+                <iframe
+                  title="Manuscript PDF"
+                  src={`${pdfBlobUrl}#view=FitH`}
+                  className="w-full h-full border-0 hidden sm:block"
+                />
+                <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                  <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
+                  <a href={pdfBlobUrl} target="_blank" rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-bold hover:bg-indigo-600">
+                    Open PDF
+                  </a>
+                </div>
+              </>
             )}
           </div>
         </div>
 
         {/* RIGHT: Review form */}
-        <div className="w-[44%] min-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
+        <div className="lg:w-[44%] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
           {/* Metadata */}
           <details className="rounded border border-[var(--border)] bg-[var(--secondary)] p-2" open>
             <summary className="text-xs font-bold cursor-pointer">Manuscript metadata</summary>
