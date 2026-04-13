@@ -326,17 +326,17 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
+      <div className="space-y-3">
+        <div>
           <Link href={`/papers/${paperId}`} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
             ← Back to paper
           </Link>
-          <h1 className="text-xl font-bold mt-1 truncate">{paperTitle}</h1>
+          <h1 className="text-xl font-bold mt-1 line-clamp-2">{paperTitle}</h1>
           <p className="text-xs text-[var(--muted-foreground)]">
             Paper Quality Assessment · paper #{paperId} · v{pqr.version} {pqr.is_current ? "(current)" : "(historical)"}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && (
             <button
               onClick={llmSuggest}
@@ -370,9 +370,9 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Side-by-side layout */}
-      <div className="flex gap-4 h-[calc(100vh-200px)]">
+      <div className="flex flex-col lg:flex-row gap-4 h-auto lg:h-[calc(100vh-200px)]">
         {/* LEFT: Paper PDF */}
-        <div className="flex-1 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col">
+        <div className="lg:flex-1 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
           <div className="p-2 border-b border-gray-300 bg-gray-100">
             <span className="text-xs font-bold text-gray-800">Paper PDF</span>
           </div>
@@ -382,13 +382,22 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
             ) : pdfLoading || !pdfBlobUrl ? (
               <div className="h-full flex items-center justify-center text-gray-500 text-sm">Loading PDF...</div>
             ) : (
-              <iframe title="Paper PDF" src={`${pdfBlobUrl}#view=FitH`} className="w-full h-full border-0" />
+              <>
+                <iframe title="Paper PDF" src={`${pdfBlobUrl}#view=FitH`} className="w-full h-full border-0 hidden sm:block" />
+                <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                  <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
+                  <a href={pdfBlobUrl} target="_blank" rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-bold hover:bg-indigo-600">
+                    Open PDF
+                  </a>
+                </div>
+              </>
             )}
           </div>
         </div>
 
         {/* RIGHT: Form */}
-        <div className="w-[44%] min-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
+        <div className="lg:w-[44%] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
           {/* Version selector */}
           {history.length > 1 && (
             <div className="rounded border border-fuchsia-700/50 bg-fuchsia-900/10 p-2">
