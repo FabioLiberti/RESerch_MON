@@ -1820,9 +1820,9 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-1 sm:p-2" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-[var(--background)] lg:flex lg:items-center lg:justify-center lg:bg-black/80 lg:p-2 overflow-y-auto lg:overflow-hidden" onClick={onClose}>
       <div
-        className="bg-[var(--card)] border border-[var(--border)] rounded-xl w-full h-[95vh] max-w-[1800px] flex flex-col overflow-hidden"
+        className="bg-[var(--card)] lg:border lg:border-[var(--border)] lg:rounded-xl w-full min-h-screen lg:min-h-0 lg:h-[95vh] lg:max-w-[1800px] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -1835,18 +1835,17 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
             <button
               onClick={viewValidationReport}
               className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600 font-bold"
-              title="Open the latest validation report PDF"
             >
-              View Validation PDF
+              Validation PDF
             </button>
-            <button onClick={onClose} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xl leading-none px-2">✕</button>
+            <button onClick={onClose} className="px-3 py-1 rounded bg-[var(--secondary)] text-xs hover:bg-[var(--muted)]">Close</button>
           </div>
         </div>
 
         {/* Body: side-by-side on desktop, stacked on mobile */}
-        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
           {/* LEFT: Tabbed preview (Extended Abstract / Paper PDF) */}
-          <div className="lg:flex-1 lg:border-r border-b lg:border-b-0 border-[var(--border)] flex flex-col overflow-hidden bg-white min-h-[200px] lg:min-h-0">
+          <div className="lg:flex-1 lg:border-r border-b lg:border-b-0 border-[var(--border)] flex flex-col overflow-hidden bg-white min-h-[300px] lg:min-h-0">
             {/* Tab bar */}
             <div className="flex shrink-0 border-b border-gray-300 bg-gray-100">
               <button
@@ -1889,11 +1888,20 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
               ) : paperPdfLoading || !paperPdfBlobUrl ? (
                 <div className="h-full flex items-center justify-center text-gray-500 text-sm">Loading paper PDF...</div>
               ) : (
-                <iframe
-                  title="Original paper PDF"
-                  src={`${paperPdfBlobUrl}#view=FitH`}
-                  className="w-full h-full border-0"
-                />
+                <>
+                  <iframe
+                    title="Original paper PDF"
+                    src={`${paperPdfBlobUrl}#view=FitH`}
+                    className="w-full h-full border-0 hidden sm:block"
+                  />
+                  <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                    <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
+                    <a href={paperPdfBlobUrl} target="_blank" rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-bold hover:bg-indigo-600">
+                      Open PDF
+                    </a>
+                  </div>
+                </>
               )}
             </div>
           </div>
