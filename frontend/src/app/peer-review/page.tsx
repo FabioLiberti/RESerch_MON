@@ -269,7 +269,7 @@ export default function PeerReviewPage() {
                       Open
                     </Link>
                     <button onClick={() => remove(pr.id)} className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700">
-                      Delete
+                      Del
                     </button>
                   </td>
                 </tr>
