@@ -214,10 +214,10 @@ export default function PeerReviewPage() {
             <thead className="bg-[var(--secondary)] border-b border-[var(--border)]">
               <tr className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider">
                 <th className="text-left px-4 py-3 font-medium">Manuscript</th>
-                <th className="text-left px-4 py-3 font-medium">Journal</th>
-                <th className="text-left px-4 py-3 font-medium">Deadline</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="text-left px-4 py-3 font-medium">Recommendation</th>
+                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Journal</th>
+                <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Deadline</th>
+                <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Status</th>
+                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Recommendation</th>
                 <th className="text-right px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -239,14 +239,14 @@ export default function PeerReviewPage() {
                       {pr.manuscript_id && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">{pr.manuscript_id}</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">{pr.target_journal || "—"}</td>
-                  <td className="px-4 py-3 text-xs whitespace-nowrap">{pr.deadline || "—"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 text-xs hidden md:table-cell">{pr.target_journal || "—"}</td>
+                  <td className="px-4 py-3 text-xs whitespace-nowrap hidden lg:table-cell">{pr.deadline || "—"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${STATUS_COLOR[pr.status] || "bg-gray-600 text-white"}`}>
                       {pr.status.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">
                     {pr.recommendation ? (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${REC_COLOR[pr.recommendation] || "bg-gray-600 text-white"}`}>
                         {REC_LABEL[pr.recommendation] || pr.recommendation}
