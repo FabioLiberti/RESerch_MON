@@ -1820,18 +1820,18 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-1 sm:p-2" onClick={onClose}>
       <div
         className="bg-[var(--card)] border border-[var(--border)] rounded-xl w-full h-[95vh] max-w-[1800px] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center gap-3">
-            <h3 className="text-base font-semibold">Review — {modeLabel} (v{run.version || 1})</h3>
-            <span className="text-xs text-[var(--muted-foreground)]">Paper ID: {paperId}</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border-b border-[var(--border)] shrink-0 gap-2">
+          <div>
+            <h3 className="text-sm sm:text-base font-semibold">Review — {modeLabel} (v{run.version || 1})</h3>
+            <span className="text-[10px] text-[var(--muted-foreground)]">Paper ID: {paperId}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={viewValidationReport}
               className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600 font-bold"
@@ -1843,10 +1843,10 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
           </div>
         </div>
 
-        {/* Body: side-by-side */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* Body: side-by-side on desktop, stacked on mobile */}
+        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
           {/* LEFT: Tabbed preview (Extended Abstract / Paper PDF) */}
-          <div className="flex-1 border-r border-[var(--border)] flex flex-col overflow-hidden bg-white">
+          <div className="lg:flex-1 lg:border-r border-b lg:border-b-0 border-[var(--border)] flex flex-col overflow-hidden bg-white min-h-[200px] lg:min-h-0">
             {/* Tab bar */}
             <div className="flex shrink-0 border-b border-gray-300 bg-gray-100">
               <button
@@ -1899,7 +1899,7 @@ function ReviewModal({ run, paperId, hasZoteroKey, hasPaperPdf: hasPaperPdfProp,
           </div>
 
           {/* RIGHT: Rubric + status + notes */}
-          <div className="w-[44%] min-w-[440px] flex flex-col overflow-hidden">
+          <div className="lg:w-[44%] flex flex-col overflow-hidden">
             <div className="overflow-y-auto p-4 flex-1 space-y-4">
               {/* Status */}
               <div>
