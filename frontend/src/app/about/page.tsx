@@ -1,10 +1,9 @@
 "use client";
 
 import useSWR from "swr";
-import { authFetcher } from "@/lib/api";
 
 export default function AboutPage() {
-  const { data: health } = useSWR<{ status: string; version: string }>("/health", async (url) => {
+  const { data: health } = useSWR<{ status: string; version: string }>("/health", async (url: string) => {
     const r = await fetch(url);
     return r.json();
   });
