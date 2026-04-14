@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     admin_email: str = "admin@localhost"
     api_service_key: str = ""  # For GitHub Actions unattended access
 
+    # Email notifications (Gmail SMTP)
+    smtp_user: str = ""
+    smtp_app_password: str = ""
+    notify_email: str = ""  # Admin email for login notifications
+
     # Storage paths
     pdf_storage_path: str = "./data/pdfs"
     registry_path: str = "./data/registry"

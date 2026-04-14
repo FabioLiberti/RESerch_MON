@@ -146,6 +146,17 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
             detail="Invalid username or password",
         )
 
+    # Log access + email notification (non-blocking)
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    ua = request.headers.get("user-agent", "")
+    logger.info(f"Login OK: {user.username} from {ip}")
+    try:
+        from app.services.email_notify import send_login_notification
+        import threading
+        threading.Thread(target=send_login_notification, args=(user.username, ip, ua), daemon=True).start()
+    except Exception:
+        pass  # Never block login for email failures
+
     return TokenResponse(
         access_token=create_access_token(user.id, user.username, user.role),
         refresh_token=create_refresh_token(user.id),
