@@ -11,6 +11,7 @@ from app.api.auth import get_current_user
 from app.database import get_db
 from app.models.paper import Paper
 from app.models.paper_reference import PaperReference
+from app.models.label import Label, PaperLabel
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,19 @@ async def list_references(
     refs = result.all()
 
     import json as _json
+
+    # Fetch labels for all cited papers in one query
+    cited_ids = [r.PaperReference.cited_paper_id for r in refs]
+    paper_labels_map: dict[int, list[dict]] = {}
+    if cited_ids:
+        labels_result = await db.execute(
+            select(PaperLabel.paper_id, Label.name, Label.color)
+            .join(Label, PaperLabel.label_id == Label.id)
+            .where(PaperLabel.paper_id.in_(cited_ids))
+        )
+        for pid, lname, lcolor in labels_result.all():
+            paper_labels_map.setdefault(pid, []).append({"name": lname, "color": lcolor})
+
     return {
         "manuscript_id": manuscript_id,
         "references": [
@@ -69,6 +83,7 @@ async def list_references(
                 "disabled": bool(ref.disabled),
                 "rating": ref.rating,
                 "keywords": [k.lower() for k in _json.loads(ref.keywords_json)] if ref.keywords_json else [],
+                "labels": paper_labels_map.get(ref.PaperReference.cited_paper_id, []),
                 "context": ref.PaperReference.context,
                 "context_label": CONTEXT_LABELS.get(ref.PaperReference.context, ref.PaperReference.context),
                 "note": ref.PaperReference.note,

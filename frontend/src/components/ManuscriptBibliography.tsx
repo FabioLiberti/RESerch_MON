@@ -16,6 +16,7 @@ interface Reference {
   disabled: boolean;
   rating: number | null;
   keywords: string[];
+  labels: { name: string; color: string }[];
   context: string | null;
   context_label: string | null;
   note: string | null;
@@ -227,6 +228,9 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
   );
   const [showKeywords, setShowKeywords] = useState(false);
   const [filterKeywords, setFilterKeywords] = useState<Set<string>>(new Set());
+  const [filterLabels, setFilterLabels] = useState<Set<string>>(new Set());
+  const [showLabelsFilter, setShowLabelsFilter] = useState(false);
+  const [expandedDetails, setExpandedDetails] = useState<Set<number>>(new Set());
 
   if (isLoading) return <div className="h-16 bg-[var(--muted)] rounded-xl animate-pulse" />;
 
@@ -316,6 +320,54 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
           )}
         </div>
       )}
+
+      {/* Labels aggregation — collapsed, multi-select filter */}
+      {refs.length > 0 && (() => {
+        const labelCounts: Record<string, { color: string; count: number }> = {};
+        refs.forEach(r => r.labels.forEach(l => {
+          if (!labelCounts[l.name]) labelCounts[l.name] = { color: l.color, count: 0 };
+          labelCounts[l.name].count++;
+        }));
+        const sortedLabels = Object.entries(labelCounts).sort((a, b) => a[0].localeCompare(b[0]));
+        if (sortedLabels.length === 0) return null;
+        return (
+          <div className="rounded-lg border border-[var(--border)] overflow-hidden">
+            <button
+              onClick={() => setShowLabelsFilter(!showLabelsFilter)}
+              className="w-full flex items-center justify-between px-3 py-2 bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
+            >
+              <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">
+                Labels ({sortedLabels.length} unique)
+              </span>
+              <svg className={`w-3.5 h-3.5 text-[var(--muted-foreground)] transition-transform ${showLabelsFilter ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showLabelsFilter && (
+              <div className="p-3 flex flex-wrap gap-1.5">
+                {filterLabels.size > 0 && (
+                  <button onClick={() => setFilterLabels(new Set())} className="text-[10px] px-2 py-1 rounded-full bg-red-700 text-white font-bold hover:bg-red-600">
+                    Clear ({filterLabels.size}) &times;
+                  </button>
+                )}
+                {sortedLabels.map(([name, { color, count }]) => (
+                  <button
+                    key={name}
+                    onClick={() => setFilterLabels(prev => { const next = new Set(prev); if (next.has(name)) next.delete(name); else next.add(name); return next; })}
+                    className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1 ${
+                      filterLabels.has(name) ? "border-white/50 ring-1 ring-white/30" : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: filterLabels.has(name) ? color : `${color}25`, color: filterLabels.has(name) ? "#fff" : color }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filterLabels.has(name) ? "#fff" : color }} />
+                    {name} ({count})
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Import from Label */}
       {showLabelImport && (
@@ -479,7 +531,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
       {refs.length > 0 && (
         <div className="space-y-2">
           {refs.map(ref => (
-            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k)) ? "opacity-20" : ""}`}>
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k)) ? "opacity-20" : ""} ${filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name)) ? "opacity-20" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}
@@ -509,6 +561,38 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   placeholder="Add note..."
                   className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none mt-1"
                 />
+                {/* Collapsible keywords + labels */}
+                {(ref.keywords.length > 0 || ref.labels.length > 0) && (
+                  <>
+                    <button
+                      onClick={() => setExpandedDetails(prev => { const next = new Set(prev); if (next.has(ref.id)) next.delete(ref.id); else next.add(ref.id); return next; })}
+                      className="text-[9px] text-[var(--primary)] hover:underline mt-1 self-start"
+                    >
+                      {expandedDetails.has(ref.id) ? "Hide details ▴" : `Details ▾ (${ref.keywords.length} kw, ${ref.labels.length} labels)`}
+                    </button>
+                    {expandedDetails.has(ref.id) && (
+                      <div className="mt-1 space-y-1">
+                        {ref.labels.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {ref.labels.map(l => (
+                              <span key={l.name} className="text-[8px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${l.color}25`, color: l.color }}>
+                                {l.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {ref.keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {ref.keywords.slice(0, 15).map(kw => (
+                              <span key={kw} className="text-[8px] px-1.5 py-0.5 rounded-full bg-[var(--secondary)] border border-[var(--border)]">{kw}</span>
+                            ))}
+                            {ref.keywords.length > 15 && <span className="text-[8px] text-[var(--muted-foreground)]">+{ref.keywords.length - 15} more</span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               <div className="flex flex-col gap-1 shrink-0">
                 <select
