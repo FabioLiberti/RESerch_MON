@@ -1072,7 +1072,6 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/{paper_id}/extract-pdf-keywords")
 async def extract_pdf_keywords(
     paper_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Extract keywords from the paper's local PDF file."""
