@@ -1,10 +1,8 @@
 "use client";
 
-import { use, useState, useEffect, useRef } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import useSWR from "swr";
 import { usePaper } from "@/hooks/usePapers";
-import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import ReviewJournal from "@/components/ReviewJournal";
@@ -18,7 +16,6 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
   // PDF viewer state
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load PDF
   useEffect(() => {
@@ -36,7 +33,7 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
     return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl); };
   }, [pdfBlobUrl]);
 
-  const uploadPdf = async (file: File) => {
+  const uploadFile = async (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
     const r = await fetch(`/api/v1/analysis/${paperId}/upload-pdf`, {
@@ -47,11 +44,28 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
     if (r.ok) {
       if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
       setPdfBlobUrl(null);
-      // Force re-fetch of paper data + PDF
       const { mutate } = await import("swr");
       mutate(`/api/v1/papers/${paperId}`);
     }
   };
+
+  const downloadFile = async (format: "tex" | "md") => {
+    const r = await fetch(`/api/v1/papers/${paperId}/${format}-file`, {
+      headers: authHeaders(),
+    });
+    if (r.ok) {
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(paper?.title || "manuscript").slice(0, 80)}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  // Dropdown state for TEX/MD buttons
+  const [openDropdown, setOpenDropdown] = useState<"tex" | "md" | null>(null);
 
   if (isLoading) {
     return (
@@ -120,32 +134,113 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
 
       {/* Side-by-side layout */}
       <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-180px)]">
-        {/* LEFT: Manuscript PDF */}
+        {/* LEFT: Manuscript Document */}
         <div className="lg:w-1/2 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
-          <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center justify-between shrink-0">
-            <div>
-              <span className="text-xs font-bold text-gray-800">Manuscript Document</span>
-              <span className="text-[9px] text-gray-500 ml-2">.pdf .md .tex .txt</span>
-            </div>
-            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-bold cursor-pointer hover:bg-blue-600 transition-colors">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              {paper.has_pdf ? "Replace Document" : "Upload Document"}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.md,.tex,.txt"
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadPdf(f); }}
-                className="hidden"
-              />
+          {/* Toolbar */}
+          <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center gap-2 flex-wrap shrink-0">
+            <span className="text-xs font-bold text-gray-800 mr-auto">Manuscript</span>
+
+            {/* Upload PDF */}
+            <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-700 text-white text-[10px] font-bold cursor-pointer hover:bg-red-600 transition-colors">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              {paper.has_pdf ? "PDF ↑" : "Upload PDF"}
+              <input type="file" accept=".pdf" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
             </label>
+
+            {/* TEX dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenDropdown(openDropdown === "tex" ? null : "tex")}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                  (paper as any).has_tex
+                    ? "bg-emerald-700 text-white hover:bg-emerald-600"
+                    : "bg-gray-500 text-white hover:bg-gray-400"
+                }`}
+              >
+                TEX ⬆⬇
+                {(paper as any).has_tex && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </button>
+              {openDropdown === "tex" && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden min-w-[130px]">
+                  <label className="flex items-center gap-2 px-3 py-2 text-xs text-gray-800 hover:bg-gray-100 cursor-pointer">
+                    <span>⬆ Import .tex</span>
+                    <input type="file" accept=".tex" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { uploadFile(f); setOpenDropdown(null); } e.target.value = ""; }} />
+                  </label>
+                  <button
+                    onClick={() => { downloadFile("tex"); setOpenDropdown(null); }}
+                    disabled={!(paper as any).has_tex}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-800 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed text-left"
+                  >
+                    ⬇ Export .tex
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* MD dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenDropdown(openDropdown === "md" ? null : "md")}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                  (paper as any).has_md
+                    ? "bg-emerald-700 text-white hover:bg-emerald-600"
+                    : "bg-gray-500 text-white hover:bg-gray-400"
+                }`}
+              >
+                MD ⬆⬇
+                {(paper as any).has_md && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </button>
+              {openDropdown === "md" && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden min-w-[130px]">
+                  <label className="flex items-center gap-2 px-3 py-2 text-xs text-gray-800 hover:bg-gray-100 cursor-pointer">
+                    <span>⬆ Import .md</span>
+                    <input type="file" accept=".md" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { uploadFile(f); setOpenDropdown(null); } e.target.value = ""; }} />
+                  </label>
+                  <button
+                    onClick={() => { downloadFile("md"); setOpenDropdown(null); }}
+                    disabled={!(paper as any).has_md}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-800 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed text-left"
+                  >
+                    ⬇ Export .md
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Overleaf link */}
+            {(paper as any).overleaf_url && (
+              <a
+                href={(paper as any).overleaf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-500 transition-colors"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M22.39 10.97L13.13.55c-.2-.23-.5-.35-.8-.35h-.03c-.28.01-.55.13-.75.34L.42 12.6c-.42.44-.42 1.14 0 1.58l5.85 6.12c.2.21.48.33.77.33h.03c.28-.01.55-.14.74-.35l4.62-5.07c.12-.13.31-.14.44-.02l4.36 4.17c.2.2.48.3.76.3.29 0 .57-.11.78-.33l3.62-3.78c.42-.44.42-1.14 0-1.58z"/>
+                </svg>
+                Overleaf
+              </a>
+            )}
           </div>
+
+          {/* Document viewer */}
           <div className="flex-1 overflow-hidden">
             {!paper.has_pdf ? (
-              <div className="h-full flex items-center justify-center text-gray-500 text-sm p-4 text-center">
-                No manuscript document uploaded yet.<br />
-                Click &quot;Upload&quot; to attach your manuscript (.pdf, .md, .tex, .txt).
+              <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
+                <p>No manuscript PDF uploaded yet.</p>
+                <p className="text-[10px] text-gray-400">Upload a PDF to preview it here, or use TEX/MD buttons to manage source files.</p>
+                {(paper as any).overleaf_url && (
+                  <a href={(paper as any).overleaf_url} target="_blank" rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 flex items-center gap-2">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M22.39 10.97L13.13.55c-.2-.23-.5-.35-.8-.35h-.03c-.28.01-.55.13-.75.34L.42 12.6c-.42.44-.42 1.14 0 1.58l5.85 6.12c.2.21.48.33.77.33h.03c.28-.01.55-.14.74-.35l4.62-5.07c.12-.13.31-.14.44-.02l4.36 4.17c.2.2.48.3.76.3.29 0 .57-.11.78-.33l3.62-3.78c.42-.44.42-1.14 0-1.58z"/>
+                    </svg>
+                    Open in Overleaf
+                  </a>
+                )}
               </div>
             ) : pdfLoading || !pdfBlobUrl ? (
               <div className="h-full flex items-center justify-center text-gray-500 text-sm">
@@ -158,15 +253,10 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                   src={`${pdfBlobUrl}#view=FitH`}
                   className="w-full h-full border-0 hidden sm:block"
                 />
-                {/* Mobile fallback: iframe doesn't work on iOS/Android */}
                 <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
                   <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
-                  <a
-                    href={pdfBlobUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600"
-                  >
+                  <a href={pdfBlobUrl} target="_blank" rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600">
                     Open PDF
                   </a>
                 </div>

@@ -476,15 +476,23 @@ async def upload_pdf(
     pdf_path = pdf_dir / f"{safe_title}_{paper_id}{ext}"
 
     pdf_path.write_bytes(content)
-    paper.pdf_local_path = str(pdf_path)
+
+    # Route to correct model field based on extension
+    if ext == ".tex":
+        paper.tex_local_path = str(pdf_path)
+    elif ext == ".md":
+        paper.md_local_path = str(pdf_path)
+    else:
+        paper.pdf_local_path = str(pdf_path)
     await db.flush()
 
-    logger.info(f"PDF uploaded for paper {paper_id}: {pdf_path} ({len(content) / 1024:.0f} KB)")
+    logger.info(f"Document uploaded for paper {paper_id}: {pdf_path} ({len(content) / 1024:.0f} KB)")
 
     return {
         "status": "uploaded",
         "path": str(pdf_path),
         "size_kb": len(content) // 1024,
+        "format": ext.lstrip("."),
     }
 
 

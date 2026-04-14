@@ -104,6 +104,8 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         conference_notes=paper.conference_notes,
         github_url=paper.github_url,
         overleaf_url=paper.overleaf_url,
+        has_tex=paper.tex_local_path is not None,
+        has_md=paper.md_local_path is not None,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -1147,6 +1149,30 @@ async def get_paper_pdf(paper_id: int, db: AsyncSession = Depends(get_db)):
     if not path.exists():
         raise HTTPException(404, "PDF file not found on disk")
     return FileResponse(path, media_type="application/pdf", filename=f"{paper.title[:80]}.pdf")
+
+
+@router.get("/{paper_id}/tex-file")
+async def get_paper_tex(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve the local .tex source file for a paper."""
+    paper = await db.get(Paper, paper_id)
+    if not paper or not paper.tex_local_path:
+        raise HTTPException(404, "TEX file not found")
+    path = Path(paper.tex_local_path)
+    if not path.exists():
+        raise HTTPException(404, "TEX file not found on disk")
+    return FileResponse(path, media_type="application/x-tex", filename=f"{paper.title[:80]}.tex")
+
+
+@router.get("/{paper_id}/md-file")
+async def get_paper_md(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve the local .md source file for a paper."""
+    paper = await db.get(Paper, paper_id)
+    if not paper or not paper.md_local_path:
+        raise HTTPException(404, "MD file not found")
+    path = Path(paper.md_local_path)
+    if not path.exists():
+        raise HTTPException(404, "MD file not found on disk")
+    return FileResponse(path, media_type="text/markdown", filename=f"{paper.title[:80]}.md")
 
 
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)
