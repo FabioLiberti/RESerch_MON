@@ -1069,6 +1069,46 @@ async def enrich_paper(paper_id: int, db: AsyncSession = Depends(get_db)):
     return result
 
 
+@router.post("/{paper_id}/extract-pdf-keywords")
+async def extract_pdf_keywords(
+    paper_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Extract keywords from the paper's local PDF file."""
+    import json as json_mod
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if not paper.pdf_local_path:
+        raise HTTPException(status_code=400, detail="Paper has no local PDF")
+
+    from app.services.pdf_keywords import extract_keywords_from_pdf
+    kw_dict = extract_keywords_from_pdf(paper.pdf_local_path)
+
+    if not kw_dict:
+        return {"total": 0, "keywords": {}}
+
+    # Merge into existing keywords (don't overwrite)
+    existing = set(paper.keywords or [])
+    existing_cats = paper.keyword_categories or {}
+    new_count = 0
+    for cat, kws in kw_dict.items():
+        for kw in kws:
+            if kw not in existing:
+                existing.add(kw)
+                new_count += 1
+        existing_cats[cat] = kws
+
+    paper.keywords_json = json_mod.dumps(sorted(existing))
+    paper.keyword_categories_json = json_mod.dumps(existing_cats)
+    await db.flush()
+    await db.commit()
+
+    return {"total": new_count, "keywords": kw_dict}
+
+
 @router.post("/{paper_id}/refresh-citations")
 async def refresh_citations_single(
     paper_id: int,

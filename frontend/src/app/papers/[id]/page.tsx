@@ -652,6 +652,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Enrich metadata — admin only */}
         {isAdmin && paper.doi && <EnrichButton paperId={paperId} />}
 
+        {/* Extract keywords from PDF — admin only, when no DOI but has PDF */}
+        {isAdmin && !paper.doi && paper.has_pdf && <ExtractKeywordsButton paperId={paperId} />}
+
         {/* Disable toggle — admin only */}
         {isAdmin && <DisableToggle paperId={paperId} initialDisabled={paper.disabled || false} />}
 
@@ -2512,6 +2515,56 @@ function EnrichButton({ paperId }: { paperId: number }) {
             Enrich Metadata
           </>
         )}
+      </button>
+      {result && (
+        <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>
+          {result}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+// --- Extract Keywords from PDF ---
+
+function ExtractKeywordsButton({ paperId }: { paperId: number }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [result, setResult] = useState<string | null>(null);
+
+  const extract = async () => {
+    setStatus("loading");
+    try {
+      const r = await fetch(`/api/v1/papers/${paperId}/extract-pdf-keywords`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await r.json();
+      if (r.ok && data.total > 0) {
+        setStatus("done");
+        setResult(`Extracted ${data.total} keywords`);
+        setTimeout(() => window.location.reload(), 1500);
+      } else if (r.ok) {
+        setStatus("error");
+        setResult("No keywords found in PDF");
+      } else {
+        setStatus("error");
+        setResult(data.detail || "Extraction failed");
+      }
+    } catch {
+      setStatus("error");
+      setResult("Extraction failed");
+    }
+  };
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <button
+        onClick={extract}
+        disabled={status === "loading" || status === "done"}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-700 text-white text-sm font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+      >
+        {status === "loading" ? "Extracting..." : "Extract Keywords from PDF"}
       </button>
       {result && (
         <span className={`text-xs ${status === "done" ? "text-emerald-400" : "text-red-400"}`}>
