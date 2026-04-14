@@ -290,6 +290,7 @@ function UserManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [actionMsg, setActionMsg] = useState<Record<number, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
 
   const createUser = async () => {
     setSaving(true);
@@ -399,13 +400,27 @@ function UserManagement() {
             </div>
             <div>
               <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Password (min 12 chars)</label>
-              <input
-                type="password"
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-                placeholder="Min 12 characters"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="w-full px-3 py-2 pr-10 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+                  placeholder="Min 12 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  )}
+                </button>
+              </div>
             </div>
             <div>
               <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Role</label>
@@ -507,6 +522,8 @@ function UserManagement() {
 function ChangePasswordSection() {
   const [current, setCurrent] = useState("");
   const [newPwd, setNewPwd] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -524,6 +541,9 @@ function ChangePasswordSection() {
     setSaving(false);
   };
 
+  const eyeOpen = <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
+  const eyeClosed = <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>;
+
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
       <h3 className="font-medium mb-4">Change Password</h3>
@@ -537,23 +557,37 @@ function ChangePasswordSection() {
         </div>
       )}
       <div className="space-y-3 max-w-sm">
-        <input
-          type="password"
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-          placeholder="Current password"
-        />
-        <input
-          type="password"
-          value={newPwd}
-          onChange={(e) => setNewPwd(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-          placeholder="New password (min 6 chars)"
-        />
+        <div className="relative">
+          <input
+            type={showCurrent ? "text" : "password"}
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            className="w-full px-3 py-2 pr-10 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+            placeholder="Current password"
+          />
+          <button type="button" onClick={() => setShowCurrent(!showCurrent)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            title={showCurrent ? "Hide" : "Show"}>
+            {showCurrent ? eyeClosed : eyeOpen}
+          </button>
+        </div>
+        <div className="relative">
+          <input
+            type={showNew ? "text" : "password"}
+            value={newPwd}
+            onChange={(e) => setNewPwd(e.target.value)}
+            className="w-full px-3 py-2 pr-10 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+            placeholder="New password (min 12 chars)"
+          />
+          <button type="button" onClick={() => setShowNew(!showNew)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            title={showNew ? "Hide" : "Show"}>
+            {showNew ? eyeClosed : eyeOpen}
+          </button>
+        </div>
         <button
           onClick={handleChange}
-          disabled={saving || !current || newPwd.length < 6}
+          disabled={saving || !current || newPwd.length < 12}
           className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Updating..." : "Update Password"}
