@@ -649,11 +649,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           </Link>
         )}
 
-        {/* Enrich metadata */}
-        {paper.doi && <EnrichButton paperId={paperId} />}
+        {/* Enrich metadata — admin only */}
+        {isAdmin && paper.doi && <EnrichButton paperId={paperId} />}
 
-        {/* Disable toggle */}
-        <DisableToggle paperId={paperId} initialDisabled={paper.disabled || false} />
+        {/* Disable toggle — admin only */}
+        {isAdmin && <DisableToggle paperId={paperId} initialDisabled={paper.disabled || false} />}
 
         {/* Tutor check decision */}
         <TutorCheckWidget paperId={paperId} initial={paper.tutor_check || null} />
