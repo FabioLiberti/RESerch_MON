@@ -5,6 +5,7 @@ import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 interface Observation {
   text: string;

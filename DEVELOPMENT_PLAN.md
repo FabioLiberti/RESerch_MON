@@ -398,6 +398,12 @@ propri sottomessi a journal con osservazioni dai reviewer.
 - [ ] Comparison export/import tra localStorage di origini diverse (Mac `:3000` ↔ VPS `resmon.fabioliberti.com`)
 - [ ] **Zotero Group Library Sync** — per-label mapping (label → Group Library ID + collection), artifact selection per-label (PDF, EXT.ABS, Summary, Quick, Deep, Validation, Quality), filtri globali (tutor_check=OK, exclude disabled). Design: tabella `label_group_sync` + `paper_group_sync`. **Prerequisito**: osservare per 2-3 settimane se i tutor scrivono nel Group Library o sono solo lettori — determina se serve sync unidirezionale semplice (~8h) o merge bidirezionale con protezione campi (~12h)
 
+### Prossima sessione — priorità immediate
+
+- [ ] **Review Journal read-only for viewer** — hide all edit/add/delete buttons when `!isAdmin`. Import `useAuth` already added in ReviewJournal.tsx. Also: darker notes text (gray too light on white), admin edit-lock (require explicit Edit click before modifying rubric/rating)
+- [ ] **Manuscript development center** — accept .md/.tex/.txt uploads in submission rounds. Add `overleaf_url` to paper metadata (like github_url). Future: Git push to Overleaf
+- [ ] **Tutor notes in manuscript** — allow viewer to create ReviewerEntry with source_type "tutor_feedback" (reuses Review Journal, zero new tables, just relax permission check on POST /review-journal)
+
 ### Scalabilità condizionale
 
 - [ ] **PostgreSQL** migration da SQLite (solo quando serve per multi-utente concorrenti o >10k paper)
