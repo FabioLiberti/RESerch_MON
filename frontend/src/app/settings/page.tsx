@@ -422,6 +422,7 @@ function UserManagement() {
                   )}
                 </button>
               </div>
+              <PasswordStrengthBar password={newUser.password} username={newUser.username} />
             </div>
             <div>
               <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Role</label>
@@ -438,7 +439,7 @@ function UserManagement() {
           <div className="flex gap-2">
             <button
               onClick={createUser}
-              disabled={saving || !newUser.username || !newUser.email || newUser.password.length < 12}
+              disabled={saving || !newUser.username || !newUser.email || !isPasswordValid(newUser.password, newUser.username)}
               className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-600 disabled:opacity-50"
             >
               {saving ? "Creating..." : "Create User"}
@@ -518,6 +519,54 @@ function UserManagement() {
 }
 
 
+// --- Password Strength ---
+
+function getPasswordChecks(password: string, username?: string) {
+  return [
+    { label: "At least 12 characters", ok: password.length >= 12 },
+    { label: "Uppercase letter (A-Z)", ok: /[A-Z]/.test(password) },
+    { label: "Lowercase letter (a-z)", ok: /[a-z]/.test(password) },
+    { label: "Number (0-9)", ok: /[0-9]/.test(password) },
+    { label: "Special character (!@#$%...)", ok: /[^A-Za-z0-9]/.test(password) },
+    ...(username ? [{ label: "Does not contain username", ok: !password.toLowerCase().includes(username.toLowerCase()) }] : []),
+  ];
+}
+
+function PasswordStrengthBar({ password, username }: { password: string; username?: string }) {
+  if (!password) return null;
+  const checks = getPasswordChecks(password, username);
+  const passed = checks.filter(c => c.ok).length;
+  const total = checks.length;
+  const pct = Math.round((passed / total) * 100);
+  const isStrong = passed === total && password.length >= 14;
+  const isMedium = passed === total;
+  const color = isStrong ? "bg-emerald-500" : isMedium ? "bg-amber-500" : "bg-red-500";
+  const label = isStrong ? "Strong" : isMedium ? "Good" : `${passed}/${total} criteria`;
+
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1.5 rounded-full bg-[var(--secondary)] overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-300 ${color}`} style={{ width: `${pct}%` }} />
+        </div>
+        <span className={`text-[9px] font-bold ${isStrong ? "text-emerald-400" : isMedium ? "text-amber-400" : "text-red-400"}`}>{label}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+        {checks.map(c => (
+          <span key={c.label} className={`text-[9px] ${c.ok ? "text-emerald-400" : "text-[var(--muted-foreground)]"}`}>
+            {c.ok ? "✓" : "○"} {c.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function isPasswordValid(password: string, username?: string) {
+  return getPasswordChecks(password, username).every(c => c.ok);
+}
+
+
 // --- Change Password ---
 
 function ChangePasswordSection() {
@@ -587,9 +636,10 @@ function ChangePasswordSection() {
             {showNew ? eyeClosed : eyeOpen}
           </button>
         </div>
+        <PasswordStrengthBar password={newPwd} />
         <button
           onClick={handleChange}
-          disabled={saving || !current || newPwd.length < 12}
+          disabled={saving || !current || !isPasswordValid(newPwd)}
           className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Updating..." : "Update Password"}
