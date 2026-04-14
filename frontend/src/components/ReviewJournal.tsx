@@ -93,6 +93,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ReviewJournal({ paperId }: { paperId: number }) {
+  const { isAdmin } = useAuth();
   const { data, isLoading } = useSWR<JournalResponse>(
     `/api/v1/review-journal/${paperId}`,
     authFetcher
@@ -113,6 +114,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
   const [editingRawText, setEditingRawText] = useState<number | null>(null);
   const [editRawTextValue, setEditRawTextValue] = useState("");
   const [editingRatingLabel, setEditingRatingLabel] = useState<Record<number, string>>({});
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
 
   const toggleExpanded = (id: number) => {
     setExpandedEntries(prev => {
@@ -211,12 +213,14 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             </span>
           )}
         </h3>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600 transition-colors"
-        >
-          + Add Reviewer
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600 transition-colors"
+          >
+            + Add Reviewer
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -230,7 +234,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
       )}
 
       {/* Add Reviewer Form */}
-      {showAddForm && (
+      {isAdmin && showAddForm && (
         <div className="p-4 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <input
@@ -283,13 +287,16 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
       {/* Empty state */}
       {entries.length === 0 && !showAddForm && (
         <p className="text-sm text-[var(--muted-foreground)] text-center py-6">
-          No reviewer feedback recorded yet. Click &quot;+ Add Reviewer&quot; to start tracking observations.
+          {isAdmin
+            ? 'No reviewer feedback recorded yet. Click "+ Add Reviewer" to start tracking observations.'
+            : "No reviewer feedback recorded yet."}
         </p>
       )}
 
       {/* Reviewer Entries */}
       {entries.map(entry => {
         const isExpanded = expandedEntries.has(entry.id);
+        const isEditing = isAdmin && editingEntryId === entry.id;
         const entryAddressed = entry.items.filter(i => ["addressed", "rejected_justified", "not_applicable"].includes(i.status)).length;
         const entryTotal = entry.items.length;
 
@@ -336,8 +343,35 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             {/* Expanded content */}
             {isExpanded && (
               <div className="border-t border-[var(--border)] px-4 py-3 space-y-3">
-                {/* Raw text — always editable */}
-                {editingRawText === entry.id ? (
+                {/* Edit lock toggle (admin only) */}
+                {isAdmin && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setEditingEntryId(editingEntryId === entry.id ? null : entry.id)}
+                      className={cn(
+                        "text-[10px] px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-colors",
+                        editingEntryId === entry.id
+                          ? "bg-amber-600 text-white hover:bg-amber-500"
+                          : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                      )}
+                    >
+                      {editingEntryId === entry.id ? (
+                        <>
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          Done
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          Edit
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Raw text */}
+                {isAdmin && editingRawText === entry.id ? (
                   <div className="space-y-2">
                     <textarea
                       value={editRawTextValue}
@@ -365,95 +399,109 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 ) : (
                   <div className="relative group">
                     {entry.raw_text ? (
-                      <div className="text-xs text-[var(--muted-foreground)] bg-[var(--secondary)] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                      <div className="text-xs text-[var(--foreground)] bg-[var(--secondary)] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">
                         {entry.raw_text}
                       </div>
-                    ) : (
+                    ) : isAdmin ? (
                       <div className="text-xs text-[var(--muted-foreground)] italic bg-[var(--secondary)] rounded-lg p-3">
                         No notes yet — click Edit to add reviewer feedback text.
                       </div>
+                    ) : null}
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setEditingRawText(entry.id); setEditRawTextValue(entry.raw_text || ""); }}
+                        className="text-[10px] text-[var(--primary)] hover:underline mt-1"
+                      >
+                        Edit notes
+                      </button>
                     )}
-                    <button
-                      onClick={() => { setEditingRawText(entry.id); setEditRawTextValue(entry.raw_text || ""); }}
-                      className="text-[10px] text-[var(--primary)] hover:underline mt-1"
-                    >
-                      Edit notes
-                    </button>
                   </div>
                 )}
 
-                {/* Rating — collapsible, shown only if has data or user expands */}
+                {/* Rating */}
                 {(entry.rating_max != null && entry.rating_max > 0) ? (
                 <div className="p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20 space-y-2">
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Rating:</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={entry.rating_max || 10}
-                      value={entry.rating ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value ? parseInt(e.target.value) : null;
-                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json", ...authHeaders() },
-                          body: JSON.stringify({ rating: val }),
-                        });
-                        mutate(`/api/v1/review-journal/${paperId}`);
-                      }}
-                      className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
-                      placeholder="—"
-                    />
-                    <span className="text-[10px] text-[var(--muted-foreground)]">out of</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={entry.rating_max ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value ? parseInt(e.target.value) : null;
-                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json", ...authHeaders() },
-                          body: JSON.stringify({ rating_max: val }),
-                        });
-                        mutate(`/api/v1/review-journal/${paperId}`);
-                      }}
-                      className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
-                      placeholder="5"
-                    />
-                    <button
-                      onClick={async () => {
-                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json", ...authHeaders() },
-                          body: JSON.stringify({ rating: 0, rating_max: 0, rating_label: "" }),
-                        });
-                        mutate(`/api/v1/review-journal/${paperId}`);
-                      }}
-                      className="text-[10px] text-red-400 hover:underline shrink-0"
-                      title="Remove rating"
-                    >
-                      Remove
-                    </button>
+                    {isEditing ? (
+                      <>
+                        <input
+                          type="number"
+                          min={1}
+                          max={entry.rating_max || 10}
+                          value={entry.rating ?? ""}
+                          onChange={async (e) => {
+                            const val = e.target.value ? parseInt(e.target.value) : null;
+                            await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json", ...authHeaders() },
+                              body: JSON.stringify({ rating: val }),
+                            });
+                            mutate(`/api/v1/review-journal/${paperId}`);
+                          }}
+                          className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
+                          placeholder="—"
+                        />
+                        <span className="text-[10px] text-[var(--muted-foreground)]">out of</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={entry.rating_max ?? ""}
+                          onChange={async (e) => {
+                            const val = e.target.value ? parseInt(e.target.value) : null;
+                            await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json", ...authHeaders() },
+                              body: JSON.stringify({ rating_max: val }),
+                            });
+                            mutate(`/api/v1/review-journal/${paperId}`);
+                          }}
+                          className="w-14 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs text-center focus:outline-none"
+                          placeholder="5"
+                        />
+                        <button
+                          onClick={async () => {
+                            await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json", ...authHeaders() },
+                              body: JSON.stringify({ rating: 0, rating_max: 0, rating_label: "" }),
+                            });
+                            mutate(`/api/v1/review-journal/${paperId}`);
+                          }}
+                          className="text-[10px] text-red-400 hover:underline shrink-0"
+                          title="Remove rating"
+                        >
+                          Remove
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs font-bold text-indigo-400">
+                        {entry.rating ?? "—"} / {entry.rating_max}
+                      </span>
+                    )}
                   </div>
-                  <input
-                    type="text"
-                    value={editingRatingLabel[entry.id] ?? entry.rating_label ?? ""}
-                    onChange={(e) => setEditingRatingLabel(prev => ({ ...prev, [entry.id]: e.target.value }))}
-                    onBlur={async (e) => {
-                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json", ...authHeaders() },
-                        body: JSON.stringify({ rating_label: e.target.value || null }),
-                      });
-                      mutate(`/api/v1/review-journal/${paperId}`);
-                    }}
-                    className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none"
-                    placeholder="Rating label (e.g. Overall contribution to IFKAD)"
-                  />
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editingRatingLabel[entry.id] ?? entry.rating_label ?? ""}
+                      onChange={(e) => setEditingRatingLabel(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                      onBlur={async (e) => {
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ rating_label: e.target.value || null }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none"
+                      placeholder="Rating label (e.g. Overall contribution to IFKAD)"
+                    />
+                  ) : entry.rating_label ? (
+                    <span className="text-[10px] text-[var(--muted-foreground)]">{entry.rating_label}</span>
+                  ) : null}
                 </div>
-                ) : (
+                ) : isEditing ? (
                 <button
                   onClick={async () => {
                     await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
@@ -467,36 +515,40 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 >
                   + Add rating
                 </button>
-                )}
+                ) : null}
 
                 {/* Decision */}
                 <div className="flex items-center gap-3 p-2 rounded-lg bg-purple-500/5 border border-purple-500/20">
                   <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Decision:</span>
-                  <select
-                    value={entry.decision || ""}
-                    onChange={async (e) => {
-                      await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json", ...authHeaders() },
-                        body: JSON.stringify({ decision: e.target.value || null }),
-                      });
-                      mutate(`/api/v1/review-journal/${paperId}`);
-                    }}
-                    className="flex-1 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs focus:outline-none"
-                  >
-                    <option value="">— not set —</option>
-                    {DECISION_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  {entry.decision && (
+                  {isEditing ? (
+                    <select
+                      value={entry.decision || ""}
+                      onChange={async (e) => {
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ decision: e.target.value || null }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="flex-1 px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-xs focus:outline-none"
+                    >
+                      <option value="">— not set —</option>
+                      {DECISION_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {entry.decision ? (
                     <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold", DECISION_COLORS[entry.decision] || "bg-gray-600 text-white")}>
                       {DECISION_OPTIONS.find(o => o.value === entry.decision)?.label || entry.decision}
                     </span>
-                  )}
+                  ) : !isEditing ? (
+                    <span className="text-xs text-[var(--muted-foreground)]">— not set —</span>
+                  ) : null}
                 </div>
 
-                {/* Rubric grid — only shown if has data */}
+                {/* Rubric grid */}
                 {entry.rubric.length > 0 ? (
                 <div className="rounded-lg border border-[var(--border)] overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-2 bg-[var(--secondary)] border-b border-[var(--border)]">
@@ -508,6 +560,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                           <span className="text-[10px] flex-1 min-w-0">{dim.dimension}</span>
                           <div className="flex gap-1 shrink-0">
                             {Array.from({ length: dim.score_max }, (_, i) => i + 1).map(val => (
+                              isEditing ? (
                               <button
                                 key={val}
                                 onClick={async () => {
@@ -529,7 +582,21 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                               >
                                 {val}
                               </button>
+                              ) : (
+                              <span
+                                key={val}
+                                className={cn(
+                                  "w-6 h-6 rounded text-[10px] font-bold flex items-center justify-center",
+                                  dim.score === val
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-[var(--secondary)] text-[var(--muted-foreground)]"
+                                )}
+                              >
+                                {val}
+                              </span>
+                              )
                             ))}
+                            {isEditing ? (
                             <button
                               onClick={async () => {
                                 const updated = [...entry.rubric];
@@ -550,12 +617,24 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                             >
                               N/A
                             </button>
+                            ) : (
+                            <span
+                              className={cn(
+                                "w-8 h-6 rounded text-[9px] font-bold flex items-center justify-center",
+                                dim.score === null
+                                  ? "bg-gray-600 text-white"
+                                  : "bg-[var(--secondary)] text-[var(--muted-foreground)]"
+                              )}
+                            >
+                              N/A
+                            </span>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
                 </div>
-                ) : (
+                ) : isEditing ? (
                 <button
                   onClick={async () => {
                     const defaultRubric = DEFAULT_RUBRIC_DIMENSIONS.map(d => ({ dimension: d, score: null, score_max: 5 }));
@@ -570,7 +649,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 >
                   + Add evaluation rubric
                 </button>
-                )}
+                ) : null}
 
                 {/* Observations list */}
                 {entry.items.length > 0 && (
@@ -593,16 +672,22 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                             </div>
                           )}
                           <div className="flex items-center gap-2">
-                            <select
-                              value={obs.status}
-                              onChange={e => updateObservation(entry.id, idx, { status: e.target.value })}
-                              className="text-[10px] px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
-                            >
-                              {STATUS_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                            </select>
-                            {obs.status !== "to_address" && !obs.response && (
+                            {isEditing ? (
+                              <select
+                                value={obs.status}
+                                onChange={e => updateObservation(entry.id, idx, { status: e.target.value })}
+                                className="text-[10px] px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
+                              >
+                                {STATUS_OPTIONS.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className={cn("text-[10px] font-bold", STATUS_OPTIONS.find(o => o.value === obs.status)?.color || "text-[var(--muted-foreground)]")}>
+                                {STATUS_OPTIONS.find(o => o.value === obs.status)?.label || obs.status}
+                              </span>
+                            )}
+                            {isEditing && obs.status !== "to_address" && !obs.response && (
                               <button
                                 onClick={() => {
                                   const resp = prompt("Your response/action for this observation:");
@@ -620,8 +705,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   </div>
                 )}
 
-                {/* Add observation form */}
-                {addingObsTo === entry.id ? (
+                {/* Add observation form (admin only) */}
+                {isAdmin && addingObsTo === entry.id ? (
                   <div className="p-3 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-2">
                     <textarea
                       value={newObsText}
@@ -664,32 +749,36 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => setAddingObsTo(entry.id)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
-                    >
-                      + Add Observation
-                    </button>
-                    <label className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white hover:bg-amber-600 cursor-pointer transition-colors">
-                      {entry.has_attachment ? "Replace attachment" : "Attach file"}
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          const fd = new FormData();
-                          fd.append("file", f);
-                          await fetch(`/api/v1/review-journal/entry/${entry.id}/attachment`, {
-                            method: "POST",
-                            headers: authHeaders(),
-                            body: fd,
-                          });
-                          mutate(`/api/v1/review-journal/${paperId}`);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setAddingObsTo(entry.id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
+                      >
+                        + Add Observation
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <label className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white hover:bg-amber-600 cursor-pointer transition-colors">
+                        {entry.has_attachment ? "Replace attachment" : "Attach file"}
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const fd = new FormData();
+                            fd.append("file", f);
+                            await fetch(`/api/v1/review-journal/entry/${entry.id}/attachment`, {
+                              method: "POST",
+                              headers: authHeaders(),
+                              body: fd,
+                            });
+                            mutate(`/api/v1/review-journal/${paperId}`);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
                     {entry.has_attachment && entry.attachment_path && (
                       <button
                         onClick={async () => {
@@ -708,12 +797,14 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                         📎 {entry.attachment_path.split("/").pop()}
                       </button>
                     )}
-                    <button
-                      onClick={() => deleteEntry(entry.id)}
-                      className="text-xs px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
-                    >
-                      Delete Reviewer
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => deleteEntry(entry.id)}
+                        className="text-xs px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
+                      >
+                        Delete Reviewer
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
