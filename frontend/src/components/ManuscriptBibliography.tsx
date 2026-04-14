@@ -221,12 +221,18 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-[var(--muted-foreground)]">{labelPapers.length} papers available</span>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => setSelectedForImport(new Set(labelPapers.map((p: any) => p.id)))}
                         className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)]"
                       >
                         Select all
+                      </button>
+                      <button
+                        onClick={() => setSelectedForImport(new Set(labelPapers.filter((p: any) => !p.disabled).map((p: any) => p.id)))}
+                        className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-600"
+                      >
+                        Select enabled only
                       </button>
                       <button
                         onClick={() => setSelectedForImport(new Set())}
