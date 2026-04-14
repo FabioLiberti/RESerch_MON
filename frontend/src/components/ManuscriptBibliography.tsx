@@ -236,6 +236,26 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
 
   const refs = data?.references || [];
 
+  // Compute filtered refs based on active filters (for dynamic counts)
+  const refsFilteredByLabels = filterLabels.size > 0
+    ? refs.filter(r => r.labels.some(l => filterLabels.has(l.name)))
+    : refs;
+  const refsFilteredByKeywords = filterKeywords.size > 0
+    ? refs.filter(r => r.keywords.some(k => filterKeywords.has(k)))
+    : refs;
+
+  // Dynamic keyword counts: when labels are selected, count only within label-filtered papers
+  const dynamicKeywordCounts: Record<string, number> = {};
+  refsFilteredByLabels.forEach(r => r.keywords.forEach(k => {
+    dynamicKeywordCounts[k] = (dynamicKeywordCounts[k] || 0) + 1;
+  }));
+
+  // Dynamic label counts: when keywords are selected, count only within keyword-filtered papers
+  const dynamicLabelCounts: Record<string, number> = {};
+  refsFilteredByKeywords.forEach(r => r.labels.forEach(l => {
+    dynamicLabelCounts[l.name] = (dynamicLabelCounts[l.name] || 0) + 1;
+  }));
+
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
       {/* Header */}
@@ -307,24 +327,29 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   Clear filter ({filterKeywords.size}) &times;
                 </button>
               )}
-              {kwData.keywords.map(({ keyword, count }) => (
-                <button
-                  key={keyword}
-                  onClick={() => setFilterKeywords(prev => {
-                    const next = new Set(prev);
-                    if (next.has(keyword)) next.delete(keyword); else next.add(keyword);
-                    return next;
-                  })}
-                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer ${
-                    filterKeywords.has(keyword)
-                      ? "bg-indigo-600 text-white border-indigo-500"
-                      : "bg-[var(--secondary)] border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--muted)]"
-                  }`}
-                  title={`${count} paper${count > 1 ? "s" : ""} — click to filter`}
-                >
-                  {keyword} <span className={filterKeywords.has(keyword) ? "text-indigo-200" : "text-[var(--muted-foreground)]"}>({count})</span>
-                </button>
-              ))}
+              {kwData.keywords.map(({ keyword }) => {
+                const dynCount = dynamicKeywordCounts[keyword] || 0;
+                return (
+                  <button
+                    key={keyword}
+                    onClick={() => setFilterKeywords(prev => {
+                      const next = new Set(prev);
+                      if (next.has(keyword)) next.delete(keyword); else next.add(keyword);
+                      return next;
+                    })}
+                    className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer ${
+                      filterKeywords.has(keyword)
+                        ? "bg-indigo-600 text-white border-indigo-500"
+                        : dynCount === 0
+                        ? "bg-[var(--secondary)] border-[var(--border)] text-[var(--muted-foreground)] opacity-40"
+                        : "bg-[var(--secondary)] border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--muted)]"
+                    }`}
+                    title={`${dynCount} paper${dynCount !== 1 ? "s" : ""} — click to filter`}
+                  >
+                    {keyword} <span className={filterKeywords.has(keyword) ? "text-indigo-200" : "text-[var(--muted-foreground)]"}>({dynCount})</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -332,12 +357,10 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
 
       {/* Labels aggregation — collapsed, multi-select filter */}
       {refs.length > 0 && (() => {
-        const labelCounts: Record<string, { color: string; count: number }> = {};
-        refs.forEach(r => r.labels.forEach(l => {
-          if (!labelCounts[l.name]) labelCounts[l.name] = { color: l.color, count: 0 };
-          labelCounts[l.name].count++;
-        }));
-        const sortedLabels = Object.entries(labelCounts).sort((a, b) => a[0].localeCompare(b[0]));
+        // Static counts for all labels (for the list)
+        const allLabelColors: Record<string, string> = {};
+        refs.forEach(r => r.labels.forEach(l => { allLabelColors[l.name] = l.color; }));
+        const sortedLabels = Object.entries(allLabelColors).sort((a, b) => a[0].localeCompare(b[0]));
         if (sortedLabels.length === 0) return null;
         return (
           <div className="rounded-lg border border-[var(--border)] overflow-hidden">
@@ -359,19 +382,22 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                     Clear ({filterLabels.size}) &times;
                   </button>
                 )}
-                {sortedLabels.map(([name, { color, count }]) => (
-                  <button
-                    key={name}
-                    onClick={() => setFilterLabels(prev => { const next = new Set(prev); if (next.has(name)) next.delete(name); else next.add(name); return next; })}
-                    className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1 ${
-                      filterLabels.has(name) ? "border-white/50 ring-1 ring-white/30" : "border-transparent"
-                    }`}
-                    style={{ backgroundColor: filterLabels.has(name) ? color : `${color}25`, color: filterLabels.has(name) ? "#fff" : color }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filterLabels.has(name) ? "#fff" : color }} />
-                    {name} ({count})
-                  </button>
-                ))}
+                {sortedLabels.map(([name, color]) => {
+                  const dynCount = dynamicLabelCounts[name] || 0;
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => setFilterLabels(prev => { const next = new Set(prev); if (next.has(name)) next.delete(name); else next.add(name); return next; })}
+                      className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1 ${
+                        filterLabels.has(name) ? "border-white/50 ring-1 ring-white/30" : "border-transparent"
+                      } ${dynCount === 0 && !filterLabels.has(name) ? "opacity-40" : ""}`}
+                      style={{ backgroundColor: filterLabels.has(name) ? color : `${color}25`, color: filterLabels.has(name) ? "#fff" : color }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filterLabels.has(name) ? "#fff" : color }} />
+                      {name} ({dynCount})
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
