@@ -58,6 +58,54 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
 
   const [editingNote, setEditingNote] = useState<Record<number, string>>({});
 
+  // Import from label
+  const [showLabelImport, setShowLabelImport] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState("");
+  const [labelPapers, setLabelPapers] = useState<any[] | null>(null);
+  const [labelLoading, setLabelLoading] = useState(false);
+  const [selectedForImport, setSelectedForImport] = useState<Set<number>>(new Set());
+  const [importingLabel, setImportingLabel] = useState(false);
+
+  const { data: labels } = useSWR<{ id: number; name: string; color: string }[]>(
+    showLabelImport ? "/api/v1/labels" : null,
+    authFetcher
+  );
+
+  const loadLabelPapers = async (labelName: string) => {
+    setLabelLoading(true);
+    setSelectedForImport(new Set());
+    try {
+      const r = await fetch(`/api/v1/papers?label=${encodeURIComponent(labelName)}&per_page=100&sort_by=title&sort_order=asc`, {
+        headers: authHeaders(),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const existingIds = new Set((data?.references || []).map(ref => ref.cited_paper_id));
+        existingIds.add(paperId);
+        setLabelPapers((d.items || []).filter((p: any) => !existingIds.has(p.id)));
+      }
+    } finally {
+      setLabelLoading(false);
+    }
+  };
+
+  const importSelected = async () => {
+    if (selectedForImport.size === 0) return;
+    setImportingLabel(true);
+    for (const pid of selectedForImport) {
+      await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ cited_paper_id: pid, context: null, note: null }),
+      }).catch(() => {});
+    }
+    setSelectedForImport(new Set());
+    setLabelPapers(null);
+    setShowLabelImport(false);
+    setImportingLabel(false);
+    mutate(apiUrl);
+  };
+
   const searchPapers = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -128,13 +176,103 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
             </span>
           )}
         </h3>
-        <button
-          onClick={() => setShowSearch(!showSearch)}
-          className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 text-white font-bold hover:bg-indigo-600 transition-colors"
-        >
-          + Add Reference
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
+            className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
+          >
+            Import from Label
+          </button>
+          <button
+            onClick={() => { setShowSearch(!showSearch); setShowLabelImport(false); }}
+            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 text-white font-bold hover:bg-indigo-600 transition-colors"
+          >
+            + Add Reference
+          </button>
+        </div>
       </div>
+
+      {/* Import from Label */}
+      {showLabelImport && (
+        <div className="p-4 rounded-lg bg-purple-500/5 border border-purple-500/20 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--muted-foreground)]">Label:</span>
+            <select
+              value={selectedLabel}
+              onChange={e => { setSelectedLabel(e.target.value); if (e.target.value) loadLabelPapers(e.target.value); else setLabelPapers(null); }}
+              className="flex-1 px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none"
+            >
+              <option value="">Select a label...</option>
+              {(labels || []).map(l => (
+                <option key={l.id} value={l.name}>{l.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {labelLoading && <p className="text-xs text-[var(--muted-foreground)]">Loading papers...</p>}
+
+          {labelPapers && !labelLoading && (
+            <>
+              {labelPapers.length === 0 ? (
+                <p className="text-xs text-[var(--muted-foreground)] text-center py-2">No new papers found in this label (all already in bibliography).</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[var(--muted-foreground)]">{labelPapers.length} papers available</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedForImport(new Set(labelPapers.map((p: any) => p.id)))}
+                        className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)]"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        onClick={() => setSelectedForImport(new Set())}
+                        className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)]"
+                      >
+                        Deselect
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1 max-h-60 overflow-y-auto">
+                    {labelPapers.map((paper: any) => (
+                      <label key={paper.id} className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors ${selectedForImport.has(paper.id) ? "bg-purple-500/10" : "hover:bg-[var(--secondary)]"} ${paper.disabled ? "opacity-40" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedForImport.has(paper.id)}
+                          onChange={() => setSelectedForImport(prev => {
+                            const next = new Set(prev);
+                            if (next.has(paper.id)) next.delete(paper.id); else next.add(paper.id);
+                            return next;
+                          })}
+                          className="mt-0.5 rounded accent-[var(--primary)]"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium line-clamp-1">{paper.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {paper.rating > 0 && (
+                              <span className="text-[10px] text-amber-400">{"★".repeat(paper.rating)}{"☆".repeat(5 - paper.rating)}</span>
+                            )}
+                            {paper.disabled && <span className="text-[9px] px-1 py-0.5 rounded bg-red-800 text-white">DISABLED</span>}
+                            {paper.journal && <span className="text-[10px] text-[var(--muted-foreground)]">{paper.journal}</span>}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={importSelected}
+                    disabled={selectedForImport.size === 0 || importingLabel}
+                    className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-bold hover:bg-purple-600 disabled:opacity-50 transition-colors"
+                  >
+                    {importingLabel ? "Importing..." : `Import ${selectedForImport.size} selected`}
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Search to add */}
       {showSearch && (
