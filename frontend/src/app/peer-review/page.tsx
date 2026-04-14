@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
+import { useAuth } from "@/lib/auth";
 
 interface PeerReviewItem {
   id: number;
@@ -52,6 +53,7 @@ const REC_LABEL: Record<string, string> = {
 };
 
 export default function PeerReviewPage() {
+  const { isAdmin } = useAuth();
   const router = useRouter();
   const { data, isLoading, mutate } = useSWR<PeerReviewItem[]>(
     "/api/v1/peer-review",
@@ -138,15 +140,17 @@ export default function PeerReviewPage() {
             Confidential review of unpublished papers. Isolated from the public bibliography — no Zotero, no LLM, no indexing.
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 rounded-lg bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300 text-sm"
-        >
-          {showForm ? "Cancel" : "+ New Peer Review"}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 rounded-lg bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300 text-sm"
+          >
+            {showForm ? "Cancel" : "+ New Peer Review"}
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {isAdmin && showForm && (
         <div className="rounded-xl bg-[var(--card)] border border-[var(--primary)]/30 p-6 space-y-3">
           <h3 className="font-medium">New peer review</h3>
           <div>
@@ -268,9 +272,9 @@ export default function PeerReviewPage() {
                     <Link href={`/peer-review/${pr.id}`} className="text-[10px] px-2 py-1 rounded bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300 mr-1">
                       Open
                     </Link>
-                    <button onClick={() => remove(pr.id)} className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700">
+                    {isAdmin && <button onClick={() => remove(pr.id)} className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700">
                       Del
-                    </button>
+                    </button>}
                   </td>
                 </tr>
               ))}

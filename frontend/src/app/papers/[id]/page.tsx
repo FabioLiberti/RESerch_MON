@@ -7,6 +7,7 @@ import { usePaper } from "@/hooks/usePapers";
 import { api, authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import ReviewJournal from "@/components/ReviewJournal";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import PaperInfoBox from "@/components/PaperInfoBox";
@@ -156,6 +157,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const paperId = Number(id);
   const { data: paper, isLoading } = usePaper(paperId);
+  const { isAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -183,7 +185,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       </Link>
 
       {/* Header */}
-      <EditableHeader paper={paper} paperId={paperId} />
+      {isAdmin ? <EditableHeader paper={paper} paperId={paperId} /> : (
+        <h1 className="text-2xl font-bold leading-snug">{paper.title}</h1>
+      )}
       <div>
         <div className="flex flex-wrap items-center gap-3 mt-3">
           {paper.doi && (
@@ -219,7 +223,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               MY MANUSCRIPT
             </span>
           )}
-          {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && !paper.doi && (
+          {isAdmin && (paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && !paper.doi && (
             <button
               onClick={() => {
                 const doi = prompt("Enter the DOI assigned upon publication:");
@@ -259,40 +263,29 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* Zotero Sync */}
+      {/* Zotero Sync + Review buttons */}
       <div className="flex items-center gap-2 flex-wrap">
-        <SyncPaperToZotero paperId={paperId} hasZoteroKey={!!paper.zotero_key} />
-        {paper.zotero_key && (
+        {isAdmin && (
           <>
-            <a
-              href={`zotero://select/library/items/${paper.zotero_key}`}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-700 text-white text-xs font-medium hover:bg-amber-600 transition-colors"
-              title="Open in Zotero desktop app"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-              Open in Zotero
-            </a>
-            <a
-              href={`https://www.zotero.org/users/14445641/items/${paper.zotero_key}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-900 text-white text-xs font-medium hover:bg-amber-800 transition-colors"
-              title="Open on zotero.org (web)"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8M3.6 15h16.8M11 3a17 17 0 000 18M13 3a17 17 0 010 18" />
-              </svg>
-              Web
-            </a>
+            <SyncPaperToZotero paperId={paperId} hasZoteroKey={!!paper.zotero_key} />
+            {paper.zotero_key && (
+              <>
+                <a href={`zotero://select/library/items/${paper.zotero_key}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-700 text-white text-xs font-medium hover:bg-amber-600 transition-colors" title="Open in Zotero desktop app">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  Open in Zotero
+                </a>
+                <a href={`https://www.zotero.org/users/14445641/items/${paper.zotero_key}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-900 text-white text-xs font-medium hover:bg-amber-800 transition-colors" title="Open on zotero.org (web)">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8M3.6 15h16.8M11 3a17 17 0 000 18M13 3a17 17 0 010 18" /></svg>
+                  Web
+                </a>
+              </>
+            )}
           </>
         )}
         {/* spacer pushes review buttons to the far right */}
         <div className="ml-auto" />
-        {/* Meta Review link — shown when paper has Extended Abstract analyses */}
-        <Link
+        {/* Meta Review link — admin only */}
+        {isAdmin && <Link
           href="/review"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
           style={{
@@ -304,7 +297,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           title="Go to Meta Review queue"
         >
           Meta Review
-        </Link>
+        </Link>}
         {/* Peer Review link — only shown when this paper has a linked peer review */}
         {paper.peer_review_id && (
           <Link
@@ -617,12 +610,12 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Tutor check decision */}
         <TutorCheckWidget paperId={paperId} initial={paper.tutor_check || null} />
 
-        {/* Generate Analysis */}
-        <AnalysisButton paperId={paperId} />
+        {/* Generate Analysis — admin only */}
+        {isAdmin && <AnalysisButton paperId={paperId} />}
       </div>
 
-      {/* Summary Card */}
-      <SummaryCard paperId={paperId} />
+      {/* Summary Card — admin only (internal working data) */}
+      {isAdmin && <SummaryCard paperId={paperId} />}
 
       {/* Cited by my manuscripts — shown on any paper that is referenced */}
       <CitedByManuscripts paperId={paperId} />
@@ -632,8 +625,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         <SubmissionTimeline paperId={paperId} />
       )}
 
-      {/* Analysis History */}
-      <AnalysisHistory paperId={paperId} hasZoteroKey={!!paper.zotero_key} hasPaperPdf={!!paper.has_pdf} />
+      {/* Analysis History — viewer sees only Extended Abstract */}
+      <AnalysisHistory paperId={paperId} hasZoteroKey={!!paper.zotero_key} hasPaperPdf={!!paper.has_pdf} viewerOnly={!isAdmin} />
 
       {/* Review Journal — shown for reviewing/my_manuscript papers, or any paper that has entries */}
       {(paper.paper_role !== "bibliography" || paper.peer_review_id) && (
@@ -1364,7 +1357,7 @@ function SummaryCard({ paperId }: { paperId: number }) {
 }
 
 
-function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: number; hasZoteroKey: boolean; hasPaperPdf: boolean }) {
+function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf, viewerOnly = false }: { paperId: number; hasZoteroKey: boolean; hasPaperPdf: boolean; viewerOnly?: boolean }) {
   const { data: history, mutate: mutateHistory } = useSWR<AnalysisRun[]>(
     `/api/v1/analysis/${paperId}/history`,
     authFetcher,
@@ -1390,7 +1383,12 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
     }
   }, [history]);
 
-  if (!history || history.length === 0) return null;
+  // Filter: viewer sees only Extended Abstract analyses
+  const visibleHistory = viewerOnly
+    ? (history || []).filter(r => r.mode === "extended")
+    : (history || []);
+
+  if (visibleHistory.length === 0) return null;
 
   const validationBadge = (run: AnalysisRun) => {
     if (!run.validation_status) return null;
@@ -1431,15 +1429,15 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4">
       <h3 className="text-xs font-medium text-[var(--muted-foreground)] mb-3">Analysis History</h3>
       <div className="space-y-2">
-        {history.map((run, idx) => {
+        {visibleHistory.map((run, idx) => {
           // Superseded = there's a newer entry with the same mode
-          const isSuperseded = history.slice(0, idx).some(r => r.mode === run.mode && r.status === "done");
+          const isSuperseded = visibleHistory.slice(0, idx).some(r => r.mode === run.mode && r.status === "done");
           return (
           <details key={run.id} className={cn("rounded-lg bg-[var(--secondary)]", isSuperseded && "opacity-50")}>
             <summary className="flex items-center justify-between p-3 cursor-pointer">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] text-[var(--muted-foreground)] font-mono">
-                  #{history.length - idx} (ID:{paperId}) v{run.version || 1}
+                  #{visibleHistory.length - idx} (ID:{paperId}) v{run.version || 1}
                   {run.zotero_synced && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-700 text-white font-medium" title="Synced to Zotero">✓Z</span>}
                 </span>
                 {isSuperseded ? (
@@ -1464,7 +1462,7 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
                 {validationBadge(run)}
               </div>
               <div className="flex gap-1.5 ml-3 shrink-0">
-                {run.status === "done" && (
+                {!viewerOnly && run.status === "done" && (
                   <button
                     onClick={(e) => { e.preventDefault(); setReviewing(run); }}
                     className="text-[10px] px-2 py-1 rounded bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300"
@@ -1472,7 +1470,7 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf }: { paperId: numb
                     Review
                   </button>
                 )}
-                {run.status === "done" && (run.version || 1) > 1 && (
+                {!viewerOnly && run.status === "done" && (run.version || 1) > 1 && (
                   <button
                     onClick={(e) => { e.preventDefault(); setDiffing(run); }}
                     className="text-[10px] px-2 py-1 rounded bg-fuchsia-700 text-white font-bold hover:bg-fuchsia-600"

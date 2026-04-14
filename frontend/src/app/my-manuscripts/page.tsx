@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
+import { useAuth } from "@/lib/auth";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { cn, formatDate } from "@/lib/utils";
@@ -17,6 +18,7 @@ interface PaperListResponse {
 }
 
 export default function MyManuscriptsPage() {
+  const { isAdmin } = useAuth();
   const { data, isLoading } = useSWR<PaperListResponse>(
     "/api/v1/papers?paper_role=my_manuscript&per_page=50&sort_by=created_at&sort_order=desc",
     authFetcher
@@ -75,12 +77,14 @@ export default function MyManuscriptsPage() {
             Papers you have submitted to journals or conferences. Track reviewer feedback and revision progress.
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600 transition-colors shrink-0"
-        >
-          + Add Manuscript
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600 transition-colors shrink-0"
+          >
+            + Add Manuscript
+          </button>
+        )}
       </div>
 
       {/* Message */}
@@ -229,19 +233,21 @@ export default function MyManuscriptsPage() {
                   >
                     Open
                   </Link>
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Delete manuscript "${paper.title.slice(0, 50)}..."? This removes the paper from the database.`)) return;
-                      await fetch(`/api/v1/papers/${paper.id}/toggle-disabled`, {
-                        method: "POST",
-                        headers: authHeaders(),
-                      });
-                      mutate("/api/v1/papers?paper_role=my_manuscript&per_page=50&sort_by=created_at&sort_order=desc");
-                    }}
-                    className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700"
-                  >
-                    Del
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Delete manuscript "${paper.title.slice(0, 50)}..."? This removes the paper from the database.`)) return;
+                        await fetch(`/api/v1/papers/${paper.id}/toggle-disabled`, {
+                          method: "POST",
+                          headers: authHeaders(),
+                        });
+                        mutate("/api/v1/papers?paper_role=my_manuscript&per_page=50&sort_by=created_at&sort_order=desc");
+                      }}
+                      className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700"
+                    >
+                      Del
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

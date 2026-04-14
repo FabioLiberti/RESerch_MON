@@ -4,6 +4,7 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
+import { useAuth } from "@/lib/auth";
 
 interface QualityListItem {
   paper_id: number;
@@ -37,6 +38,7 @@ const GRADE_COLOR: Record<string, string> = {
 };
 
 export default function PaperQualityListPage() {
+  const { isAdmin } = useAuth();
   const { data, isLoading } = useSWR<QualityListItem[]>(
     "/api/v1/paper-quality",
     authFetcher
@@ -173,19 +175,21 @@ export default function PaperQualityListPage() {
                       >
                         Open
                       </Link>
-                      <button
-                        onClick={async () => {
-                          if (!confirm(`Delete quality review v${it.version} for this paper?`)) return;
-                          await fetch(`/api/v1/paper-quality/${it.paper_id}/v/${it.version}`, {
-                            method: "DELETE",
-                            headers: authHeaders(),
-                          });
-                          mutate("/api/v1/paper-quality");
-                        }}
-                        className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700"
-                      >
-                        Del
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Delete quality review v${it.version} for this paper?`)) return;
+                            await fetch(`/api/v1/paper-quality/${it.paper_id}/v/${it.version}`, {
+                              method: "DELETE",
+                              headers: authHeaders(),
+                            });
+                            mutate("/api/v1/paper-quality");
+                          }}
+                          className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700"
+                        >
+                          Del
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
