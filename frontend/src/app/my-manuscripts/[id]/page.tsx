@@ -310,11 +310,11 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
             </div>
           )}
 
-          {/* Document viewer */}
-          <div data-tour="ms-pdf" className="flex-1 overflow-hidden">
-            {docTab === "main" ? (
-              /* Main document viewer */
-              !paper.has_pdf ? (
+          {/* Document viewer — both iframes always mounted, visibility toggled via CSS */}
+          <div data-tour="ms-pdf" className="flex-1 overflow-hidden relative">
+            {/* Main document */}
+            <div className={`absolute inset-0 ${docTab === "main" ? "" : "invisible"}`}>
+              {!paper.has_pdf ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
                   <p>No manuscript PDF uploaded yet.</p>
                   <p className="text-[10px] text-gray-400">Upload a PDF to preview it here, or use TEX/MD buttons to manage source files.</p>
@@ -338,10 +338,12 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                     <a href={pdfBlobUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600">Open PDF</a>
                   </div>
                 </>
-              )
-            ) : (
-              /* Supplementary viewer */
-              !(paper as any).has_supplementary ? (
+              )}
+            </div>
+
+            {/* Supplementary */}
+            <div className={`absolute inset-0 ${docTab === "supplementary" ? "" : "invisible"}`}>
+              {!(paper as any).has_supplementary ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
                   <p>No supplementary file uploaded yet.</p>
                   {isAdmin && (
@@ -362,8 +364,8 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                     <a href={suppBlobUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500">Open Supplementary</a>
                   </div>
                 </>
-              )
-            )}
+              )}
+            </div>
           </div>
         </div>
 
