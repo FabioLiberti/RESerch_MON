@@ -429,7 +429,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
         <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
           FL Research Monitor
         </h1>
-        <p className="text-xs text-[var(--muted-foreground)] mt-1">v2.16</p>
+        <p className="text-xs text-[var(--muted-foreground)] mt-1">v2.22</p>
       </div>
 
       {/* Navigation */}

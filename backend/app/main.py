@@ -171,7 +171,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FL-RESEARCH-MONITOR",
     description="Automated scientific paper discovery system for Federated Learning research",
-    version="0.4.0",
+    version="2.22.0",
     lifespan=lifespan,
 )
 
