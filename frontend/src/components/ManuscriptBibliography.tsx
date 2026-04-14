@@ -226,7 +226,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     authFetcher
   );
   const [showKeywords, setShowKeywords] = useState(false);
-  const [filterKeyword, setFilterKeyword] = useState<string | null>(null);
+  const [filterKeywords, setFilterKeywords] = useState<Set<string>>(new Set());
 
   if (isLoading) return <div className="h-16 bg-[var(--muted)] rounded-xl animate-pulse" />;
 
@@ -240,8 +240,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
           Bibliography
           {refs.length > 0 && (
             <span className="text-xs font-normal text-[var(--muted-foreground)]">
-              {filterKeyword
-                ? `${refs.filter(r => r.keywords.includes(filterKeyword)).length}/${refs.length} papers with "${filterKeyword}"`
+              {filterKeywords.size > 0
+                ? `${refs.filter(r => r.keywords.some(k => filterKeywords.has(k))).length}/${refs.length} papers matching ${filterKeywords.size} keyword${filterKeywords.size > 1 ? "s" : ""}`
                 : `${refs.length} paper${refs.length !== 1 ? "s" : ""} cited`
               }
             </span>
@@ -286,26 +286,30 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
           </button>
           {showKeywords && (
             <div className="p-3 flex flex-wrap gap-1.5">
-              {filterKeyword && (
+              {filterKeywords.size > 0 && (
                 <button
-                  onClick={() => setFilterKeyword(null)}
+                  onClick={() => setFilterKeywords(new Set())}
                   className="text-[10px] px-2 py-1 rounded-full bg-red-700 text-white font-bold hover:bg-red-600"
                 >
-                  Clear filter &times;
+                  Clear filter ({filterKeywords.size}) &times;
                 </button>
               )}
               {kwData.keywords.map(({ keyword, count }) => (
                 <button
                   key={keyword}
-                  onClick={() => setFilterKeyword(filterKeyword === keyword ? null : keyword)}
+                  onClick={() => setFilterKeywords(prev => {
+                    const next = new Set(prev);
+                    if (next.has(keyword)) next.delete(keyword); else next.add(keyword);
+                    return next;
+                  })}
                   className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer ${
-                    filterKeyword === keyword
+                    filterKeywords.has(keyword)
                       ? "bg-indigo-600 text-white border-indigo-500"
                       : "bg-[var(--secondary)] border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--muted)]"
                   }`}
                   title={`${count} paper${count > 1 ? "s" : ""} — click to filter`}
                 >
-                  {keyword} <span className={filterKeyword === keyword ? "text-indigo-200" : "text-[var(--muted-foreground)]"}>({count})</span>
+                  {keyword} <span className={filterKeywords.has(keyword) ? "text-indigo-200" : "text-[var(--muted-foreground)]"}>({count})</span>
                 </button>
               ))}
             </div>
@@ -475,7 +479,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
       {refs.length > 0 && (
         <div className="space-y-2">
           {refs.map(ref => (
-            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${filterKeyword && !ref.keywords.includes(filterKeyword) ? "opacity-20" : ""}`}>
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k)) ? "opacity-20" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}
