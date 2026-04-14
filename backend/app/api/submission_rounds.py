@@ -171,13 +171,20 @@ async def upload_document(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload the document (PDF) for a submission round."""
+    """Upload a document (PDF, .md, .tex, .txt) for a submission round."""
     r = await db.get(SubmissionRound, round_id)
     if not r:
         raise HTTPException(status_code=404, detail="Round not found")
 
+    allowed_ext = {".pdf", ".md", ".tex", ".txt"}
+    from pathlib import PurePosixPath
+    fname = file.filename or "document.pdf"
+    ext = PurePosixPath(fname).suffix.lower()
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=400, detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(allowed_ext))}")
+
     storage = _storage_dir(r.paper_id)
-    safe_name = f"round_{r.round_number}_{file.filename or 'document.pdf'}"
+    safe_name = f"round_{r.round_number}_{fname}"
     out_path = storage / safe_name
     content = await file.read()
     out_path.write_bytes(content)

@@ -52,6 +52,7 @@ class Paper(Base):
     conference_url = Column(Text, nullable=True)   # Link to the conference/journal website
     conference_notes = Column(Text, nullable=True)  # Free-text notes about the venue
     github_url = Column(Text, nullable=True)        # Link to the paper's code repository
+    overleaf_url = Column(Text, nullable=True)      # Link to the Overleaf project
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

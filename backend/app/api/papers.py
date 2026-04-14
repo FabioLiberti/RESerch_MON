@@ -103,6 +103,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         conference_url=paper.conference_url,
         conference_notes=paper.conference_notes,
         github_url=paper.github_url,
+        overleaf_url=paper.overleaf_url,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -727,6 +728,7 @@ class UpdatePaperMetadataRequest(BaseModel):
     conference_url: str | None = None
     conference_notes: str | None = None
     github_url: str | None = None
+    overleaf_url: str | None = None
 
 
 @router.put("/{paper_id}/metadata")
@@ -756,6 +758,8 @@ async def update_paper_metadata(
         paper.conference_notes = body.conference_notes
     if body.github_url is not None:
         paper.github_url = body.github_url
+    if body.overleaf_url is not None:
+        paper.overleaf_url = body.overleaf_url
 
     await db.commit()
     return {"status": "updated", "paper_id": paper.id}

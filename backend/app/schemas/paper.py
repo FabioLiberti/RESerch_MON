@@ -86,6 +86,7 @@ class PaperDetail(BaseModel):
     conference_url: str | None = None
     conference_notes: str | None = None
     github_url: str | None = None
+    overleaf_url: str | None = None
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

@@ -317,14 +317,16 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
                       })()}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {round.has_document && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-800 text-white">PDF</span>
+                      {round.has_document && round.document_path && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-800 text-white">
+                          {round.document_path.split(".").pop()?.toUpperCase() || "DOC"}
+                        </span>
                       )}
                       <label className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)] cursor-pointer transition-colors">
-                        {round.has_document ? "Replace" : "Upload"} PDF
+                        {round.has_document ? "Replace" : "Upload"}
                         <input
                           type="file"
-                          accept=".pdf"
+                          accept=".pdf,.md,.tex,.txt"
                           className="hidden"
                           onChange={e => {
                             const f = e.target.files?.[0];

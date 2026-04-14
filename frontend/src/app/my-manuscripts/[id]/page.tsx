@@ -96,6 +96,15 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                 GitHub
               </a>
             )}
+            {(paper as any).overleaf_url && (
+              <a href={(paper as any).overleaf_url} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M22.39 10.97L13.13.55c-.2-.23-.5-.35-.8-.35h-.03c-.28.01-.55.13-.75.34L.42 12.6c-.42.44-.42 1.14 0 1.58l5.85 6.12c.2.21.48.33.77.33h.03c.28-.01.55-.14.74-.35l4.62-5.07c.12-.13.31-.14.44-.02l4.36 4.17c.2.2.48.3.76.3.29 0 .57-.11.78-.33l3.62-3.78c.42-.44.42-1.14 0-1.58z"/>
+                </svg>
+                Overleaf
+              </a>
+            )}
             {(paper as any).conference_notes && (
               <span className="text-xs text-[var(--muted-foreground)] italic">{(paper as any).conference_notes}</span>
             )}
