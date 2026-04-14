@@ -289,6 +289,7 @@ function UserManagement() {
   const [newUser, setNewUser] = useState({ username: "", email: "", password: "", role: "viewer" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [actionMsg, setActionMsg] = useState<Record<number, string>>({});
 
   const createUser = async () => {
     setSaving(true);
@@ -314,13 +315,56 @@ function UserManagement() {
     await mutateUsers();
   };
 
+  const resetPassword = async (u: UserData) => {
+    const pw = prompt(`New password for ${u.username} (min 12 chars):`);
+    if (!pw || pw.length < 12) {
+      if (pw !== null) alert("Password must be at least 12 characters");
+      return;
+    }
+    try {
+      const r = await fetch(`/api/v1/auth/users/${u.id}/reset-password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ new_password: pw }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      setActionMsg(prev => ({ ...prev, [u.id]: "Password reset" }));
+      setTimeout(() => setActionMsg(prev => { const n = { ...prev }; delete n[u.id]; return n; }), 3000);
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    }
+  };
+
+  const deleteUser = async (u: UserData) => {
+    if (!confirm(`Delete user "${u.username}" permanently? This cannot be undone.`)) return;
+    try {
+      const r = await fetch(`/api/v1/auth/users/${u.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      await mutateUsers();
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    }
+  };
+
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium">User Management</h3>
+        <div>
+          <h3 className="font-medium">User Management</h3>
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{(users || []).length} users registered</p>
+        </div>
         <button
           onClick={() => setShowNewUser(!showNewUser)}
-          className="px-3 py-1.5 text-sm rounded-lg bg-[var(--primary)] text-white hover:opacity-90"
+          className="px-3 py-1.5 text-sm rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600"
         >
           + Add User
         </button>
@@ -334,45 +378,57 @@ function UserManagement() {
               {error}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              value={newUser.username}
-              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-              placeholder="Username"
-            />
-            <input
-              value={newUser.email}
-              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-              placeholder="Email"
-            />
-            <input
-              type="password"
-              value={newUser.password}
-              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-              placeholder="Password (min 6 chars)"
-            />
-            <select
-              value={newUser.role}
-              onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-              className="px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-            >
-              <option value="viewer">Viewer</option>
-              <option value="admin">Admin</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Username</label>
+              <input
+                value={newUser.username}
+                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+                placeholder="e.g. b.martini"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Email</label>
+              <input
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+                placeholder="e.g. b.martini@unifi.it"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Password (min 12 chars)</label>
+              <input
+                type="password"
+                value={newUser.password}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+                placeholder="Min 12 characters"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Role</label>
+              <select
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              >
+                <option value="viewer">Viewer (tutor)</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={createUser}
-              disabled={saving || !newUser.username || !newUser.email || newUser.password.length < 6}
-              className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+              disabled={saving || !newUser.username || !newUser.email || newUser.password.length < 12}
+              className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-600 disabled:opacity-50"
             >
               {saving ? "Creating..." : "Create User"}
             </button>
             <button
-              onClick={() => setShowNewUser(false)}
+              onClick={() => { setShowNewUser(false); setError(""); }}
               className="px-4 py-2 rounded-lg bg-[var(--muted)] text-sm hover:bg-[var(--border)]"
             >
               Cancel
@@ -384,40 +440,59 @@ function UserManagement() {
       {/* Users List */}
       <div className="space-y-2">
         {(users || []).map((u) => (
-          <div key={u.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--secondary)]">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
+          <div key={u.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--secondary)] gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{u.username}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  u.role === "admin" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  u.role === "admin" ? "bg-purple-700 text-white" : "bg-blue-700 text-white"
                 }`}>
-                  {u.role}
+                  {u.role === "admin" ? "ADMIN" : "VIEWER"}
                 </span>
                 {!u.is_active && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">
-                    inactive
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-700 text-white font-bold">
+                    INACTIVE
                   </span>
                 )}
+                {actionMsg[u.id] && (
+                  <span className="text-[10px] text-emerald-400">{actionMsg[u.id]}</span>
+                )}
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">{u.email}</p>
+              <p className="text-xs text-[var(--muted-foreground)] truncate">{u.email}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
               <select
                 value={u.role}
                 onChange={(e) => changeRole(u, e.target.value)}
-                className="text-xs px-2 py-1 rounded bg-[var(--muted)] border border-[var(--border)]"
+                className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] border border-[var(--border)]"
               >
                 <option value="viewer">Viewer</option>
                 <option value="admin">Admin</option>
               </select>
               <button
+                onClick={() => resetPassword(u)}
+                className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white hover:bg-amber-600"
+                title="Reset password"
+              >
+                Reset PW
+              </button>
+              <button
                 onClick={() => toggleActive(u)}
-                className={`text-xs px-2 py-1 rounded transition-colors ${
-                  u.is_active ? "hover:bg-red-500/20 text-red-400" : "hover:bg-green-500/20 text-green-400"
+                className={`text-[10px] px-2 py-1 rounded font-bold ${
+                  u.is_active ? "bg-red-700 text-white hover:bg-red-600" : "bg-emerald-700 text-white hover:bg-emerald-600"
                 }`}
               >
                 {u.is_active ? "Disable" : "Enable"}
               </button>
+              {u.role !== "admin" && (
+                <button
+                  onClick={() => deleteUser(u)}
+                  className="text-[10px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10"
+                  title="Delete user permanently"
+                >
+                  Del
+                </button>
+              )}
             </div>
           </div>
         ))}

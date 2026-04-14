@@ -230,3 +230,39 @@ async def update_existing_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     return UserResponse.from_user(user)
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=12, max_length=64)
+
+
+@router.put("/users/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: int,
+    body: ResetPasswordRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin resets another user's password."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await change_password(db, user_id, body.new_password)
+    return {"status": "password_reset", "user_id": user_id}
+
+
+@router.delete("/users/{user_id}")
+async def delete_existing_user(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a user permanently. Cannot delete yourself."""
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await db.delete(user)
+    await db.commit()
+    return {"status": "deleted", "user_id": user_id}
