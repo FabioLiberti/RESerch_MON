@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { getSectionVisitedAt, markSectionVisited } from "@/lib/newBadge";
 
 const navItems: { href: string; label: string; icon: string; tooltip: string; adminOnly?: boolean }[] = [
   {
@@ -129,10 +130,12 @@ function NavItem({
   item,
   isActive,
   onNavigate,
+  hasNew,
 }: {
   item: { href: string; label: string; icon: string; tooltip: string };
   isActive: boolean;
   onNavigate?: () => void;
+  hasNew?: boolean;
 }) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const [show, setShow] = useState(false);
@@ -183,6 +186,7 @@ function NavItem({
           <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
         </svg>
         {item.label}
+        {hasNew && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-auto shrink-0" />}
       </Link>
       {show && (
         <div
@@ -389,10 +393,36 @@ function LearningPathSection() {
   );
 }
 
+const BADGE_SECTIONS = ["review", "peer-review", "my-manuscripts", "paper-quality"];
+
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [isDark, setIsDark] = useState(true);
+
+  // Badge system: fetch latest timestamps per section
+  const { data: sectionLatest } = useSWR<Record<string, string | null>>(
+    "/api/v1/papers/section-latest", authFetcher, { refreshInterval: 60000 }
+  );
+
+  // Compute which sections have new content
+  const newSections = new Set<string>();
+  if (sectionLatest) {
+    for (const section of BADGE_SECTIONS) {
+      const latest = sectionLatest[section];
+      if (latest && new Date(latest) > getSectionVisitedAt(section)) {
+        newSections.add(section);
+      }
+    }
+  }
+
+  // Mark current section as visited when navigating
+  useEffect(() => {
+    const section = pathname.replace(/^\//, "").split("/")[0];
+    if (BADGE_SECTIONS.includes(section)) {
+      markSectionVisited(section);
+    }
+  }, [pathname]);
 
   // Persist theme preference
   useEffect(() => {
@@ -431,8 +461,9 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
           .filter(item => !item.adminOnly || user?.role === "admin")
           .map((item) => {
             const isActive = pathname === item.href;
+            const sectionKey = item.href.replace(/^\//, "") || "dashboard";
             return (
-              <NavItem key={item.href} item={item} isActive={isActive} onNavigate={onNavigate} />
+              <NavItem key={item.href} item={item} isActive={isActive} onNavigate={onNavigate} hasNew={newSections.has(sectionKey)} />
             );
           })}
 

@@ -7,7 +7,9 @@ import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
 const TOUR_DONE_KEY = "fl-tour-done";
+const TOUR_MANUSCRIPT_KEY = "fl-tour-manuscript-done";
 
+// --- Tour 1: Sidebar overview (Dashboard) ---
 const TUTOR_STEPS = [
   {
     element: "[data-tour='sidebar']",
@@ -91,56 +93,123 @@ const TUTOR_STEPS = [
   },
   {
     popover: {
-      title: "Tutor Notes",
-      description: "In ogni paper del tipo 'My Manuscript', trovi il Review Journal. Clicca il bottone '+ Add Tutor Note' per lasciare le tue osservazioni e feedback. Le tue note saranno evidenziate in giallo e visibili a tutto il team.",
-    },
-  },
-  {
-    popover: {
       title: "Tour completato!",
-      description: "Puoi riavviare questo tour in qualsiasi momento dalla pagina About. Buon lavoro!",
+      description: "Ora vai su My Manuscripts per un tour dedicato alle funzioni del manoscritto. Puoi riavviare questo tour dalla pagina About.",
     },
   },
 ];
 
+// --- Tour 2: My Manuscripts detail page ---
+const MANUSCRIPT_STEPS = [
+  {
+    popover: {
+      title: "Pagina Manoscritto",
+      description: "Questa è la pagina di dettaglio del tuo manoscritto. Qui trovi il documento, la timeline delle submission, il Review Journal e la bibliografia. Ti mostro le sezioni principali.",
+    },
+  },
+  {
+    element: "[data-tour='ms-toolbar']",
+    popover: {
+      title: "Toolbar Documento",
+      description: "Da qui l'amministratore può caricare il PDF del manoscritto e i file sorgente (.tex, .md). Se è configurato un progetto Overleaf, trovi il link diretto.",
+      side: "bottom" as const,
+    },
+  },
+  {
+    element: "[data-tour='ms-pdf']",
+    popover: {
+      title: "Visualizzatore PDF",
+      description: "Qui puoi leggere il PDF del manoscritto direttamente nel browser. Il PDF viene aggiornato automaticamente quando l'amministratore carica una nuova versione.",
+      side: "right" as const,
+    },
+  },
+  {
+    element: "[data-tour='ms-timeline']",
+    popover: {
+      title: "Submission Timeline",
+      description: "La timeline traccia tutte le sottomissioni: round, deadline, decisioni dei reviewer. Puoi vedere lo stato di avanzamento del processo di pubblicazione.",
+      side: "left" as const,
+    },
+  },
+  {
+    element: "[data-tour='ms-journal']",
+    popover: {
+      title: "Review Journal",
+      description: "Qui trovi il feedback dei reviewer e le osservazioni strutturate. Come tutor, puoi aggiungere le tue note cliccando '+ Add Tutor Note'.",
+      side: "left" as const,
+    },
+  },
+  {
+    popover: {
+      title: "Come aggiungere una Tutor Note",
+      description: "1. Clicca '+ Add Tutor Note' (bottone blu)\n2. Inserisci il tuo nome e il testo della nota\n3. Clicca 'Add Note'\n4. Espandi la nota e clicca 'Edit' per aggiungere osservazioni strutturate con severity (major, minor, suggestion, praise)\n5. Le tue note saranno evidenziate in giallo.",
+    },
+  },
+  {
+    element: "[data-tour='ms-bibliography']",
+    popover: {
+      title: "Bibliografia",
+      description: "L'elenco dei paper citati nel manoscritto. Puoi consultare la lista, filtrare per keyword o label, e scaricare in formato TXT, BIB o CSV.",
+      side: "left" as const,
+    },
+  },
+  {
+    popover: {
+      title: "Tour Manoscritto completato!",
+      description: "Ora conosci tutte le funzionalità della pagina manoscritto. Puoi riavviare i tour dalla pagina About.",
+    },
+  },
+];
+
+type TourStep = { element?: string; popover: { title: string; description: string; side?: "top" | "bottom" | "left" | "right" } };
+
+function runTour(steps: TourStep[], doneKey: string) {
+  const d = driver({
+    showProgress: true,
+    animate: true,
+    overlayColor: "rgba(0, 0, 0, 0.75)",
+    stagePadding: 8,
+    stageRadius: 12,
+    popoverClass: "fl-tour-popover",
+    nextBtnText: "Avanti",
+    prevBtnText: "Indietro",
+    doneBtnText: "Fine",
+    progressText: "{{current}} di {{total}}",
+    steps,
+    onDestroyStarted: () => {
+      localStorage.setItem(doneKey, "1");
+      d.destroy();
+    },
+  });
+  d.drive();
+}
+
 export default function GuidedTour() {
   const { user, isAdmin } = useAuth();
   const pathname = usePathname();
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState<"sidebar" | "manuscript" | null>(null);
 
-  // Only run on dashboard, only for tutor/viewer, only once
   useEffect(() => {
     if (!user || isAdmin) return;
-    if (pathname !== "/") return;
-    if (localStorage.getItem(TOUR_DONE_KEY)) return;
-    // Small delay to let sidebar render
-    const t = setTimeout(() => setReady(true), 800);
-    return () => clearTimeout(t);
+
+    // Tour 1: Sidebar (on Dashboard)
+    if (pathname === "/" && !localStorage.getItem(TOUR_DONE_KEY)) {
+      const t = setTimeout(() => setReady("sidebar"), 800);
+      return () => clearTimeout(t);
+    }
+
+    // Tour 2: Manuscript detail page
+    if (pathname.startsWith("/my-manuscripts/") && pathname !== "/my-manuscripts" && !localStorage.getItem(TOUR_MANUSCRIPT_KEY)) {
+      const t = setTimeout(() => setReady("manuscript"), 1000);
+      return () => clearTimeout(t);
+    }
   }, [user, isAdmin, pathname]);
 
   useEffect(() => {
     if (!ready) return;
-
-    const d = driver({
-      showProgress: true,
-      animate: true,
-      overlayColor: "rgba(0, 0, 0, 0.75)",
-      stagePadding: 8,
-      stageRadius: 12,
-      popoverClass: "fl-tour-popover",
-      nextBtnText: "Avanti",
-      prevBtnText: "Indietro",
-      doneBtnText: "Fine",
-      progressText: "{{current}} di {{total}}",
-      steps: TUTOR_STEPS,
-      onDestroyStarted: () => {
-        localStorage.setItem(TOUR_DONE_KEY, "1");
-        d.destroy();
-      },
-    });
-
-    d.drive();
-    setReady(false);
+    if (ready === "sidebar") runTour(TUTOR_STEPS, TOUR_DONE_KEY);
+    if (ready === "manuscript") runTour(MANUSCRIPT_STEPS, TOUR_MANUSCRIPT_KEY);
+    setReady(null);
   }, [ready]);
 
   return null;
@@ -149,4 +218,9 @@ export default function GuidedTour() {
 export function restartTour() {
   localStorage.removeItem(TOUR_DONE_KEY);
   window.location.href = "/";
+}
+
+export function restartManuscriptTour() {
+  localStorage.removeItem(TOUR_MANUSCRIPT_KEY);
+  window.location.reload();
 }

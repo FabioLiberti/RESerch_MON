@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { useAuth } from "@/lib/auth";
-import { restartTour } from "@/components/GuidedTour";
+import { restartTour, restartManuscriptTour } from "@/components/GuidedTour";
 
 export default function AboutPage() {
   const { data: health } = useSWR<{ status: string; version: string }>("/health", async (url: string) => {
@@ -140,12 +140,20 @@ export default function AboutPage() {
           <p className="text-xs text-[var(--muted-foreground)] mb-3">
             Rivedi il tour guidato delle funzionalità principali del sistema.
           </p>
-          <button
-            onClick={restartTour}
-            className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-bold hover:bg-indigo-600 transition-colors"
-          >
-            Restart Tour
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={restartTour}
+              className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-bold hover:bg-indigo-600 transition-colors"
+            >
+              Restart Tour Generale
+            </button>
+            <button
+              onClick={restartManuscriptTour}
+              className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600 transition-colors"
+            >
+              Restart Tour Manoscritto
+            </button>
+          </div>
         </div>
       )}
     </div>

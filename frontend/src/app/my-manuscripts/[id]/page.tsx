@@ -139,7 +139,7 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
         {/* LEFT: Manuscript Document */}
         <div className="lg:w-1/2 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
           {/* Toolbar */}
-          <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center gap-2 flex-wrap shrink-0">
+          <div data-tour="ms-toolbar" className="p-2 border-b border-gray-300 bg-gray-100 flex items-center gap-2 flex-wrap shrink-0">
             <span className="text-xs font-bold text-gray-800 mr-auto">Manuscript</span>
 
             {/* Upload PDF — admin only */}
@@ -235,7 +235,7 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           </div>
 
           {/* Document viewer */}
-          <div className="flex-1 overflow-hidden">
+          <div data-tour="ms-pdf" className="flex-1 overflow-hidden">
             {!paper.has_pdf ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
                 <p>No manuscript PDF uploaded yet.</p>
@@ -275,9 +275,9 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
 
         {/* RIGHT: Submission Timeline + Review Journal + Bibliography */}
         <div className="lg:w-1/2 overflow-y-auto space-y-4">
-          <SubmissionTimeline paperId={paperId} />
-          <ReviewJournal paperId={paperId} />
-          <ManuscriptBibliography paperId={paperId} />
+          <div data-tour="ms-timeline"><SubmissionTimeline paperId={paperId} /></div>
+          <div data-tour="ms-journal"><ReviewJournal paperId={paperId} /></div>
+          <div data-tour="ms-bibliography"><ManuscriptBibliography paperId={paperId} /></div>
         </div>
       </div>
     </div>
