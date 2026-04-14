@@ -3,7 +3,7 @@
 import math
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -71,6 +71,7 @@ def _paper_to_summary(paper: Paper, labels: list[dict] | None = None, analyses: 
         tutor_check=paper.tutor_check,
         quality_grade=quality_grade,
         paper_role=paper.paper_role or "bibliography",
+        has_supplementary=paper.supplementary_path is not None,
         created_via=paper.created_via,
         created_at=paper.created_at,
     )
@@ -106,6 +107,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         overleaf_url=paper.overleaf_url,
         has_tex=paper.tex_local_path is not None,
         has_md=paper.md_local_path is not None,
+        has_supplementary=paper.supplementary_path is not None,
         authors=[
             AuthorSchema(
                 id=pa.author.id,
@@ -1232,6 +1234,49 @@ async def get_paper_md(paper_id: int, db: AsyncSession = Depends(get_db)):
     if not path.exists():
         raise HTTPException(404, "MD file not found on disk")
     return FileResponse(path, media_type="text/markdown", filename=f"{paper.title[:80]}.md")
+
+
+@router.get("/{paper_id}/supplementary-file")
+async def get_paper_supplementary(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve the supplementary file for a paper."""
+    paper = await db.get(Paper, paper_id)
+    if not paper or not paper.supplementary_path:
+        raise HTTPException(404, "Supplementary file not found")
+    path = Path(paper.supplementary_path)
+    if not path.exists():
+        raise HTTPException(404, "Supplementary file not found on disk")
+    ext = path.suffix.lower()
+    media = "application/pdf" if ext == ".pdf" else "application/octet-stream"
+    return FileResponse(path, media_type=media, filename=f"{paper.title[:60]}_supplementary{ext}")
+
+
+@router.post("/{paper_id}/upload-supplementary")
+async def upload_supplementary(
+    paper_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a supplementary file for a paper."""
+    import re as re_mod
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    content = await file.read()
+    fname = file.filename or "supplementary.pdf"
+    ext = Path(fname).suffix.lower()
+
+    upload_dir = Path(settings.pdf_storage_path) / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_title = re_mod.sub(r'[^\w\s-]', '', paper.title[:60]).strip().replace(' ', '_')
+    out_path = upload_dir / f"{safe_title}_{paper_id}_supplementary{ext}"
+    out_path.write_bytes(content)
+
+    paper.supplementary_path = str(out_path)
+    await db.flush()
+    await db.commit()
+    return {"status": "uploaded", "path": str(out_path), "size_kb": len(content) // 1024}
 
 
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)

@@ -16,11 +16,17 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
   const { isAdmin } = useAuth();
   const { data: paper, isLoading } = usePaper(paperId);
 
-  // PDF viewer state
+  // Document tab: Main vs Supplementary
+  const [docTab, setDocTab] = useState<"main" | "supplementary">("main");
+
+  // PDF viewer state (main)
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  // Supplementary viewer state
+  const [suppBlobUrl, setSuppBlobUrl] = useState<string | null>(null);
+  const [suppLoading, setSuppLoading] = useState(false);
 
-  // Load PDF
+  // Load main PDF
   useEffect(() => {
     if (!paper?.has_pdf || pdfBlobUrl || pdfLoading) return;
     setPdfLoading(true);
@@ -31,10 +37,24 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
       .finally(() => setPdfLoading(false));
   }, [paper?.has_pdf, paperId, pdfBlobUrl, pdfLoading]);
 
-  // Cleanup blob URL
+  // Load supplementary PDF
   useEffect(() => {
-    return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl); };
-  }, [pdfBlobUrl]);
+    if (!(paper as any)?.has_supplementary || suppBlobUrl || suppLoading) return;
+    setSuppLoading(true);
+    fetch(`/api/v1/papers/${paperId}/supplementary-file`, { headers: authHeaders() })
+      .then(r => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(blob => setSuppBlobUrl(URL.createObjectURL(blob)))
+      .catch(() => {})
+      .finally(() => setSuppLoading(false));
+  }, [(paper as any)?.has_supplementary, paperId, suppBlobUrl, suppLoading]);
+
+  // Cleanup blob URLs
+  useEffect(() => {
+    return () => {
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+      if (suppBlobUrl) URL.revokeObjectURL(suppBlobUrl);
+    };
+  }, [pdfBlobUrl, suppBlobUrl]);
 
   const uploadFile = async (file: File) => {
     const fd = new FormData();
@@ -64,6 +84,22 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
       a.download = `${(paper?.title || "manuscript").slice(0, 80)}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
+    }
+  };
+
+  const uploadSupplementary = async (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch(`/api/v1/papers/${paperId}/upload-supplementary`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    });
+    if (r.ok) {
+      if (suppBlobUrl) URL.revokeObjectURL(suppBlobUrl);
+      setSuppBlobUrl(null);
+      const { mutate } = await import("swr");
+      mutate(`/api/v1/papers/${paperId}`);
     }
   };
 
@@ -98,6 +134,9 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
               <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${getPaperTypeBadge(paper.paper_type).color}`}>
                 {getPaperTypeBadge(paper.paper_type).badge}
               </span>
+            )}
+            {(paper as any).has_supplementary && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold" title="Has supplementary file">S</span>
             )}
             {paper.journal && <span className="text-xs text-[var(--muted-foreground)] italic">{paper.journal}</span>}
             {(paper as any).conference_url && (
@@ -224,6 +263,15 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
               </div>
             )}
 
+            {/* Supplementary upload — admin only */}
+            {isAdmin && (
+              <label className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-600 text-white text-[10px] font-bold cursor-pointer hover:bg-red-500 transition-colors">
+                S ↑
+                <input type="file" accept=".pdf,.doc,.docx,.zip" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadSupplementary(f); e.target.value = ""; }} />
+              </label>
+            )}
+
             {/* Overleaf link */}
             {(paper as any).overleaf_url && (
               <a
@@ -240,41 +288,81 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
 
+          {/* Tab selector: Main / Supplementary */}
+          {(paper.has_pdf || (paper as any).has_supplementary) && (
+            <div className="flex border-b border-gray-300">
+              <button
+                onClick={() => setDocTab("main")}
+                className={`flex-1 text-[10px] font-bold py-1.5 text-center transition-colors ${
+                  docTab === "main" ? "bg-white text-gray-800 border-b-2 border-blue-600" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                Main Document
+              </button>
+              <button
+                onClick={() => setDocTab("supplementary")}
+                className={`flex-1 text-[10px] font-bold py-1.5 text-center transition-colors ${
+                  docTab === "supplementary" ? "bg-white text-gray-800 border-b-2 border-red-600" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                Supplementary {(paper as any).has_supplementary && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 ml-1" />}
+              </button>
+            </div>
+          )}
+
           {/* Document viewer */}
           <div data-tour="ms-pdf" className="flex-1 overflow-hidden">
-            {!paper.has_pdf ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
-                <p>No manuscript PDF uploaded yet.</p>
-                <p className="text-[10px] text-gray-400">Upload a PDF to preview it here, or use TEX/MD buttons to manage source files.</p>
-                {(paper as any).overleaf_url && (
-                  <a href={(paper as any).overleaf_url} target="_blank" rel="noopener noreferrer"
-                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 flex items-center gap-2">
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M22.39 10.97L13.13.55c-.2-.23-.5-.35-.8-.35h-.03c-.28.01-.55.13-.75.34L.42 12.6c-.42.44-.42 1.14 0 1.58l5.85 6.12c.2.21.48.33.77.33h.03c.28-.01.55-.14.74-.35l4.62-5.07c.12-.13.31-.14.44-.02l4.36 4.17c.2.2.48.3.76.3.29 0 .57-.11.78-.33l3.62-3.78c.42-.44.42-1.14 0-1.58z"/>
-                    </svg>
-                    Open in Overleaf
-                  </a>
-                )}
-              </div>
-            ) : pdfLoading || !pdfBlobUrl ? (
-              <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-                Loading manuscript PDF...
-              </div>
-            ) : (
-              <>
-                <iframe
-                  title="Manuscript PDF"
-                  src={`${pdfBlobUrl}#view=FitH`}
-                  className="w-full h-full border-0 hidden sm:block"
-                />
-                <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
-                  <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
-                  <a href={pdfBlobUrl} target="_blank" rel="noopener noreferrer"
-                    className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600">
-                    Open PDF
-                  </a>
+            {docTab === "main" ? (
+              /* Main document viewer */
+              !paper.has_pdf ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
+                  <p>No manuscript PDF uploaded yet.</p>
+                  <p className="text-[10px] text-gray-400">Upload a PDF to preview it here, or use TEX/MD buttons to manage source files.</p>
+                  {(paper as any).overleaf_url && (
+                    <a href={(paper as any).overleaf_url} target="_blank" rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 flex items-center gap-2">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.39 10.97L13.13.55c-.2-.23-.5-.35-.8-.35h-.03c-.28.01-.55.13-.75.34L.42 12.6c-.42.44-.42 1.14 0 1.58l5.85 6.12c.2.21.48.33.77.33h.03c.28-.01.55-.14.74-.35l4.62-5.07c.12-.13.31-.14.44-.02l4.36 4.17c.2.2.48.3.76.3.29 0 .57-.11.78-.33l3.62-3.78c.42-.44.42-1.14 0-1.58z"/>
+                      </svg>
+                      Open in Overleaf
+                    </a>
+                  )}
                 </div>
-              </>
+              ) : pdfLoading || !pdfBlobUrl ? (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Loading manuscript PDF...</div>
+              ) : (
+                <>
+                  <iframe title="Manuscript PDF" src={`${pdfBlobUrl}#view=FitH`} className="w-full h-full border-0 hidden sm:block" />
+                  <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                    <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
+                    <a href={pdfBlobUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600">Open PDF</a>
+                  </div>
+                </>
+              )
+            ) : (
+              /* Supplementary viewer */
+              !(paper as any).has_supplementary ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm p-4 text-center gap-3">
+                  <p>No supplementary file uploaded yet.</p>
+                  {isAdmin && (
+                    <label className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500 cursor-pointer">
+                      Upload Supplementary
+                      <input type="file" accept=".pdf,.doc,.docx,.zip" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadSupplementary(f); e.target.value = ""; }} />
+                    </label>
+                  )}
+                </div>
+              ) : suppLoading || !suppBlobUrl ? (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">Loading supplementary file...</div>
+              ) : (
+                <>
+                  <iframe title="Supplementary" src={`${suppBlobUrl}#view=FitH`} className="w-full h-full border-0 hidden sm:block" />
+                  <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                    <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
+                    <a href={suppBlobUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-500">Open Supplementary</a>
+                  </div>
+                </>
+              )
             )}
           </div>
         </div>

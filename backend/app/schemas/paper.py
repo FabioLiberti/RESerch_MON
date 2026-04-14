@@ -53,6 +53,7 @@ class PaperSummary(BaseModel):
     tutor_check: str | None = None
     quality_grade: str | None = None
     paper_role: str = "bibliography"
+    has_supplementary: bool = False
     created_via: str | None = None
     created_at: datetime
 
@@ -89,6 +90,7 @@ class PaperDetail(BaseModel):
     overleaf_url: str | None = None
     has_tex: bool = False
     has_md: bool = False
+    has_supplementary: bool = False
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]

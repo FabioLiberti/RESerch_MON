@@ -257,6 +257,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               {getPaperTypeBadge(paper.paper_type).badge}
             </span>
           )}
+          {paper.has_supplementary && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-bold" title="Has supplementary file">S</span>
+          )}
           {isAdmin && (paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && !paper.doi && (
             <button
               onClick={() => {

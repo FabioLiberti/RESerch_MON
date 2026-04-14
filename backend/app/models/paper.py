@@ -55,6 +55,7 @@ class Paper(Base):
     overleaf_url = Column(Text, nullable=True)      # Link to the Overleaf project
     tex_local_path = Column(Text, nullable=True)    # Local path to .tex source file
     md_local_path = Column(Text, nullable=True)     # Local path to .md source file
+    supplementary_path = Column(Text, nullable=True) # Local path to supplementary file (PDF)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

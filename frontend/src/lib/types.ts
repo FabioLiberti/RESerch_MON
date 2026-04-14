@@ -21,6 +21,7 @@ export interface Paper {
   tutor_check: string | null;
   quality_grade: string | null;
   paper_role: string;  // 'bibliography' | 'reviewing' | 'my_manuscript'
+  has_supplementary: boolean;
   created_via: string | null;
   created_at: string;
 }

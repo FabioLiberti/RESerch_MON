@@ -205,6 +205,9 @@ export default function MyManuscriptsPage() {
                         {getPaperTypeBadge(paper.paper_type).badge}
                       </span>
                     )}
+                    {(paper as any).has_supplementary && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold" title="Has supplementary file">S</span>
+                    )}
                     {paper.journal && (
                       <span className="text-xs text-[var(--muted-foreground)]">{paper.journal}</span>
                     )}
