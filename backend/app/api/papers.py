@@ -1258,6 +1258,7 @@ async def upload_supplementary(
 ):
     """Upload a supplementary file for a paper."""
     import re as re_mod
+    from app.config import settings
 
     paper = await db.get(Paper, paper_id)
     if not paper:
