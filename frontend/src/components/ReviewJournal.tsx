@@ -89,6 +89,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   editorial_letter: "Editorial Letter",
   scholarone: "ScholarOne",
   verbal: "Verbal / Meeting",
+  tutor_feedback: "Tutor Feedback",
   other: "Other",
 };
 
@@ -213,12 +214,19 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             </span>
           )}
         </h3>
-        {isAdmin && (
+        {isAdmin ? (
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600 transition-colors"
           >
             + Add Reviewer
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-600 transition-colors"
+          >
+            + Add Tutor Note
           </button>
         )}
       </div>
@@ -233,7 +241,62 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
         </div>
       )}
 
-      {/* Add Reviewer Form */}
+      {/* Add Tutor Note Form (viewer) */}
+      {!isAdmin && showAddForm && (
+        <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/20 space-y-3">
+          <input
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            placeholder="Your name or label (e.g. Prof. Rossi)"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none"
+          />
+          <textarea
+            value={newRawText}
+            onChange={e => setNewRawText(e.target.value)}
+            placeholder="Write your feedback, notes, or suggestions here..."
+            rows={4}
+            className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none resize-y"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                if (!newLabel.trim()) return;
+                setCreating(true);
+                try {
+                  await fetch(`/api/v1/review-journal/${paperId}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...authHeaders() },
+                    body: JSON.stringify({
+                      reviewer_label: newLabel.trim(),
+                      source_type: "tutor_feedback",
+                      received_at: null,
+                      raw_text: newRawText || null,
+                      items: [],
+                    }),
+                  });
+                  setNewLabel(""); setNewRawText("");
+                  setShowAddForm(false);
+                  mutate(`/api/v1/review-journal/${paperId}`);
+                } finally {
+                  setCreating(false);
+                }
+              }}
+              disabled={!newLabel.trim() || creating}
+              className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600 disabled:opacity-50 transition-colors"
+            >
+              {creating ? "..." : "Add Note"}
+            </button>
+            <button
+              onClick={() => setShowAddForm(false)}
+              className="px-4 py-2 rounded-lg bg-[var(--card)] text-sm hover:bg-[var(--muted)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Reviewer Form (admin) */}
       {isAdmin && showAddForm && (
         <div className="p-4 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -289,14 +352,16 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
         <p className="text-sm text-[var(--muted-foreground)] text-center py-6">
           {isAdmin
             ? 'No reviewer feedback recorded yet. Click "+ Add Reviewer" to start tracking observations.'
-            : "No reviewer feedback recorded yet."}
+            : 'No reviewer feedback recorded yet. Click "+ Add Tutor Note" to leave feedback.'}
         </p>
       )}
 
       {/* Reviewer Entries */}
       {entries.map(entry => {
         const isExpanded = expandedEntries.has(entry.id);
-        const isEditing = isAdmin && editingEntryId === entry.id;
+        const isTutorEntry = entry.source_type === "tutor_feedback";
+        const canEditEntry = isAdmin || isTutorEntry;
+        const isEditing = canEditEntry && editingEntryId === entry.id;
         const entryAddressed = entry.items.filter(i => ["addressed", "rejected_justified", "not_applicable"].includes(i.status)).length;
         const entryTotal = entry.items.length;
 
@@ -313,6 +378,9 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 </svg>
                 <div className="min-w-0">
                   <span className="text-sm font-bold">{entry.reviewer_label}</span>
+                  {isTutorEntry && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold ml-2">TUTOR</span>
+                  )}
                   <span className="text-[10px] text-[var(--muted-foreground)] ml-2">
                     {SOURCE_TYPE_LABELS[entry.source_type] || entry.source_type}
                     {entry.received_at && ` · ${entry.received_at}`}
@@ -343,8 +411,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             {/* Expanded content */}
             {isExpanded && (
               <div className="border-t border-[var(--border)] px-4 py-3 space-y-3">
-                {/* Edit lock toggle (admin only) */}
-                {isAdmin && (
+                {/* Edit lock toggle */}
+                {canEditEntry && (
                   <div className="flex justify-end">
                     <button
                       onClick={() => setEditingEntryId(editingEntryId === entry.id ? null : entry.id)}
@@ -371,7 +439,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 )}
 
                 {/* Raw text */}
-                {isAdmin && editingRawText === entry.id ? (
+                {canEditEntry && editingRawText === entry.id ? (
                   <div className="space-y-2">
                     <textarea
                       value={editRawTextValue}
@@ -402,12 +470,12 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                       <div className="text-xs text-[var(--foreground)] bg-[var(--secondary)] rounded-lg p-3 max-h-40 overflow-y-auto whitespace-pre-wrap">
                         {entry.raw_text}
                       </div>
-                    ) : isAdmin ? (
+                    ) : canEditEntry ? (
                       <div className="text-xs text-[var(--muted-foreground)] italic bg-[var(--secondary)] rounded-lg p-3">
-                        No notes yet — click Edit to add reviewer feedback text.
+                        No notes yet — click Edit to add feedback text.
                       </div>
                     ) : null}
-                    {isAdmin && (
+                    {canEditEntry && (
                       <button
                         onClick={() => { setEditingRawText(entry.id); setEditRawTextValue(entry.raw_text || ""); }}
                         className="text-[10px] text-[var(--primary)] hover:underline mt-1"
@@ -705,8 +773,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   </div>
                 )}
 
-                {/* Add observation form (admin only) */}
-                {isAdmin && addingObsTo === entry.id ? (
+                {/* Add observation form */}
+                {canEditEntry && addingObsTo === entry.id ? (
                   <div className="p-3 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-2">
                     <textarea
                       value={newObsText}
@@ -749,7 +817,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
-                    {isAdmin && (
+                    {canEditEntry && (
                       <button
                         onClick={() => setAddingObsTo(entry.id)}
                         className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
@@ -757,7 +825,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                         + Add Observation
                       </button>
                     )}
-                    {isAdmin && (
+                    {canEditEntry && (
                       <label className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white hover:bg-amber-600 cursor-pointer transition-colors">
                         {entry.has_attachment ? "Replace attachment" : "Attach file"}
                         <input
@@ -797,12 +865,12 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                         📎 {entry.attachment_path.split("/").pop()}
                       </button>
                     )}
-                    {isAdmin && (
+                    {canEditEntry && (
                       <button
                         onClick={() => deleteEntry(entry.id)}
                         className="text-xs px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
                       >
-                        Delete Reviewer
+                        {isTutorEntry ? "Delete Note" : "Delete Reviewer"}
                       </button>
                     )}
                   </div>

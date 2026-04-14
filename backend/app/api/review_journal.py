@@ -138,6 +138,10 @@ async def create_entry(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new reviewer entry for a paper."""
+    # Viewer can only create tutor_feedback entries
+    if user.role != "admin" and body.source_type != "tutor_feedback":
+        raise HTTPException(status_code=403, detail="Viewers can only add tutor feedback notes")
+
     entry = ReviewerEntry(
         paper_id=paper_id,
         reviewer_label=body.reviewer_label,
@@ -171,6 +175,10 @@ async def update_entry(
     entry = await db.get(ReviewerEntry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
+
+    # Viewer can only edit their own tutor_feedback entries
+    if user.role != "admin" and entry.source_type != "tutor_feedback":
+        raise HTTPException(status_code=403, detail="Viewers can only edit tutor feedback notes")
 
     if body.reviewer_label is not None:
         entry.reviewer_label = body.reviewer_label
@@ -208,6 +216,10 @@ async def delete_entry(
     entry = await db.get(ReviewerEntry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
+
+    # Viewer can only delete their own tutor_feedback entries
+    if user.role != "admin" and entry.source_type != "tutor_feedback":
+        raise HTTPException(status_code=403, detail="Viewers can only delete tutor feedback notes")
 
     await db.delete(entry)
     await db.commit()
