@@ -192,9 +192,9 @@ export default function MyManuscriptsPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <Link href={`/papers/${paper.id}`} className="text-sm font-bold line-clamp-2 hover:text-[var(--primary)]">
-                    {paper.title}
-                  </Link>
+                  <a href={`/papers/${paper.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-bold line-clamp-2 hover:text-[var(--primary)]">
+                    {paper.title} ↗
+                  </a>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold">
                       MY MANUSCRIPT
