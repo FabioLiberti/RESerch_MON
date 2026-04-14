@@ -244,8 +244,17 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
           Bibliography
           {refs.length > 0 && (
             <span className="text-xs font-normal text-[var(--muted-foreground)]">
-              {filterKeywords.size > 0
-                ? `${refs.filter(r => r.keywords.some(k => filterKeywords.has(k))).length}/${refs.length} papers matching ${filterKeywords.size} keyword${filterKeywords.size > 1 ? "s" : ""}`
+              {(filterKeywords.size > 0 || filterLabels.size > 0)
+                ? (() => {
+                    const matched = refs.filter(r =>
+                      (filterKeywords.size === 0 || r.keywords.some(k => filterKeywords.has(k))) &&
+                      (filterLabels.size === 0 || r.labels.some(l => filterLabels.has(l.name)))
+                    ).length;
+                    const parts: string[] = [];
+                    if (filterKeywords.size > 0) parts.push(`${filterKeywords.size} keyword${filterKeywords.size > 1 ? "s" : ""}`);
+                    if (filterLabels.size > 0) parts.push(`${filterLabels.size} label${filterLabels.size > 1 ? "s" : ""}`);
+                    return `${matched}/${refs.length} papers matching ${parts.join(" + ")}`;
+                  })()
                 : `${refs.length} paper${refs.length !== 1 ? "s" : ""} cited`
               }
             </span>
@@ -531,10 +540,11 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
       {refs.length > 0 && (
         <div className="space-y-2">
           {refs.map(ref => (
-            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k)) ? "opacity-20" : ""} ${filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name)) ? "opacity-20" : ""}`}>
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${(filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k))) || (filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name))) ? "opacity-20" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}
+                  target="_blank"
                   className="text-sm font-medium hover:text-[var(--primary)] line-clamp-2"
                 >
                   {ref.title}
