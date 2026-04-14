@@ -219,9 +219,9 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     downloadFile([header, ...rows].join("\n"), `bibliography_${paperId}.csv`, "text/csv");
   };
 
-  // Keywords aggregation
+  // Keywords aggregation — use data?.references directly (refs not yet defined here)
   const { data: kwData } = useSWR<{ total_papers: number; keywords: { keyword: string; count: number }[] }>(
-    refs.length > 0 ? `/api/v1/paper-references/${paperId}/keywords` : null,
+    (data?.references?.length ?? 0) > 0 ? `/api/v1/paper-references/${paperId}/keywords` : null,
     authFetcher
   );
   const [showKeywords, setShowKeywords] = useState(false);
