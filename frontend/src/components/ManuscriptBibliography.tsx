@@ -15,6 +15,7 @@ interface Reference {
   publication_date: string | null;
   disabled: boolean;
   rating: number | null;
+  keywords: string[];
   context: string | null;
   context_label: string | null;
   note: string | null;
@@ -225,6 +226,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     authFetcher
   );
   const [showKeywords, setShowKeywords] = useState(false);
+  const [filterKeyword, setFilterKeyword] = useState<string | null>(null);
 
   if (isLoading) return <div className="h-16 bg-[var(--muted)] rounded-xl animate-pulse" />;
 
@@ -238,7 +240,10 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
           Bibliography
           {refs.length > 0 && (
             <span className="text-xs font-normal text-[var(--muted-foreground)]">
-              {refs.length} paper{refs.length !== 1 ? "s" : ""} cited
+              {filterKeyword
+                ? `${refs.filter(r => r.keywords.includes(filterKeyword)).length}/${refs.length} papers with "${filterKeyword}"`
+                : `${refs.length} paper${refs.length !== 1 ? "s" : ""} cited`
+              }
             </span>
           )}
         </h3>
@@ -281,14 +286,27 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
           </button>
           {showKeywords && (
             <div className="p-3 flex flex-wrap gap-1.5">
-              {kwData.keywords.map(({ keyword, count }) => (
-                <span
-                  key={keyword}
-                  className="text-[10px] px-2 py-1 rounded-full bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]"
-                  title={`${count} paper${count > 1 ? "s" : ""}`}
+              {filterKeyword && (
+                <button
+                  onClick={() => setFilterKeyword(null)}
+                  className="text-[10px] px-2 py-1 rounded-full bg-red-700 text-white font-bold hover:bg-red-600"
                 >
-                  {keyword} <span className="text-[var(--muted-foreground)] font-bold">({count})</span>
-                </span>
+                  Clear filter &times;
+                </button>
+              )}
+              {kwData.keywords.map(({ keyword, count }) => (
+                <button
+                  key={keyword}
+                  onClick={() => setFilterKeyword(filterKeyword === keyword ? null : keyword)}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors cursor-pointer ${
+                    filterKeyword === keyword
+                      ? "bg-indigo-600 text-white border-indigo-500"
+                      : "bg-[var(--secondary)] border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--muted)]"
+                  }`}
+                  title={`${count} paper${count > 1 ? "s" : ""} — click to filter`}
+                >
+                  {keyword} <span className={filterKeyword === keyword ? "text-indigo-200" : "text-[var(--muted-foreground)]"}>({count})</span>
+                </button>
               ))}
             </div>
           )}
@@ -457,7 +475,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
       {refs.length > 0 && (
         <div className="space-y-2">
           {refs.map(ref => (
-            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] ${ref.disabled ? "opacity-40" : ""}`}>
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${filterKeyword && !ref.keywords.includes(filterKeyword) ? "opacity-20" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}

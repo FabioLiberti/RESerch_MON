@@ -48,13 +48,14 @@ async def list_references(
 ):
     """List all papers cited by a manuscript, with their metadata."""
     result = await db.execute(
-        select(PaperReference, Paper.title, Paper.doi, Paper.journal, Paper.publication_date, Paper.disabled, Paper.rating)
+        select(PaperReference, Paper.title, Paper.doi, Paper.journal, Paper.publication_date, Paper.disabled, Paper.rating, Paper.keywords_json)
         .join(Paper, PaperReference.cited_paper_id == Paper.id)
         .where(PaperReference.manuscript_id == manuscript_id)
         .order_by(PaperReference.created_at.asc())
     )
     refs = result.all()
 
+    import json as _json
     return {
         "manuscript_id": manuscript_id,
         "references": [
@@ -67,6 +68,7 @@ async def list_references(
                 "publication_date": ref.publication_date,
                 "disabled": bool(ref.disabled),
                 "rating": ref.rating,
+                "keywords": [k.lower() for k in _json.loads(ref.keywords_json)] if ref.keywords_json else [],
                 "context": ref.PaperReference.context,
                 "context_label": CONTEXT_LABELS.get(ref.PaperReference.context, ref.PaperReference.context),
                 "note": ref.PaperReference.note,
@@ -131,8 +133,8 @@ async def bibliography_keywords(
             if kw_clean:
                 counts[kw_clean.lower()] = counts.get(kw_clean.lower(), 0) + 1
 
-    # Sort by count descending, then alphabetically
-    sorted_kws = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+    # Sort alphabetically
+    sorted_kws = sorted(counts.items(), key=lambda x: x[0])
 
     return {
         "manuscript_id": manuscript_id,
