@@ -162,6 +162,63 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     mutate(apiUrl);
   };
 
+  // --- Export functions ---
+  const downloadFile = (content: string, filename: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportTxt = () => {
+    const lines = (data?.references || []).map((ref, i) => {
+      let line = `[${i + 1}] ${ref.title}`;
+      if (ref.journal) line += `. ${ref.journal}`;
+      if (ref.publication_date) line += ` (${ref.publication_date.slice(0, 4)})`;
+      if (ref.doi) line += `. DOI: ${ref.doi}`;
+      if (ref.context_label) line += `\n    Context: ${ref.context_label}`;
+      if (ref.note) line += `\n    Note: ${ref.note}`;
+      if (ref.disabled) line += `\n    [DISABLED]`;
+      return line;
+    });
+    downloadFile(lines.join("\n\n"), `bibliography_${paperId}.txt`, "text/plain");
+  };
+
+  const exportBibtex = () => {
+    const entries = (data?.references || []).map((ref, i) => {
+      const key = `ref${paperId}_${i + 1}`;
+      const fields: string[] = [];
+      fields.push(`  title = {${ref.title}}`);
+      if (ref.journal) fields.push(`  journal = {${ref.journal}}`);
+      if (ref.publication_date) fields.push(`  year = {${ref.publication_date.slice(0, 4)}}`);
+      if (ref.doi) fields.push(`  doi = {${ref.doi}}`);
+      if (ref.note) fields.push(`  note = {${ref.note}}`);
+      return `@article{${key},\n${fields.join(",\n")}\n}`;
+    });
+    downloadFile(entries.join("\n\n"), `bibliography_${paperId}.bib`, "text/plain");
+  };
+
+  const exportCsv = () => {
+    const header = "No,Title,Journal,Year,DOI,Context,Note,Disabled,Rating";
+    const rows = (data?.references || []).map((ref, i) =>
+      [
+        i + 1,
+        `"${(ref.title || "").replace(/"/g, '""')}"`,
+        `"${(ref.journal || "").replace(/"/g, '""')}"`,
+        ref.publication_date ? ref.publication_date.slice(0, 4) : "",
+        ref.doi || "",
+        ref.context_label || "",
+        `"${(ref.note || "").replace(/"/g, '""')}"`,
+        ref.disabled ? "YES" : "",
+        ref.rating || "",
+      ].join(",")
+    );
+    downloadFile([header, ...rows].join("\n"), `bibliography_${paperId}.csv`, "text/csv");
+  };
+
   if (isLoading) return <div className="h-16 bg-[var(--muted)] rounded-xl animate-pulse" />;
 
   const refs = data?.references || [];
@@ -178,7 +235,14 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
             </span>
           )}
         </h3>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {refs.length > 0 && (
+            <>
+              <button onClick={exportTxt} className="text-[10px] px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600" title="Export as numbered text list">TXT</button>
+              <button onClick={exportBibtex} className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600" title="Export as BibTeX">BIB</button>
+              <button onClick={exportCsv} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-white hover:bg-emerald-700" title="Export as CSV">CSV</button>
+            </>
+          )}
           <button
             onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
             className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
