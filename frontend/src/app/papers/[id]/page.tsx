@@ -1041,8 +1041,8 @@ function AnalysisButton({ paperId }: { paperId: number }) {
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          Upload PDF
-          <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUpload} className="hidden" />
+          Upload Document
+          <input ref={fileInputRef} type="file" accept=".pdf,.md,.tex,.txt" onChange={handleUpload} className="hidden" />
         </label>
         {uploadMsg && (
           <span className={`text-xs ${uploadMsg.includes("failed") || uploadMsg.includes("ERROR") || uploadMsg.includes("No PDF") ? "text-red-400" : "text-emerald-400"}`}>{uploadMsg}</span>
@@ -1111,11 +1111,11 @@ function AnalysisButton({ paperId }: { paperId: number }) {
       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
       </svg>
-      Upload PDF
+      Upload Document
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,.md,.tex,.txt"
         onChange={handleUpload}
         className="hidden"
       />

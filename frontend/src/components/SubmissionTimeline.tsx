@@ -5,6 +5,7 @@ import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 interface Round {
   id: number;
@@ -62,6 +63,7 @@ const ROUND_LABEL_PRESETS = [
 ];
 
 export default function SubmissionTimeline({ paperId }: { paperId: number }) {
+  const { isAdmin } = useAuth();
   const apiUrl = `/api/v1/submission-rounds/${paperId}`;
   const { data, isLoading } = useSWR<TimelineResponse>(apiUrl, authFetcher);
 
@@ -161,16 +163,18 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold">Submission Timeline</h3>
-        <button
-          onClick={() => { setShowForm(!showForm); setLabel(`Round ${nextRoundNumber}`); }}
-          className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-600 transition-colors"
-        >
-          + Add Round
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => { setShowForm(!showForm); setLabel(`Round ${nextRoundNumber}`); }}
+            className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-600 transition-colors"
+          >
+            + Add Round
+          </button>
+        )}
       </div>
 
       {/* Add Round Form */}
-      {showForm && (
+      {isAdmin && showForm && (
         <div className="p-4 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -265,7 +269,9 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
       {/* Empty state */}
       {rounds.length === 0 && !showForm && (
         <p className="text-sm text-[var(--muted-foreground)] text-center py-6">
-          No submission rounds recorded. Click &quot;+ Add Round&quot; to track your submission history.
+          {isAdmin
+            ? 'No submission rounds recorded. Click "+ Add Round" to track your submission history.'
+            : "No submission rounds recorded yet."}
         </p>
       )}
 
@@ -322,25 +328,29 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
                           {round.document_path.split(".").pop()?.toUpperCase() || "DOC"}
                         </span>
                       )}
-                      <label className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)] cursor-pointer transition-colors">
-                        {round.has_document ? "Replace" : "Upload"}
-                        <input
-                          type="file"
-                          accept=".pdf,.md,.tex,.txt"
-                          className="hidden"
-                          onChange={e => {
-                            const f = e.target.files?.[0];
-                            if (f) uploadDoc(round.id, f);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                      <button
-                        onClick={() => deleteRound(round.id)}
-                        className="text-[10px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10"
-                      >
-                        Del
-                      </button>
+                      {isAdmin && (
+                        <label className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)] cursor-pointer transition-colors">
+                          {round.has_document ? "Replace" : "Upload"}
+                          <input
+                            type="file"
+                            accept=".pdf,.md,.tex,.txt"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadDoc(round.id, f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => deleteRound(round.id)}
+                          className="text-[10px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10"
+                        >
+                          Del
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -410,21 +420,23 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
                       ) : (
                         <span className="text-[10px] text-[var(--muted-foreground)]">No decision yet</span>
                       )}
-                      <button
-                        onClick={() => {
-                          setEditingId(round.id);
-                          setEditLabel(round.label);
-                          setEditDocType(round.document_type);
-                          setEditSubmittedAt(round.submitted_at || "");
-                          setEditDeadline(round.deadline || "");
-                          setEditDecision(round.decision || "");
-                          setEditDecisionAt(round.decision_at || "");
-                          setEditDecisionNotes(round.decision_notes || "");
-                        }}
-                        className="text-[10px] text-[var(--primary)] hover:underline ml-auto"
-                      >
-                        Edit
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            setEditingId(round.id);
+                            setEditLabel(round.label);
+                            setEditDocType(round.document_type);
+                            setEditSubmittedAt(round.submitted_at || "");
+                            setEditDeadline(round.deadline || "");
+                            setEditDecision(round.decision || "");
+                            setEditDecisionAt(round.decision_at || "");
+                            setEditDecisionNotes(round.decision_notes || "");
+                          }}
+                          className="text-[10px] text-[var(--primary)] hover:underline ml-auto"
+                        >
+                          Edit
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

@@ -444,22 +444,27 @@ async def upload_pdf(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a PDF file for a paper (for deep analysis when auto-download is not available)."""
+    """Upload a document file for a paper (PDF, .md, .tex, .txt)."""
     paper = await db.get(Paper, paper_id)
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
-    # Validate file
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="File must be a PDF")
+    # Validate file extension
+    from pathlib import PurePosixPath
+    fname = file.filename or "document.pdf"
+    ext = PurePosixPath(fname).suffix.lower()
+    allowed_ext = {".pdf", ".md", ".tex", ".txt"}
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=400, detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(allowed_ext))}")
 
     content = await file.read()
-    if len(content) < 1000:
-        raise HTTPException(status_code=400, detail="File too small, likely not a valid PDF")
 
-    # Check PDF magic bytes
-    if not content[:5].startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail="Invalid PDF file")
+    # PDF-specific validation
+    if ext == ".pdf":
+        if len(content) < 1000:
+            raise HTTPException(status_code=400, detail="File too small, likely not a valid PDF")
+        if not content[:5].startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="Invalid PDF file")
 
     # Save to data/pdfs/uploads/
     pdf_dir = Path(settings.pdf_storage_path) / "uploads"
@@ -468,7 +473,7 @@ async def upload_pdf(
     # Sanitize filename
     import re
     safe_title = re.sub(r'[^\w\s-]', '', paper.title[:80]).strip().replace(' ', '_')
-    pdf_path = pdf_dir / f"{safe_title}_{paper_id}.pdf"
+    pdf_path = pdf_dir / f"{safe_title}_{paper_id}{ext}"
 
     pdf_path.write_bytes(content)
     paper.pdf_local_path = str(pdf_path)

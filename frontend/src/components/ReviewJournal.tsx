@@ -366,11 +366,17 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
         const entryTotal = entry.items.length;
 
         return (
-          <div key={entry.id} className="rounded-lg border border-[var(--border)] overflow-hidden">
+          <div key={entry.id} className={cn(
+            "rounded-lg border overflow-hidden",
+            isTutorEntry ? "border-amber-500/50 bg-amber-500/5" : "border-[var(--border)]"
+          )}>
             {/* Entry header — click to expand/collapse */}
             <button
               onClick={() => toggleExpanded(entry.id)}
-              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--secondary)] transition-colors"
+              className={cn(
+                "w-full flex items-center justify-between px-4 py-3 text-left transition-colors",
+                isTutorEntry ? "hover:bg-amber-500/10" : "hover:bg-[var(--secondary)]"
+              )}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <svg className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform shrink-0", isExpanded && "rotate-90")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -379,12 +385,17 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 <div className="min-w-0">
                   <span className="text-sm font-bold">{entry.reviewer_label}</span>
                   {isTutorEntry && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold ml-2">TUTOR</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600 text-white font-bold ml-2">TUTOR</span>
                   )}
                   <span className="text-[10px] text-[var(--muted-foreground)] ml-2">
                     {SOURCE_TYPE_LABELS[entry.source_type] || entry.source_type}
                     {entry.received_at && ` · ${entry.received_at}`}
                   </span>
+                  {entry.created_at && (
+                    <span className="text-[9px] text-[var(--muted-foreground)] ml-2">
+                      {new Date(entry.created_at).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
