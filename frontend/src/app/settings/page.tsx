@@ -581,50 +581,87 @@ interface LoginLogEntry {
 }
 
 function LoginLogSection() {
-  const { data: logs } = useSWR<LoginLogEntry[]>("/api/v1/auth/login-log?limit=50", authFetcher);
+  const [limit, setLimit] = useState(50);
+  const { data: logs } = useSWR<LoginLogEntry[]>(`/api/v1/auth/login-log?limit=${limit}`, authFetcher);
 
-  const parseUA = (ua: string | null) => {
-    if (!ua) return "—";
-    if (ua.includes("Chrome")) return "Chrome";
-    if (ua.includes("Firefox")) return "Firefox";
-    if (ua.includes("Safari")) return "Safari";
-    if (ua.includes("Edge")) return "Edge";
-    return ua.slice(0, 40);
+  const fmtDate = (ts: string | null) =>
+    ts ? new Date(ts).toLocaleString("it-IT", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    }) : "—";
+
+  const fmtDateUTC = (ts: string | null) =>
+    ts ? new Date(ts).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "—";
+
+  const exportTxt = () => {
+    if (!logs || logs.length === 0) return;
+    const lines = logs.map(l =>
+      `User: ${l.username}\nTime: ${fmtDateUTC(l.timestamp)}\nIP: ${l.ip || "—"}\nUser-Agent: ${l.user_agent || "—"}\nServer: production\n`
+    );
+    const blob = new Blob([lines.join("\n---\n\n")], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `login_log_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const exportCsv = () => {
+    if (!logs || logs.length === 0) return;
+    const header = "User,Time (UTC),IP,User-Agent,Server\n";
+    const rows = logs.map(l =>
+      `"${l.username}","${fmtDateUTC(l.timestamp)}","${l.ip || ""}","${(l.user_agent || "").replace(/"/g, '""')}","production"`
+    );
+    const blob = new Blob([header + rows.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `login_log_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h3 className="font-medium">Login Log</h3>
-          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">Last 50 logins</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{logs?.length || 0} entries shown</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={limit}
+            onChange={e => setLimit(Number(e.target.value))}
+            className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] border border-[var(--border)]"
+          >
+            <option value={50}>Last 50</option>
+            <option value={100}>Last 100</option>
+            <option value={500}>Last 500</option>
+            <option value={9999}>All</option>
+          </select>
+          <button onClick={exportTxt} className="text-[10px] px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600" title="Export as TXT">TXT</button>
+          <button onClick={exportCsv} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-white hover:bg-emerald-700" title="Export as CSV">CSV</button>
         </div>
       </div>
       {!logs || logs.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)] text-center py-4">No login records yet.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs table-fixed">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
-                <th className="text-left py-2 pr-4">User</th>
-                <th className="text-left py-2 pr-4">Date/Time</th>
-                <th className="text-left py-2 pr-4">IP</th>
-                <th className="text-left py-2">Browser</th>
+                <th className="text-left py-2 pr-2 w-24">User</th>
+                <th className="text-left py-2 pr-2 w-44">Date/Time (UTC)</th>
+                <th className="text-left py-2 pr-2 w-32">IP</th>
+                <th className="text-left py-2">User-Agent</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
               {logs.map(log => (
                 <tr key={log.id} className="hover:bg-[var(--secondary)] transition-colors">
-                  <td className="py-2 pr-4 font-medium">{log.username}</td>
-                  <td className="py-2 pr-4 text-[var(--muted-foreground)]">
-                    {log.timestamp ? new Date(log.timestamp).toLocaleString("it-IT", {
-                      day: "2-digit", month: "2-digit", year: "numeric",
-                      hour: "2-digit", minute: "2-digit", second: "2-digit",
-                    }) : "—"}
-                  </td>
-                  <td className="py-2 pr-4 font-mono text-[10px]">{log.ip || "—"}</td>
-                  <td className="py-2 text-[var(--muted-foreground)]">{parseUA(log.user_agent)}</td>
+                  <td className="py-2 pr-2 font-medium">{log.username}</td>
+                  <td className="py-2 pr-2 text-[var(--muted-foreground)] font-mono text-[10px]">{fmtDateUTC(log.timestamp)}</td>
+                  <td className="py-2 pr-2 font-mono text-[10px]">{log.ip || "—"}</td>
+                  <td className="py-2 text-[10px] text-[var(--muted-foreground)] truncate" title={log.user_agent || ""}>{log.user_agent || "—"}</td>
                 </tr>
               ))}
             </tbody>
