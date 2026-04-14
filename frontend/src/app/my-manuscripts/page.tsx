@@ -20,8 +20,8 @@ interface PaperListResponse {
 
 const DECISION_BADGE: Record<string, { bg: string; label: string }> = {
   pending: { bg: "bg-gray-600 text-white", label: "Pending" },
-  accepted: { bg: "bg-emerald-700 text-white", label: "Accepted" },
-  accepted_with_revisions: { bg: "bg-amber-600 text-white", label: "Accepted w/ revisions" },
+  accepted: { bg: "bg-emerald-700 text-white", label: "✓ Accepted" },
+  accepted_with_revisions: { bg: "bg-amber-600 text-white", label: "✓ Accepted w/ revisions" },
   minor_revisions: { bg: "bg-amber-700 text-white", label: "Minor revisions" },
   major_revisions: { bg: "bg-orange-700 text-white", label: "Major revisions" },
   rejected: { bg: "bg-red-700 text-white", label: "Rejected" },
