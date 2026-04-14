@@ -107,6 +107,40 @@ async def list_cited_by(
     }
 
 
+@router.get("/{manuscript_id}/keywords")
+async def bibliography_keywords(
+    manuscript_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate keywords from all papers cited by this manuscript, with counts."""
+    result = await db.execute(
+        select(Paper.keywords_json)
+        .join(PaperReference, PaperReference.cited_paper_id == Paper.id)
+        .where(PaperReference.manuscript_id == manuscript_id)
+    )
+    rows = result.all()
+
+    import json as _json
+    counts: dict[str, int] = {}
+    for (kw_json,) in rows:
+        if not kw_json:
+            continue
+        for kw in _json.loads(kw_json):
+            kw_clean = kw.strip()
+            if kw_clean:
+                counts[kw_clean.lower()] = counts.get(kw_clean.lower(), 0) + 1
+
+    # Sort by count descending, then alphabetically
+    sorted_kws = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+
+    return {
+        "manuscript_id": manuscript_id,
+        "total_papers": len(rows),
+        "keywords": [{"keyword": kw, "count": c} for kw, c in sorted_kws],
+    }
+
+
 @router.post("/{manuscript_id}")
 async def add_reference(
     manuscript_id: int,
