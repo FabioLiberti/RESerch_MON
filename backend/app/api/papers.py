@@ -576,6 +576,37 @@ async def get_categorized_keywords(db: AsyncSession = Depends(get_db)):
     return result
 
 
+@router.get("/manuscript-status")
+async def get_manuscript_status(db: AsyncSession = Depends(get_db)):
+    """Return the latest submission round decision for each my_manuscript paper."""
+    from app.models.submission_round import SubmissionRound
+
+    # Get all my_manuscript paper IDs
+    ms_result = await db.execute(select(Paper.id).where(Paper.paper_role == "my_manuscript"))
+    paper_ids = [r[0] for r in ms_result.all()]
+    if not paper_ids:
+        return {}
+
+    # For each, get the latest round (highest round_number)
+    status: dict[int, dict] = {}
+    for pid in paper_ids:
+        r = await db.execute(
+            select(SubmissionRound)
+            .where(SubmissionRound.paper_id == pid)
+            .order_by(SubmissionRound.round_number.desc())
+            .limit(1)
+        )
+        latest = r.scalar_one_or_none()
+        if latest:
+            status[pid] = {
+                "round_label": latest.label,
+                "decision": latest.decision,
+                "decision_at": latest.decision_at,
+                "deadline": latest.deadline,
+            }
+    return status
+
+
 @router.get("/section-latest")
 async def get_section_latest(db: AsyncSession = Depends(get_db)):
     """Return the latest updated_at per section for badge system."""

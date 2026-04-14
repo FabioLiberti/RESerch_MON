@@ -18,11 +18,25 @@ interface PaperListResponse {
   pages: number;
 }
 
+const DECISION_BADGE: Record<string, { bg: string; label: string }> = {
+  pending: { bg: "bg-gray-600 text-white", label: "Pending" },
+  accepted: { bg: "bg-emerald-700 text-white", label: "Accepted" },
+  accepted_with_revisions: { bg: "bg-amber-600 text-white", label: "Accepted w/ revisions" },
+  minor_revisions: { bg: "bg-amber-700 text-white", label: "Minor revisions" },
+  major_revisions: { bg: "bg-orange-700 text-white", label: "Major revisions" },
+  rejected: { bg: "bg-red-700 text-white", label: "Rejected" },
+};
+
 export default function MyManuscriptsPage() {
   const { isAdmin } = useAuth();
   const { data, isLoading } = useSWR<PaperListResponse>(
     "/api/v1/papers?paper_role=my_manuscript&per_page=50&sort_by=created_at&sort_order=desc",
     authFetcher
+  );
+
+  // Fetch latest submission status per manuscript
+  const { data: statusMap } = useSWR<Record<string, { round_label: string; decision: string | null; decision_at: string | null; deadline: string | null }>>(
+    "/api/v1/papers/manuscript-status", authFetcher
   );
 
   const [showForm, setShowForm] = useState(false);
@@ -208,6 +222,23 @@ export default function MyManuscriptsPage() {
                     {(paper as any).has_supplementary && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold" title="Has supplementary file">S</span>
                     )}
+                    {(() => {
+                      const st = statusMap?.[String(paper.id)];
+                      if (!st) return null;
+                      const dec = st.decision ? DECISION_BADGE[st.decision] : null;
+                      return (
+                        <>
+                          {dec && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${dec.bg}`}>
+                              {dec.label}
+                            </span>
+                          )}
+                          <span className="text-[9px] text-[var(--muted-foreground)] italic">
+                            {st.round_label}
+                          </span>
+                        </>
+                      );
+                    })()}
                     {paper.journal && (
                       <span className="text-xs text-[var(--muted-foreground)]">{paper.journal}</span>
                     )}
