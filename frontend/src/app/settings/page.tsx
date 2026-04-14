@@ -244,13 +244,16 @@ export default function SettingsPage() {
         </div>
       </div>}
 
+      {/* Login Log — admin only */}
+      {isAdmin && <LoginLogSection />}
+
       {/* System Info */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
         <h3 className="font-medium mb-4">System</h3>
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between">
             <dt className="text-[var(--muted-foreground)]">Version</dt>
-            <dd>0.2.0</dd>
+            <dd>2.26</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-[var(--muted-foreground)]">Sources</dt>
@@ -561,6 +564,73 @@ function UserManagement() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+
+// --- Login Log ---
+
+interface LoginLogEntry {
+  id: number;
+  user_id: number;
+  username: string;
+  ip: string | null;
+  user_agent: string | null;
+  timestamp: string | null;
+}
+
+function LoginLogSection() {
+  const { data: logs } = useSWR<LoginLogEntry[]>("/api/v1/auth/login-log?limit=50", authFetcher);
+
+  const parseUA = (ua: string | null) => {
+    if (!ua) return "—";
+    if (ua.includes("Chrome")) return "Chrome";
+    if (ua.includes("Firefox")) return "Firefox";
+    if (ua.includes("Safari")) return "Safari";
+    if (ua.includes("Edge")) return "Edge";
+    return ua.slice(0, 40);
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-medium">Login Log</h3>
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">Last 50 logins</p>
+        </div>
+      </div>
+      {!logs || logs.length === 0 ? (
+        <p className="text-sm text-[var(--muted-foreground)] text-center py-4">No login records yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <th className="text-left py-2 pr-4">User</th>
+                <th className="text-left py-2 pr-4">Date/Time</th>
+                <th className="text-left py-2 pr-4">IP</th>
+                <th className="text-left py-2">Browser</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {logs.map(log => (
+                <tr key={log.id} className="hover:bg-[var(--secondary)] transition-colors">
+                  <td className="py-2 pr-4 font-medium">{log.username}</td>
+                  <td className="py-2 pr-4 text-[var(--muted-foreground)]">
+                    {log.timestamp ? new Date(log.timestamp).toLocaleString("it-IT", {
+                      day: "2-digit", month: "2-digit", year: "numeric",
+                      hour: "2-digit", minute: "2-digit", second: "2-digit",
+                    }) : "—"}
+                  </td>
+                  <td className="py-2 pr-4 font-mono text-[10px]">{log.ip || "—"}</td>
+                  <td className="py-2 text-[var(--muted-foreground)]">{parseUA(log.user_agent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

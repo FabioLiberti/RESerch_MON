@@ -146,16 +146,22 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
             detail="Invalid username or password",
         )
 
-    # Log access + email notification (non-blocking)
+    # Log access to DB + email notification (non-blocking)
     ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
     ua = request.headers.get("user-agent", "")
     logger.info(f"Login OK: {user.username} from {ip}")
+    try:
+        from app.models.user import LoginLog
+        db.add(LoginLog(user_id=user.id, username=user.username, ip=ip, user_agent=ua))
+        await db.flush()
+    except Exception:
+        pass
     try:
         from app.services.email_notify import send_login_notification
         import threading
         threading.Thread(target=send_login_notification, args=(user.username, ip, ua), daemon=True).start()
     except Exception:
-        pass  # Never block login for email failures
+        pass
 
     return TokenResponse(
         access_token=create_access_token(user.id, user.username, user.role),
@@ -277,3 +283,28 @@ async def delete_existing_user(
     await db.delete(user)
     await db.commit()
     return {"status": "deleted", "user_id": user_id}
+
+
+@router.get("/login-log")
+async def get_login_log(
+    limit: int = 100,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get recent login log entries (admin only)."""
+    from app.models.user import LoginLog
+    result = await db.execute(
+        select(LoginLog).order_by(LoginLog.timestamp.desc()).limit(limit)
+    )
+    entries = result.scalars().all()
+    return [
+        {
+            "id": e.id,
+            "user_id": e.user_id,
+            "username": e.username,
+            "ip": e.ip,
+            "user_agent": e.user_agent,
+            "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+        }
+        for e in entries
+    ]
