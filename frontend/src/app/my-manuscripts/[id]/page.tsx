@@ -123,13 +123,13 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
         {/* LEFT: Manuscript PDF */}
         <div className="lg:w-1/2 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
           <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center justify-between shrink-0">
-            <span className="text-xs font-bold text-gray-800">Manuscript PDF</span>
+            <span className="text-xs font-bold text-gray-800">Manuscript Document</span>
             <label className="text-[10px] px-2 py-1 rounded bg-blue-700 text-white font-bold cursor-pointer hover:bg-blue-600">
-              {paper.has_pdf ? "Replace PDF" : "Upload PDF"}
+              {paper.has_pdf ? "Replace" : "Upload"}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.md,.tex,.txt"
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadPdf(f); }}
                 className="hidden"
               />
@@ -138,8 +138,8 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           <div className="flex-1 overflow-hidden">
             {!paper.has_pdf ? (
               <div className="h-full flex items-center justify-center text-gray-500 text-sm p-4 text-center">
-                No manuscript PDF uploaded yet.<br />
-                Click &quot;Upload PDF&quot; to attach your manuscript.
+                No manuscript document uploaded yet.<br />
+                Click &quot;Upload&quot; to attach your manuscript (.pdf, .md, .tex, .txt).
               </div>
             ) : pdfLoading || !pdfBlobUrl ? (
               <div className="h-full flex items-center justify-center text-gray-500 text-sm">
