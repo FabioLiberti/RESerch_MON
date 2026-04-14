@@ -123,9 +123,15 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
         {/* LEFT: Manuscript PDF */}
         <div className="lg:w-1/2 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
           <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center justify-between shrink-0">
-            <span className="text-xs font-bold text-gray-800">Manuscript Document</span>
-            <label className="text-[10px] px-2 py-1 rounded bg-blue-700 text-white font-bold cursor-pointer hover:bg-blue-600">
-              {paper.has_pdf ? "Replace" : "Upload"}
+            <div>
+              <span className="text-xs font-bold text-gray-800">Manuscript Document</span>
+              <span className="text-[9px] text-gray-500 ml-2">.pdf .md .tex .txt</span>
+            </div>
+            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-bold cursor-pointer hover:bg-blue-600 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              {paper.has_pdf ? "Replace Document" : "Upload Document"}
               <input
                 ref={fileInputRef}
                 type="file"
