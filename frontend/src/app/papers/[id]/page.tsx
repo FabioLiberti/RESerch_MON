@@ -301,8 +301,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         )}
         {/* spacer pushes review buttons to the far right */}
         <div className="ml-auto" />
-        {/* Meta Review link — admin only */}
-        {isAdmin && <Link
+        {/* Meta Review link */}
+        <Link
           href="/review"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-transform hover:scale-105"
           style={{
@@ -314,7 +314,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           title="Go to Meta Review queue"
         >
           Meta Review
-        </Link>}
+        </Link>
         {/* Peer Review link — only shown when this paper has a linked peer review */}
         {paper.peer_review_id && (
           <Link
@@ -562,6 +562,37 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             View PDF (external)
           </a>
         ) : null}
+
+        {/* Upload Document — for non-bibliography papers (my_manuscript, reviewing) */}
+        {paper.paper_role !== "bibliography" && (
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-600 transition-colors cursor-pointer">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Upload Document
+            <input
+              type="file"
+              accept=".pdf,.md,.tex,.txt"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const fd = new FormData();
+                fd.append("file", f);
+                const r = await fetch(`/api/v1/analysis/${paperId}/upload-pdf`, {
+                  method: "POST",
+                  headers: authHeaders(),
+                  body: fd,
+                });
+                if (r.ok) {
+                  const { mutate } = await import("swr");
+                  mutate(`/api/v1/papers/${paperId}`);
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
 
         {/* Citation Network */}
         <Link
