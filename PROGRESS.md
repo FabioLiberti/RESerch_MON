@@ -1,8 +1,34 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.16.18 — Phase 12 Unified Paper Lifecycle (A+B+C complete) + full mobile responsive
-**Current Version:** v2.16.18
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Unified paper lifecycle with paper_role (bibliography/reviewing/my_manuscript), Review Journal, Submission Timeline with deadline tracking, My Manuscripts side-by-side detail page, conference/GitHub links, mobile hamburger menu, all pages fully responsive on mobile with uniform navigation (title → paper detail, Open/Del buttons in all review lists)
+**Current Phase:** v2.22.0 — Phase 12 complete + Review Journal viewer/tutor + Manuscript dev center
+**Current Version:** v2.22.0
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — All pending items from session 2026-04-11/14 completed: Review Journal read-only + edit lock, Overleaf URL + multi-format upload, tutor notes
+
+---
+
+### 2026-04-14 — Session: Pending items #1-#3
+
+3 releases (v2.20.0 → v2.22.0), all pending items from previous session completed.
+
+**v2.20.0 — Review Journal read-only + edit lock:**
+- Viewer sees all Review Journal content but cannot modify (buttons hidden)
+- Notes text darker (`text-foreground` instead of `text-muted-foreground`)
+- Edit/Done toggle for admin: rating, decision, rubric, observation status locked by default, require explicit Edit click
+- Attachment download accessible to all users
+
+**v2.21.0 — Manuscript development center:**
+- `overleaf_url` field in paper metadata (model, schema, API, EditableHeader form, header display)
+- Emerald Overleaf icon in paper detail and my-manuscripts headers
+- Submission round upload accepts .pdf, .md, .tex, .txt (was PDF-only)
+- File type badge shows actual extension (PDF/MD/TEX/TXT)
+- Backend validates allowed extensions with 400 error
+
+**v2.22.0 — Tutor notes:**
+- New source_type `tutor_feedback` with blue TUTOR badge
+- Viewer sees "Add Tutor Note" button (simplified form: name + text)
+- Viewer can edit/delete only their own tutor_feedback entries (Edit lock, notes, observations, attachments)
+- Backend enforces: POST restricted to tutor_feedback for viewer, PUT/DELETE restricted to tutor_feedback entries
+- Admin retains full control over all entry types
 
 ---
 
