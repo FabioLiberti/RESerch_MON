@@ -578,7 +578,7 @@ async def get_section_latest(db: AsyncSession = Depends(get_db)):
     """Return the latest updated_at per section for badge system."""
     from app.models.analysis import AnalysisQueue
     from app.models.peer_review import PeerReview
-    from app.models.paper_quality import PaperQualityReview
+    from app.models.paper_quality_review import PaperQualityReview
 
     async def latest(stmt):
         r = await db.execute(stmt)
