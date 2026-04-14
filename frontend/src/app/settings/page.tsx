@@ -291,6 +291,10 @@ function UserManagement() {
   const [error, setError] = useState("");
   const [actionMsg, setActionMsg] = useState<Record<number, string>>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [resetUserId, setResetUserId] = useState<number | null>(null);
+  const [resetPwd, setResetPwd] = useState("");
+  const [showResetPwd, setShowResetPwd] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const createUser = async () => {
     setSaving(true);
@@ -316,27 +320,27 @@ function UserManagement() {
     await mutateUsers();
   };
 
-  const resetPassword = async (u: UserData) => {
-    const pw = prompt(`New password for ${u.username} (12-20 chars, special chars allowed):`);
-    if (!pw || pw.length < 12) {
-      if (pw !== null) alert("Password must be at least 12 characters");
-      return;
-    }
+  const submitResetPassword = async () => {
+    if (!resetUserId || !isPasswordValid(resetPwd)) return;
+    setResetting(true);
     try {
-      const r = await fetch(`/api/v1/auth/users/${u.id}/reset-password`, {
+      const r = await fetch(`/api/v1/auth/users/${resetUserId}/reset-password`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ new_password: pw }),
+        body: JSON.stringify({ new_password: resetPwd }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${r.status}`);
       }
-      setActionMsg(prev => ({ ...prev, [u.id]: "Password reset" }));
-      setTimeout(() => setActionMsg(prev => { const n = { ...prev }; delete n[u.id]; return n; }), 3000);
+      setActionMsg(prev => ({ ...prev, [resetUserId]: "Password reset" }));
+      setTimeout(() => setActionMsg(prev => { const n = { ...prev }; delete n[resetUserId!]; return n; }), 3000);
+      setResetUserId(null);
+      setResetPwd("");
     } catch (e: any) {
       alert(`Failed: ${e.message}`);
     }
+    setResetting(false);
   };
 
   const deleteUser = async (u: UserData) => {
@@ -487,8 +491,8 @@ function UserManagement() {
                 <option value="admin">Admin</option>
               </select>
               <button
-                onClick={() => resetPassword(u)}
-                className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white hover:bg-amber-600"
+                onClick={() => { setResetUserId(resetUserId === u.id ? null : u.id); setResetPwd(""); setShowResetPwd(false); }}
+                className={`text-[10px] px-2 py-1 rounded font-bold ${resetUserId === u.id ? "bg-amber-500 text-black" : "bg-amber-700 text-white hover:bg-amber-600"}`}
                 title="Reset password"
               >
                 Reset PW
@@ -511,6 +515,49 @@ function UserManagement() {
                 </button>
               )}
             </div>
+
+            {/* Reset Password inline form */}
+            {resetUserId === u.id && (
+              <div className="mt-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-2">
+                <p className="text-[10px] font-bold text-amber-400">New password for {u.username}</p>
+                <div className="relative max-w-sm">
+                  <input
+                    type={showResetPwd ? "text" : "password"}
+                    value={resetPwd}
+                    onChange={(e) => setResetPwd(e.target.value.slice(0, 20))}
+                    className="w-full px-3 py-2 pr-10 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+                    placeholder="12-20 characters"
+                    maxLength={20}
+                    autoFocus
+                  />
+                  <button type="button" onClick={() => setShowResetPwd(!showResetPwd)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                    title={showResetPwd ? "Hide" : "Show"}>
+                    {showResetPwd ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    )}
+                  </button>
+                </div>
+                <PasswordStrengthBar password={resetPwd} username={u.username} />
+                <div className="flex gap-2">
+                  <button
+                    onClick={submitResetPassword}
+                    disabled={resetting || !isPasswordValid(resetPwd, u.username)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-700 text-white text-xs font-bold hover:bg-amber-600 disabled:opacity-50"
+                  >
+                    {resetting ? "Resetting..." : "Reset Password"}
+                  </button>
+                  <button
+                    onClick={() => { setResetUserId(null); setResetPwd(""); }}
+                    className="px-3 py-1.5 rounded-lg bg-[var(--muted)] text-xs hover:bg-[var(--border)]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
