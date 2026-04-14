@@ -125,10 +125,10 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Link href={`/papers/${paperId}`}
+          <a href={`/papers/${paperId}`} target="_blank" rel="noopener noreferrer"
             className="px-3 py-1.5 text-xs rounded-lg bg-[var(--secondary)] hover:bg-[var(--border)] transition-colors">
-            Paper Detail
-          </Link>
+            Paper Detail ↗
+          </a>
         </div>
       </div>
 
