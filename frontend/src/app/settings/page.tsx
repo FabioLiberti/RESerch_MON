@@ -317,7 +317,7 @@ function UserManagement() {
   };
 
   const resetPassword = async (u: UserData) => {
-    const pw = prompt(`New password for ${u.username} (min 12 chars):`);
+    const pw = prompt(`New password for ${u.username} (12-20 chars, special chars allowed):`);
     if (!pw || pw.length < 12) {
       if (pw !== null) alert("Password must be at least 12 characters");
       return;
@@ -399,14 +399,15 @@ function UserManagement() {
               />
             </div>
             <div>
-              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Password (min 12 chars)</label>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Password (min 12, max 20 chars — letters, numbers, . ! @ # $ % etc.)</label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value.slice(0, 20) })}
                   className="w-full px-3 py-2 pr-10 rounded-lg bg-[var(--muted)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-                  placeholder="Min 12 characters"
+                  placeholder="12-20 characters"
+                  maxLength={20}
                 />
                 <button
                   type="button"
@@ -577,7 +578,8 @@ function ChangePasswordSection() {
             value={newPwd}
             onChange={(e) => setNewPwd(e.target.value)}
             className="w-full px-3 py-2 pr-10 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
-            placeholder="New password (min 12 chars)"
+            placeholder="12-20 chars, special chars allowed"
+            maxLength={20}
           />
           <button type="button" onClick={() => setShowNew(!showNew)}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
