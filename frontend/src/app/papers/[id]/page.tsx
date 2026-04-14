@@ -8,6 +8,7 @@ import { api, authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, SOURCE_LABELS, SOURCE_COLORS, cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { PAPER_TYPE_OPTIONS, getPaperTypeBadge } from "@/lib/paperTypes";
 import ReviewJournal from "@/components/ReviewJournal";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import PaperInfoBox from "@/components/PaperInfoBox";
@@ -20,6 +21,7 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
   const [title, setTitle] = useState(paper.title);
   const [journal, setJournal] = useState(paper.journal || "");
   const [pubDate, setPubDate] = useState(paper.publication_date || "");
+  const [paperType, setPaperType] = useState(paper.paper_type || "full_paper");
   const [abstract, setAbstract] = useState(paper.abstract || "");
   const [confUrl, setConfUrl] = useState(paper.conference_url || "");
   const [confNotes, setConfNotes] = useState(paper.conference_notes || "");
@@ -37,6 +39,7 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
           title: title.trim() || null,
           journal: journal.trim() || null,
           publication_date: pubDate || null,
+          paper_type: paperType || null,
           abstract: abstract.trim() || null,
           conference_url: confUrl.trim() || null,
           conference_notes: confNotes.trim() || null,
@@ -61,11 +64,20 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
           <input value={title} onChange={e => setTitle(e.target.value)}
             className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Journal / Conference</label>
             <input value={journal} onChange={e => setJournal(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Document Type</label>
+            <select value={paperType} onChange={e => setPaperType(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none">
+              {PAPER_TYPE_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Submission / Publication Date</label>
@@ -238,6 +250,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           {paper.paper_role === "my_manuscript" && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">
               MY MANUSCRIPT
+            </span>
+          )}
+          {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && paper.paper_type && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full text-white font-bold ${getPaperTypeBadge(paper.paper_type).color}`}>
+              {getPaperTypeBadge(paper.paper_type).badge}
             </span>
           )}
           {isAdmin && (paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && !paper.doi && (

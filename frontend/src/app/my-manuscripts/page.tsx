@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { cn, formatDate } from "@/lib/utils";
+import { getPaperTypeBadge } from "@/lib/paperTypes";
 import type { Paper } from "@/lib/types";
 
 interface PaperListResponse {
@@ -199,6 +200,11 @@ export default function MyManuscriptsPage() {
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold">
                       MY MANUSCRIPT
                     </span>
+                    {paper.paper_type && (
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${getPaperTypeBadge(paper.paper_type).color}`}>
+                        {getPaperTypeBadge(paper.paper_type).badge}
+                      </span>
+                    )}
                     {paper.journal && (
                       <span className="text-xs text-[var(--muted-foreground)]">{paper.journal}</span>
                     )}

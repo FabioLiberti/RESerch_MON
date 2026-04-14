@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePaper } from "@/hooks/usePapers";
 import { authHeaders } from "@/lib/authHeaders";
 import { useAuth } from "@/lib/auth";
+import { getPaperTypeBadge } from "@/lib/paperTypes";
 import SubmissionTimeline from "@/components/SubmissionTimeline";
 import ReviewJournal from "@/components/ReviewJournal";
 import ManuscriptBibliography from "@/components/ManuscriptBibliography";
@@ -93,6 +94,11 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           <h1 className="text-lg font-bold leading-snug mt-1 line-clamp-2">{paper.title}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold">MY MANUSCRIPT</span>
+            {paper.paper_type && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${getPaperTypeBadge(paper.paper_type).color}`}>
+                {getPaperTypeBadge(paper.paper_type).badge}
+              </span>
+            )}
             {paper.journal && <span className="text-xs text-[var(--muted-foreground)] italic">{paper.journal}</span>}
             {(paper as any).conference_url && (
               <a href={(paper as any).conference_url} target="_blank" rel="noopener noreferrer"
