@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import AuthGuard from "./AuthGuard";
 import Sidebar from "./Sidebar";
+import GuidedTour from "../GuidedTour";
 
 const NO_SHELL_PATHS = ["/login"];
 
@@ -91,6 +92,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <main className="main-content flex-1 ml-64 p-6 md:p-8">
             <div className="animate-fade-in">{children}</div>
           </main>
+          <GuidedTour />
         </div>
       ) : (
         children

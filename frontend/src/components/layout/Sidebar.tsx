@@ -166,6 +166,7 @@ function NavItem({
       <Link
         ref={linkRef}
         href={item.href}
+        data-tour={item.href.replace(/\//g, "") || "dashboard"}
         onClick={onNavigate}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
@@ -415,7 +416,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}
   };
 
   return (
-    <aside className="w-64 bg-[var(--card)] border-r border-[var(--border)] flex flex-col h-screen fixed left-0 top-0 transition-colors duration-300">
+    <aside data-tour="sidebar" className="w-64 bg-[var(--card)] border-r border-[var(--border)] flex flex-col h-screen fixed left-0 top-0 transition-colors duration-300">
       {/* Logo */}
       <div className="p-6 border-b border-[var(--border)]">
         <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">

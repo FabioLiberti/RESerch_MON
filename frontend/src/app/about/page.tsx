@@ -1,6 +1,8 @@
 "use client";
 
 import useSWR from "swr";
+import { useAuth } from "@/lib/auth";
+import { restartTour } from "@/components/GuidedTour";
 
 export default function AboutPage() {
   const { data: health } = useSWR<{ status: string; version: string }>("/health", async (url: string) => {
@@ -130,6 +132,22 @@ export default function AboutPage() {
           ))}
         </div>
       </div>
+
+      {/* Guided Tour */}
+      {!useAuth().isAdmin && (
+        <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
+          <h2 className="text-sm font-bold mb-2">Guided Tour</h2>
+          <p className="text-xs text-[var(--muted-foreground)] mb-3">
+            Rivedi il tour guidato delle funzionalità principali del sistema.
+          </p>
+          <button
+            onClick={restartTour}
+            className="px-4 py-2 rounded-lg bg-indigo-700 text-white text-sm font-bold hover:bg-indigo-600 transition-colors"
+          >
+            Restart Tour
+          </button>
+        </div>
+      )}
     </div>
   );
 }
