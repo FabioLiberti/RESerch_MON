@@ -573,6 +573,26 @@ async def get_categorized_keywords(db: AsyncSession = Depends(get_db)):
     return result
 
 
+@router.get("/section-latest")
+async def get_section_latest(db: AsyncSession = Depends(get_db)):
+    """Return the latest updated_at per section for badge system."""
+    from app.models.analysis import AnalysisQueue
+    from app.models.peer_review import PeerReview
+    from app.models.paper_quality import PaperQualityReview
+
+    async def latest(stmt):
+        r = await db.execute(stmt)
+        v = r.scalar_one_or_none()
+        return v.isoformat() if v else None
+
+    return {
+        "review": await latest(select(func.max(AnalysisQueue.completed_at)).where(AnalysisQueue.mode == "extended", AnalysisQueue.status == "done")),
+        "peer-review": await latest(select(func.max(PeerReview.updated_at))),
+        "my-manuscripts": await latest(select(func.max(Paper.updated_at)).where(Paper.paper_role == "my_manuscript")),
+        "paper-quality": await latest(select(func.max(PaperQualityReview.updated_at))),
+    }
+
+
 class ImportByDoiRequest(BaseModel):
     doi: str
 
@@ -1173,26 +1193,6 @@ async def get_paper_md(paper_id: int, db: AsyncSession = Depends(get_db)):
     if not path.exists():
         raise HTTPException(404, "MD file not found on disk")
     return FileResponse(path, media_type="text/markdown", filename=f"{paper.title[:80]}.md")
-
-
-@router.get("/section-latest")
-async def get_section_latest(db: AsyncSession = Depends(get_db)):
-    """Return the latest created_at per section for badge system."""
-    from app.models.analysis import AnalysisQueue
-    from app.models.peer_review import PeerReview
-    from app.models.paper_quality import PaperQualityReview
-
-    async def latest(stmt):
-        r = await db.execute(stmt)
-        v = r.scalar_one_or_none()
-        return v.isoformat() if v else None
-
-    return {
-        "review": await latest(select(func.max(AnalysisQueue.completed_at)).where(AnalysisQueue.mode == "extended", AnalysisQueue.status == "done")),
-        "peer-review": await latest(select(func.max(PeerReview.updated_at))),
-        "my-manuscripts": await latest(select(func.max(Paper.updated_at)).where(Paper.paper_role == "my_manuscript")),
-        "paper-quality": await latest(select(func.max(PaperQualityReview.updated_at))),
-    }
 
 
 @router.get("/{paper_id}/analysis", response_model=AnalysisSchema | None)
