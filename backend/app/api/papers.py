@@ -586,7 +586,7 @@ async def get_section_latest(db: AsyncSession = Depends(get_db)):
         return v.isoformat() if v else None
 
     return {
-        "review": await latest(select(func.max(AnalysisQueue.completed_at)).where(AnalysisQueue.mode == "extended", AnalysisQueue.status == "done")),
+        "review": await latest(select(func.max(AnalysisQueue.completed_at)).where(AnalysisQueue.analysis_mode == "extended", AnalysisQueue.status == "done")),
         "peer-review": await latest(select(func.max(PeerReview.updated_at))),
         "my-manuscripts": await latest(select(func.max(Paper.updated_at)).where(Paper.paper_role == "my_manuscript")),
         "paper-quality": await latest(select(func.max(PaperQualityReview.updated_at))),
