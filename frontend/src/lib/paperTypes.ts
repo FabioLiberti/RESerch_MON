@@ -1,7 +1,7 @@
 /** Document type labels and badge styles for papers/manuscripts. */
 
 export const PAPER_TYPE_OPTIONS = [
-  { value: "extended_abstract", label: "Extended Abstract", badge: "EXT. ABSTRACT", color: "bg-blue-700" },
+  { value: "extended_abstract", label: "Extended Abstract", badge: "EXT. ABSTRACT", color: "bg-red-600" },
   { value: "full_paper", label: "Full Paper", badge: "FULL PAPER", color: "bg-purple-700" },
   { value: "conference", label: "Conference Paper", badge: "CONFERENCE", color: "bg-indigo-700" },
   { value: "journal_article", label: "Journal Article", badge: "JOURNAL", color: "bg-emerald-700" },
