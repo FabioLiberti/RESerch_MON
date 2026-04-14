@@ -257,9 +257,6 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               {getPaperTypeBadge(paper.paper_type).badge}
             </span>
           )}
-          {paper.has_supplementary && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-bold" title="Has supplementary file">S</span>
-          )}
           {isAdmin && (paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && !paper.doi && (
             <button
               onClick={() => {
@@ -290,6 +287,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           {paper.has_pdf && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-700 text-white font-medium">
               PDF{paper.pdf_pages ? ` (${paper.pdf_pages} pp)` : ""}
+            </span>
+          )}
+          {paper.has_supplementary && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-medium">
+              S{(paper as any).supplementary_pages ? ` (${(paper as any).supplementary_pages} pp)` : ""}
             </span>
           )}
           {paper.zotero_key && (

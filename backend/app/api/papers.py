@@ -108,6 +108,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         has_tex=paper.tex_local_path is not None,
         has_md=paper.md_local_path is not None,
         has_supplementary=paper.supplementary_path is not None,
+        supplementary_pages=_count_pdf_pages(paper.supplementary_path),
         authors=[
             AuthorSchema(
                 id=pa.author.id,

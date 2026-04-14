@@ -91,6 +91,7 @@ class PaperDetail(BaseModel):
     has_tex: bool = False
     has_md: bool = False
     has_supplementary: bool = False
+    supplementary_pages: int | None = None
     authors: list[AuthorSchema]
     topics: list[TopicAssignment]
     keywords: list[str]
