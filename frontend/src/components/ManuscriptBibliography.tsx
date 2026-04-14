@@ -265,6 +265,36 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
         </div>
       </div>
 
+      {/* Keywords aggregation — at the top, collapsed by default */}
+      {kwData && kwData.keywords.length > 0 && (
+        <div className="rounded-lg border border-[var(--border)] overflow-hidden">
+          <button
+            onClick={() => setShowKeywords(!showKeywords)}
+            className="w-full flex items-center justify-between px-3 py-2 bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
+          >
+            <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">
+              Keywords ({kwData.keywords.length} unique from {kwData.total_papers} papers)
+            </span>
+            <svg className={`w-3.5 h-3.5 text-[var(--muted-foreground)] transition-transform ${showKeywords ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showKeywords && (
+            <div className="p-3 flex flex-wrap gap-1.5">
+              {kwData.keywords.map(({ keyword, count }) => (
+                <span
+                  key={keyword}
+                  className="text-[10px] px-2 py-1 rounded-full bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]"
+                  title={`${count} paper${count > 1 ? "s" : ""}`}
+                >
+                  {keyword} <span className="text-[var(--muted-foreground)] font-bold">({count})</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Import from Label */}
       {showLabelImport && (
         <div className="p-4 rounded-lg bg-purple-500/5 border border-purple-500/20 space-y-3">
@@ -492,35 +522,6 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
         </div>
       )}
 
-      {/* Keywords aggregation */}
-      {kwData && kwData.keywords.length > 0 && (
-        <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-          <button
-            onClick={() => setShowKeywords(!showKeywords)}
-            className="w-full flex items-center justify-between px-3 py-2 bg-[var(--secondary)] hover:bg-[var(--muted)] transition-colors"
-          >
-            <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">
-              Bibliography Keywords ({kwData.keywords.length} unique from {kwData.total_papers} papers)
-            </span>
-            <svg className={`w-3.5 h-3.5 text-[var(--muted-foreground)] transition-transform ${showKeywords ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {showKeywords && (
-            <div className="p-3 flex flex-wrap gap-1.5">
-              {kwData.keywords.map(({ keyword, count }) => (
-                <span
-                  key={keyword}
-                  className="text-[10px] px-2 py-1 rounded-full bg-[var(--secondary)] border border-[var(--border)] text-[var(--foreground)]"
-                  title={`${count} paper${count > 1 ? "s" : ""}`}
-                >
-                  {keyword} <span className="text-[var(--muted-foreground)] font-bold">({count})</span>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
