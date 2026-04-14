@@ -736,15 +736,37 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     {entry.items.map((obs, idx) => (
                       <div key={idx} className="flex gap-3 p-3 rounded-lg bg-[var(--secondary)]/50 border border-[var(--border)]">
                         <div className="flex flex-col items-center gap-1 shrink-0">
-                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold uppercase", SEVERITY_BADGE[obs.severity] || "bg-gray-600 text-white")}>
-                            {obs.severity}
-                          </span>
+                          {isEditing ? (
+                            <select
+                              value={obs.severity}
+                              onChange={e => updateObservation(entry.id, idx, { severity: e.target.value })}
+                              className="text-[9px] px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none font-bold"
+                            >
+                              <option value="major">Major</option>
+                              <option value="minor">Minor</option>
+                              <option value="suggestion">Suggestion</option>
+                              <option value="praise">Praise</option>
+                            </select>
+                          ) : (
+                            <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold uppercase", SEVERITY_BADGE[obs.severity] || "bg-gray-600 text-white")}>
+                              {obs.severity}
+                            </span>
+                          )}
                           {obs.section_ref && (
                             <span className="text-[9px] text-[var(--muted-foreground)]">§ {obs.section_ref}</span>
                           )}
                         </div>
                         <div className="flex-1 min-w-0 space-y-1.5">
-                          <p className="text-sm">{obs.text}</p>
+                          {isEditing ? (
+                            <textarea
+                              value={obs.text}
+                              onChange={e => updateObservation(entry.id, idx, { text: e.target.value })}
+                              className="w-full text-sm px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none resize-y"
+                              rows={2}
+                            />
+                          ) : (
+                            <p className="text-sm">{obs.text}</p>
+                          )}
                           {obs.response && (
                             <div className="text-xs text-emerald-400 bg-emerald-500/10 rounded px-2 py-1">
                               ↳ {obs.response}
@@ -752,30 +774,46 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                           )}
                           <div className="flex items-center gap-2">
                             {isEditing ? (
-                              <select
-                                value={obs.status}
-                                onChange={e => updateObservation(entry.id, idx, { status: e.target.value })}
-                                className="text-[10px] px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
-                              >
-                                {STATUS_OPTIONS.map(opt => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </select>
+                              <>
+                                <select
+                                  value={obs.status}
+                                  onChange={e => updateObservation(entry.id, idx, { status: e.target.value })}
+                                  className="text-[10px] px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
+                                >
+                                  {STATUS_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                                {obs.status !== "to_address" && !obs.response && (
+                                  <button
+                                    onClick={() => {
+                                      const resp = prompt("Your response/action for this observation:");
+                                      if (resp !== null) updateObservation(entry.id, idx, { response: resp });
+                                    }}
+                                    className="text-[10px] text-[var(--primary)] hover:underline"
+                                  >
+                                    + response
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    if (!confirm("Delete this observation?")) return;
+                                    const updated = entry.items.filter((_, i) => i !== idx);
+                                    fetch(`/api/v1/review-journal/entry/${entry.id}`, {
+                                      method: "PUT",
+                                      headers: { "Content-Type": "application/json", ...authHeaders() },
+                                      body: JSON.stringify({ items: updated }),
+                                    }).then(() => mutate(`/api/v1/review-journal/${paperId}`));
+                                  }}
+                                  className="text-[10px] text-red-400 hover:underline ml-auto"
+                                >
+                                  Delete
+                                </button>
+                              </>
                             ) : (
                               <span className={cn("text-[10px] font-bold", STATUS_OPTIONS.find(o => o.value === obs.status)?.color || "text-[var(--muted-foreground)]")}>
                                 {STATUS_OPTIONS.find(o => o.value === obs.status)?.label || obs.status}
                               </span>
-                            )}
-                            {isEditing && obs.status !== "to_address" && !obs.response && (
-                              <button
-                                onClick={() => {
-                                  const resp = prompt("Your response/action for this observation:");
-                                  if (resp !== null) updateObservation(entry.id, idx, { response: resp });
-                                }}
-                                className="text-[10px] text-[var(--primary)] hover:underline"
-                              >
-                                + response
-                              </button>
                             )}
                           </div>
                         </div>
