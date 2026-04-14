@@ -13,6 +13,8 @@ interface Reference {
   doi: string | null;
   journal: string | null;
   publication_date: string | null;
+  disabled: boolean;
+  rating: number | null;
   context: string | null;
   context_label: string | null;
   note: string | null;
@@ -348,7 +350,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
       {refs.length > 0 && (
         <div className="space-y-2">
           {refs.map(ref => (
-            <div key={ref.id} className="flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)]">
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] ${ref.disabled ? "opacity-40" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}
@@ -357,6 +359,10 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   {ref.title}
                 </Link>
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {ref.disabled && <span className="text-[9px] px-1 py-0.5 rounded bg-red-800 text-white font-bold">DISABLED</span>}
+                  {ref.rating != null && ref.rating > 0 && (
+                    <span className="text-[10px] text-amber-400">{"★".repeat(ref.rating)}{"☆".repeat(5 - ref.rating)}</span>
+                  )}
                   {ref.context && (
                     <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${CONTEXT_COLORS[ref.context] || "bg-gray-600"}`}>
                       {ref.context_label || ref.context}
@@ -385,6 +391,18 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                <button
+                  onClick={async () => {
+                    await fetch(`/api/v1/papers/${ref.cited_paper_id}/toggle-disabled`, {
+                      method: "POST",
+                      headers: authHeaders(),
+                    });
+                    mutate(apiUrl);
+                  }}
+                  className={`text-[9px] hover:underline ${ref.disabled ? "text-emerald-400" : "text-amber-400"}`}
+                >
+                  {ref.disabled ? "Enable" : "Disable"}
+                </button>
                 <button
                   onClick={() => deleteRef(ref.id)}
                   className="text-[9px] text-red-400 hover:underline"
