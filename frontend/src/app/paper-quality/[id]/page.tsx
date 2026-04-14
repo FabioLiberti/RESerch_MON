@@ -351,21 +351,25 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
           <button onClick={() => downloadFmt("md")} className="px-3 py-2 rounded-lg bg-gray-700 text-white text-xs font-medium hover:bg-gray-600">MD</button>
           <button onClick={() => downloadFmt("tex")} className="px-3 py-2 rounded-lg bg-teal-700 text-white text-xs font-medium hover:bg-teal-600">TEX</button>
           <button onClick={() => downloadFmt("pdf")} className="px-3 py-2 rounded-lg bg-red-700 text-white text-xs font-medium hover:bg-red-600">PDF</button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 min-w-[110px]"
-          >
-            {saving ? (savePhase || "Saving...") : (savePhase || "Save")}
-          </button>
-          <button
-            onClick={newVersion}
-            disabled={saving}
-            className="px-3 py-2 rounded-lg bg-fuchsia-700 text-white text-xs font-bold hover:bg-fuchsia-600 disabled:opacity-50"
-            title="Snapshot current version into v+1, preserving the previous one in history"
-          >
-            New version
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 min-w-[110px]"
+              >
+                {saving ? (savePhase || "Saving...") : (savePhase || "Save")}
+              </button>
+              <button
+                onClick={newVersion}
+                disabled={saving}
+                className="px-3 py-2 rounded-lg bg-fuchsia-700 text-white text-xs font-bold hover:bg-fuchsia-600 disabled:opacity-50"
+                title="Snapshot current version into v+1, preserving the previous one in history"
+              >
+                New version
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -397,6 +401,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
         </div>
 
         {/* RIGHT: Form */}
+        <fieldset disabled={!isAdmin} className="contents">
         <div className="lg:w-[44%] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
           {/* Version selector */}
           {history.length > 1 && (
@@ -589,6 +594,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
 
           {error && <div className="text-xs text-red-400">{error}</div>}
         </div>
+        </fieldset>
       </div>
     </div>
   );

@@ -95,8 +95,8 @@ export default function SettingsPage() {
       {/* PDF Author Signature */}
       {isAdmin && <PdfSignatureSection />}
 
-      {/* Topics Management */}
-      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
+      {/* Topics Management — admin only */}
+      {isAdmin && (<div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-medium">Research Topics</h3>
           <button
@@ -140,10 +140,10 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </div>)}
 
       {/* Topic Form Modal */}
-      {showForm && (
+      {isAdmin && showForm && (
         <div className="rounded-xl bg-[var(--card)] border border-[var(--primary)]/30 p-6">
           <h3 className="font-medium mb-4">{editingId ? "Edit Topic" : "New Topic"}</h3>
           <div className="space-y-4">
@@ -220,8 +220,8 @@ export default function SettingsPage() {
       {/* Change Password */}
       <ChangePasswordSection />
 
-      {/* API Keys Info */}
-      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
+      {/* API Keys Info — admin only */}
+      {isAdmin && <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
         <h3 className="font-medium mb-4">API Keys</h3>
         <p className="text-sm text-[var(--muted-foreground)] mb-4">
           Configure in <code className="bg-[var(--muted)] px-1.5 py-0.5 rounded text-xs">.env</code> file.
@@ -242,7 +242,7 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* System Info */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">

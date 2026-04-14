@@ -404,13 +404,15 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
           <button onClick={() => downloadReview("pdf")} className="px-3 py-2 rounded-lg bg-red-700 text-white text-xs font-medium hover:bg-red-600">
             PDF
           </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : saveMsg || "Save"}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : saveMsg || "Save"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -420,19 +422,21 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
         <div className="lg:flex-1 rounded-xl border border-[var(--border)] overflow-hidden bg-white flex flex-col min-h-[300px] lg:min-h-0">
           <div className="p-2 border-b border-gray-300 bg-gray-100 flex items-center justify-between">
             <span className="text-xs font-bold text-gray-800">Manuscript PDF</span>
-            <label className="text-[10px] px-2 py-1 rounded bg-indigo-700 text-white font-bold cursor-pointer hover:bg-indigo-600">
-              {pr.has_pdf ? "Replace PDF" : "Upload PDF"}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadPdf(f);
-                }}
-                className="hidden"
-              />
-            </label>
+            {isAdmin && (
+              <label className="text-[10px] px-2 py-1 rounded bg-indigo-700 text-white font-bold cursor-pointer hover:bg-indigo-600">
+                {pr.has_pdf ? "Replace PDF" : "Upload PDF"}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadPdf(f);
+                  }}
+                  className="hidden"
+                />
+              </label>
+            )}
           </div>
           <div className="flex-1 overflow-hidden">
             {!pr.has_pdf ? (
@@ -463,6 +467,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* RIGHT: Review form */}
+        <fieldset disabled={!isAdmin} className="contents">
         <div className="lg:w-[44%] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
           {/* Metadata */}
           <details className="rounded border border-[var(--border)] bg-[var(--secondary)] p-2" open>
@@ -704,6 +709,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
           {saveMsg && <div className="text-xs text-emerald-400">{saveMsg}</div>}
           {error && <div className="text-xs text-red-400">{error}</div>}
         </div>
+        </fieldset>
       </div>
 
       {/* Review Journal — editorial guidance and reviewer feedback */}

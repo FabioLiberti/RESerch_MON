@@ -362,8 +362,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         </Link>
       </div>
 
-      {/* Labels & Notes */}
-      <LabelsAndNotes paperId={paperId} />
+      {/* Labels & Notes — admin only */}
+      {isAdmin && <LabelsAndNotes paperId={paperId} />}
 
       {/* Authors */}
       {paper.authors.length > 0 && (
@@ -498,7 +498,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="flex justify-between">
               <dt className="text-[var(--muted-foreground)]">Rating</dt>
-              <dd><RatingWidget paperId={paperId} initialRating={paper.rating} /></dd>
+              <dd>{isAdmin ? <RatingWidget paperId={paperId} initialRating={paper.rating} /> : <span className="text-amber-400">{"★".repeat(paper.rating || 0)}{"☆".repeat(5 - (paper.rating || 0))}</span>}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-[var(--muted-foreground)]">Open Access</dt>
@@ -563,8 +563,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           </a>
         ) : null}
 
-        {/* Upload Document — for non-bibliography papers (my_manuscript, reviewing) */}
-        {paper.paper_role !== "bibliography" && (
+        {/* Upload Document — admin only, for non-bibliography papers */}
+        {isAdmin && paper.paper_role !== "bibliography" && (
           <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-600 transition-colors cursor-pointer">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -655,8 +655,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Disable toggle — admin only */}
         {isAdmin && <DisableToggle paperId={paperId} initialDisabled={paper.disabled || false} />}
 
-        {/* Tutor check decision */}
-        <TutorCheckWidget paperId={paperId} initial={paper.tutor_check || null} />
+        {/* Tutor check decision — admin only */}
+        {isAdmin && <TutorCheckWidget paperId={paperId} initial={paper.tutor_check || null} />}
 
         {/* Generate Analysis — admin only */}
         {isAdmin && <AnalysisButton paperId={paperId} />}

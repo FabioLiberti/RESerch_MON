@@ -5,6 +5,7 @@ import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { formatDate, cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import type { AnalysisQueueItem } from "@/lib/types";
 
 interface Report {
@@ -18,6 +19,7 @@ interface Report {
 type ReportTab = "daily" | "analysis";
 
 export default function ReportsPage() {
+  const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<ReportTab>("daily");
   const { data: reports, isLoading } = useSWR<Report[]>("/api/v1/reports", authFetcher);
   const { data: analysisReports } = useSWR<AnalysisQueueItem[]>("/api/v1/analysis/reports", authFetcher);
@@ -74,7 +76,7 @@ export default function ReportsPage() {
             Daily summaries and individual paper analyses
           </p>
         </div>
-        {activeTab === "daily" && (
+        {isAdmin && activeTab === "daily" && (
           <button
             onClick={generateReport}
             disabled={generating}

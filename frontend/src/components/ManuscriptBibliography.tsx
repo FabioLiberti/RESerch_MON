@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
+import { useAuth } from "@/lib/auth";
 
 interface Reference {
   id: number;
@@ -50,6 +51,7 @@ const CONTEXT_COLORS: Record<string, string> = {
 };
 
 export default function ManuscriptBibliography({ paperId }: { paperId: number }) {
+  const { isAdmin } = useAuth();
   const apiUrl = `/api/v1/paper-references/${paperId}`;
   const { data, isLoading } = useSWR<RefsResponse>(apiUrl, authFetcher);
 
@@ -288,18 +290,22 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
               <button onClick={exportCsv} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-white hover:bg-emerald-700" title="Export as CSV">CSV</button>
             </>
           )}
-          <button
-            onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
-            className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
-          >
-            Import from Label
-          </button>
-          <button
-            onClick={() => { setShowSearch(!showSearch); setShowLabelImport(false); }}
-            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 text-white font-bold hover:bg-indigo-600 transition-colors"
-          >
-            + Add Reference
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
+              >
+                Import from Label
+              </button>
+              <button
+                onClick={() => { setShowSearch(!showSearch); setShowLabelImport(false); }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 text-white font-bold hover:bg-indigo-600 transition-colors"
+              >
+                + Add Reference
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -588,15 +594,19 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   {ref.doi && <span className="text-[10px] text-[var(--muted-foreground)]">DOI: {ref.doi}</span>}
                   {ref.journal && <span className="text-[10px] text-[var(--muted-foreground)] italic">{ref.journal}</span>}
                 </div>
-                {/* Editable note */}
-                <input
-                  type="text"
-                  value={editingNote[ref.id] ?? ref.note ?? ""}
-                  onChange={e => setEditingNote(prev => ({ ...prev, [ref.id]: e.target.value }))}
-                  onBlur={e => updateRef(ref.id, { note: e.target.value || null })}
-                  placeholder="Add note..."
-                  className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none mt-1"
-                />
+                {/* Editable note — admin only */}
+                {isAdmin ? (
+                  <input
+                    type="text"
+                    value={editingNote[ref.id] ?? ref.note ?? ""}
+                    onChange={e => setEditingNote(prev => ({ ...prev, [ref.id]: e.target.value }))}
+                    onBlur={e => updateRef(ref.id, { note: e.target.value || null })}
+                    placeholder="Add note..."
+                    className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none mt-1"
+                  />
+                ) : ref.note ? (
+                  <p className="text-[10px] text-[var(--muted-foreground)] mt-1 italic">{ref.note}</p>
+                ) : null}
                 {/* Collapsible keywords + labels */}
                 {(ref.keywords.length > 0 || ref.labels.length > 0) && (
                   <>
@@ -630,35 +640,41 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   </>
                 )}
               </div>
-              <div className="flex flex-col gap-1 shrink-0">
-                <select
-                  value={ref.context || ""}
-                  onChange={e => updateRef(ref.id, { context: e.target.value || null })}
-                  className="text-[9px] px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
-                >
-                  {CONTEXT_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={async () => {
-                    await fetch(`/api/v1/papers/${ref.cited_paper_id}/toggle-disabled`, {
-                      method: "POST",
-                      headers: authHeaders(),
-                    });
-                    mutate(apiUrl);
-                  }}
-                  className={`text-[9px] hover:underline ${ref.disabled ? "text-emerald-400" : "text-amber-400"}`}
-                >
-                  {ref.disabled ? "Enable" : "Disable"}
-                </button>
-                <button
-                  onClick={() => deleteRef(ref.id)}
-                  className="text-[9px] text-red-400 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
+              {isAdmin ? (
+                <div className="flex flex-col gap-1 shrink-0">
+                  <select
+                    value={ref.context || ""}
+                    onChange={e => updateRef(ref.id, { context: e.target.value || null })}
+                    className="text-[9px] px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
+                  >
+                    {CONTEXT_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={async () => {
+                      await fetch(`/api/v1/papers/${ref.cited_paper_id}/toggle-disabled`, {
+                        method: "POST",
+                        headers: authHeaders(),
+                      });
+                      mutate(apiUrl);
+                    }}
+                    className={`text-[9px] hover:underline ${ref.disabled ? "text-emerald-400" : "text-amber-400"}`}
+                  >
+                    {ref.disabled ? "Enable" : "Disable"}
+                  </button>
+                  <button
+                    onClick={() => deleteRef(ref.id)}
+                    className="text-[9px] text-red-400 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : ref.context ? (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded text-white shrink-0 ${CONTEXT_COLORS[ref.context] || "bg-gray-600"}`}>
+                  {CONTEXT_OPTIONS.find(o => o.value === ref.context)?.label || ref.context}
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
