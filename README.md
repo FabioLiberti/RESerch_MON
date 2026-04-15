@@ -8,19 +8,25 @@ The framework provides three distinct review surfaces — **Meta Review** of LLM
 
 Paper analysis runs on two complementary LLM tracks: **Gemma4:e4b** (local Ollama) for batch background analysis in Italian, and **Claude Opus 4.6** with **extended thinking** for high-stakes admin-only tasks (peer review drafting, paper quality assessment, extended abstract generation). All review surfaces support **side-by-side editing** with the source PDF, in-place editing of LLM output (with versioning), and synchronized export to four formats.
 
-An interactive **Next.js dashboard** provides real-time exploration with stats cards, activity heatmaps, timeline charts, keyword clouds, a **multi-layer citation network**, and a unified **Zotero integration** that auto-syncs both metadata and shareable analysis artifacts (Extended Abstract + validation report) without ever exposing the obviously LLM-generated working notes.
+A **unified paper lifecycle** tracks manuscripts from initial submission through revision rounds to publication, with **Submission Timeline** (round-by-round deadline tracking and decision logging), **Review Journal** (structured reviewer feedback with severity, status, and response tracking), **Manuscript Bibliography** (cited papers with context tagging, keyword/label cascade filters, and TXT/BibTeX/CSV export), and **supplementary file management** (tabbed Main/Supplementary PDF viewer with per-file page counts).
+
+The framework supports **role-based multi-user access** with three functional profiles — **admin** (full control), **tutor** (read-only with Tutor Note feedback capability), and **viewer** (read-only consultation). Tutor notes are visually highlighted in yellow with timestamps, and a **guided interactive tour** (driver.js) auto-starts on first login for tutor/viewer users, covering both the general sidebar navigation and a dedicated manuscript detail walkthrough.
+
+An interactive **Next.js dashboard** provides real-time exploration with stats cards, activity heatmaps, timeline charts, keyword clouds, a **multi-layer citation network**, and a unified **Zotero integration** that auto-syncs both metadata and shareable analysis artifacts (Extended Abstract + validation report) without ever exposing the obviously LLM-generated working notes. **Login notifications** are sent via Gmail SMTP on every access, with a persistent **login audit log** viewable in Settings.
 
 **The framework is deployed in production at [https://resmon.fabioliberti.com](https://resmon.fabioliberti.com)** — full Docker stack on an Aruba VPS, with Caddy reverse proxy, automatic HTTPS via Let's Encrypt, HTTP/3 (QUIC) support, hardened authentication, and dataset migrated from the local development instance.
 
 ---
 
 ![System Architecture Diagram](img/Diagram.png)
-*System architecture and data pipeline.*
+
+**Figure 1 — System architecture and data pipeline.** The diagram illustrates the end-to-end flow from seven heterogeneous academic data sources (PubMed, arXiv, bioRxiv/medRxiv, Semantic Scholar, IEEE Xplore, Elsevier Scopus) through the ingestion layer — where papers are deduplicated via DOI exact match and title fuzzy matching (Levenshtein > 90%), validated against authoritative registries, and classified into configurable research topics — to the dual-track LLM analysis engine (local Gemma4:e4b for batch processing, cloud Claude Opus 4.6 with extended thinking for high-stakes review tasks). The generated artifacts flow through a structured Meta Review validation pipeline before reaching the tutor-facing Zotero surface, ensuring that only editorially verified Extended Abstracts are shared externally.
 
 ---
 
 ![Feature Infographic](img/Infographic.png)
-*Complete feature overview.*
+
+**Figure 2 — Complete feature overview.** The infographic maps the full capability set of FL Research Monitor across its principal functional domains: automated paper discovery and enrichment, four-mode LLM analysis with versioned output, three independent review surfaces (Meta Review for Extended Abstract validation, Peer Review for confidential journal manuscript evaluation, Paper Quality Review for versioned scientific grading), the unified paper lifecycle management (My Manuscripts with submission timeline tracking, Review Journal with structured reviewer feedback, and manuscript bibliography with cascade keyword/label filters), role-based multi-user access control (admin, tutor/viewer) with granular permission gating, and the production deployment architecture (Docker multi-stage builds, Caddy reverse proxy with automatic TLS, hardened VPS with rate limiting and brute-force mitigation).
 
 ---
 
@@ -28,6 +34,8 @@ An interactive **Next.js dashboard** provides real-time exploration with stats c
 
 - [Research Topics](#research-topics)
 - [Three Review Surfaces](#three-review-surfaces)
+- [Unified Paper Lifecycle](#unified-paper-lifecycle)
+- [Role-Based Access & Guided Tour](#role-based-access--guided-tour)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Deployment Topologies](#deployment-topologies)
@@ -97,6 +105,103 @@ Personal quality assessment of papers already in your bibliography, used to grad
 - Four-format export per version (`paper_quality_{id}_v{N}.{pdf,tex,md,txt}`)
 - Quality filter and clickable Q badge in the papers list
 
+## Unified Paper Lifecycle
+
+The framework tracks the full lifecycle of user-authored manuscripts (role `my_manuscript`) and manuscripts under review for journals (role `reviewing`), from initial submission through successive revision rounds to final publication.
+
+### My Manuscripts
+
+Each manuscript has a dedicated detail page with a **split-pane layout**: the document viewer (left) and the management panels (right). The document viewer supports **tabbed navigation** between the main manuscript PDF and an optional **supplementary file**, each with independent upload and page-count tracking.
+
+The **document toolbar** (admin only) provides:
+- **Upload PDF** — main manuscript document
+- **TEX ⬆⬇** — import/export LaTeX source file
+- **MD ⬆⬇** — import/export Markdown source file
+- **S ↑** — upload supplementary file
+- **Overleaf** — direct link to the Overleaf project (if configured)
+
+**Document type classification**: each manuscript carries a `paper_type` field (Extended Abstract, Full Paper, Conference Paper, Journal Article, Camera Ready, Poster, Preprint) displayed as a colored badge in the manuscript list, detail header, and paper detail page.
+
+### Submission Timeline
+
+Per-manuscript timeline tracking each submission round with:
+- **Round label** from standardized presets (Abstract Submission, Extended Abstract, Full Paper, Revised Paper Round 1–3, Minor/Major Revision, Camera Ready, Final Submission, Poster/Presentation) or custom labels
+- **Document type**, **submission date**, **deadline** with visual urgency indicator (red overdue, amber within 7 days)
+- **Decision** (Pending, ✓ Accepted, ✓ Accepted w/ revisions, Minor revisions, Major revisions, Rejected) with date and notes
+- **Per-round PDF upload** for versioned document management
+
+The latest submission decision is displayed as a colored badge in the My Manuscripts list.
+
+### Review Journal
+
+Shared component for structured reviewer feedback, integrated in paper detail, peer review detail, and my-manuscripts detail pages. Each reviewer entry contains:
+- **Observations** with severity (major/minor/suggestion/praise), status tracking (to address → addressed / rejected justified / N/A), section references, and response fields
+- **Rating** (numeric with configurable scale and label)
+- **Decision** (Honours / Accepted / Minor revision / Major revision / Rejected)
+- **Evaluation rubric** with 8 default dimensions scored 1–5
+- **File attachments** (annotated PDFs, editorial letters)
+- **Edit lock** (admin): rating, decision, rubric, and observation status require explicit Edit/Done toggle to prevent accidental modifications
+
+### Manuscript Bibliography
+
+Per-manuscript citation list linking to papers in the main bibliography, with:
+- **Search and add** references from the paper database
+- **Import from label** with preview, rating filter, and select-all
+- **Context tagging** per reference (Introduction, Related Work, Methodology, Comparison, Results, Discussion)
+- **Keyword aggregate** with collapsible tag cloud and multi-select filter
+- **Label aggregate** with color badges and interdependent filter counts (keywords ↔ labels cascade)
+- **Export** in TXT (numbered list), BibTeX, and CSV formats
+
+## Role-Based Access & Guided Tour
+
+### User Roles
+
+| Capability | Admin | Tutor/Viewer |
+|-----------|-------|-------------|
+| Discovery, Topics, LLM analysis | Full access | Read-only |
+| Paper labels, notes, rating, TutorCheck | Full access | Hidden |
+| Peer Review, Quality Review, Meta Review | Full edit + AI suggest | Read-only (form disabled) |
+| My Manuscripts — upload, timeline, bibliography | Full edit | Read-only |
+| Review Journal — tutor notes | Full edit all entries | Add/edit/delete own `tutor_feedback` entries only |
+| Zotero sync | Full access | Hidden |
+| Settings — topics, users, API keys | Full access | Change own password only |
+| Reports — generate | Full access | View only |
+| Disable/Enrich paper | Full access | Hidden |
+
+### Tutor Notes
+
+Tutor/viewer users can leave feedback directly in the Review Journal via the **"+ Add Tutor Note"** button. Tutor notes are:
+- Visually highlighted with a **yellow border and amber TUTOR badge**
+- Timestamped with creation date/time
+- Editable only by the tutor who created them (text, severity, observations)
+- Visible to all users in the Review Journal
+
+### Guided Interactive Tour
+
+An interactive step-by-step overlay tour (powered by `driver.js`) guides new tutor/viewer users through the application:
+
+1. **General Tour** (12 steps) — auto-starts on first login at the Dashboard, covers all sidebar sections with descriptions
+2. **Manuscript Tour** (8 steps) — auto-starts on first visit to a My Manuscripts detail page, covers the document toolbar, PDF viewer, Submission Timeline, Review Journal, tutor note workflow, and bibliography
+
+Tours are stored per-user in `localStorage` and do not repeat after completion. All users can manually restart tours from the **About → Guided Tour** section.
+
+### Login Notifications & Audit Log
+
+- **Email notification** sent to the admin on every successful login (Gmail SMTP, non-blocking)
+- **Persistent login log** in the database, viewable in Settings → Login Log (admin only)
+- **Export** in TXT and CSV formats, with configurable history depth (Last 50 / 100 / 500 / All)
+
+### Password Security
+
+- Minimum 12, maximum 20 characters enforced at API level (Pydantic validation)
+- **Real-time strength indicator** with 6 criteria: uppercase, lowercase, number, special character, minimum length, no username inclusion
+- **Show/hide toggle** (eye icon) on all password fields
+- Admin can **reset any user's password** via inline form with strength validation
+
+### Sidebar NEW Badges
+
+Pulsing red dots appear on Meta Review, Peer Review, My Manuscripts, and Quality Review sidebar entries when new content has been added since the user's last visit to that section. The badge disappears when the user enters the section, tracked per-user via `localStorage`.
+
 ## Key Features
 
 ### Discovery & Data Collection
@@ -163,9 +268,11 @@ Personal quality assessment of papers already in your bibliography, used to grad
 
 ### Authentication & Security
 - **JWT authentication**: multi-user with access tokens (24h) + refresh tokens (7 days), bcrypt password hashing
-- **Role-based access**: admin (full access) and viewer (read-only)
+- **Role-based access**: admin (full access), tutor/viewer (read-only with tutor note capability); comprehensive frontend permission gating with `fieldset disabled` on review forms
 - **Admin-only LLM features**: AI-assisted peer review and AI-assisted paper quality assessment using Claude Opus 4.6 with extended thinking are protected by `require_admin` and hidden from non-admin UIs
-- **Admin panel**: user management (create, edit role, enable/disable)
+- **Admin panel**: user management (create, edit role, enable/disable, **reset password**, **delete user**), login log with export
+- **Login audit**: every successful login is logged to `login_log` table (user, IP, user-agent, timestamp) and triggers an email notification to the admin via Gmail SMTP
+- **Password strength**: real-time 6-criteria validation (uppercase, lowercase, number, special char, min length, no username) with visual strength bar
 - **Auto-seed**: default admin user created on first startup from `.env`
 - **Password validation** (production): Pydantic `Field(min_length=12, max_length=20)` enforced on both `CreateUserRequest` and `ChangePasswordRequest` — validated at API boundary, bypassed only by the bootstrap seed so the local dev env can still use short passwords
 - **Rate limiting**: SlowAPI per-IP throttle of **5 login attempts per minute** on `POST /auth/login`, with 429 Too Many Requests on overflow — mitigates brute force attacks
@@ -218,12 +325,16 @@ papers → analysis_queue          ← validation, rubric, scores, versioning
 papers → structured_analyses     ← Haiku-extracted FL techniques, datasets, method tags
 papers → citation_links          ← cached S2 citation network
 papers → paper_quality_reviews   ← versioned quality assessment
+papers → reviewer_entries        ← Review Journal observations + rubric + rating
+papers → submission_rounds       ← timeline round tracking with deadlines + decisions
+papers → paper_references        ← manuscript bibliography links
 peer_reviews                     ← isolated peer review module
 app_settings                     ← runtime config (PDF signature, ...)
 fetch_logs
 daily_reports
 smart_search_jobs
 users
+login_log                        ← access audit trail (user, IP, user-agent, timestamp)
 ```
 
 Note: the `papers` table carries a `tutor_check` column (nullable `'ok' | 'review' | 'no'`) used by the Tutor Check workflow.
@@ -283,7 +394,9 @@ All three topologies run from the same git branch (`main`) — the distinction i
 | **Patch management** | `unattended-upgrades` enabled for automatic security patches |
 | **Confidentiality** | Peer review manuscripts isolated in `data/peer-review/{id}/`, never indexed, never synced to Zotero |
 | **Data at rest** | SQLite file on disk with filesystem-level permissions; encryption at rest delegated to VPS storage layer |
-| **Audit trail** | Caddy JSON access log (stdout, captured by `docker logs`), backend application logs with timestamped events |
+| **Audit trail** | Caddy JSON access log (stdout, captured by `docker logs`), backend application logs with timestamped events, **login_log** table with user/IP/user-agent/timestamp (viewable in Settings, exportable as TXT/CSV) |
+| **Login notifications** | Gmail SMTP email sent to admin on every successful login (non-blocking background thread) |
+| **Password strength** | Real-time 6-criteria validation (uppercase, lowercase, digit, special char, min length 12, no username) with visual strength bar on all password forms |
 
 ### Known limitations (tracked for future hardening)
 - SSH on port 22 (default) — brute force reduced by fail2ban but not eliminated; tracked as future enhancement
@@ -445,7 +558,9 @@ openssl rand -base64 32 | tr -d "\n/=+"                    # API_SERVICE_KEY
 | **Comparison** | Side-by-side comparison of multiple papers across 13 structured fields, Research Gaps aggregation tab, saved comparisons in localStorage, Excel export |
 | **Compendium** | Embedded FedCompendium XL (React app) with educational content and learning paths |
 | **Reports** | Daily/Analysis tabs, inline HTML viewer, PDF download, report generation, analysis queue status |
-| **Settings** | Topic CRUD, user management (admin), change password, API costs, **PDF Author Signature**, system info |
+| **My Manuscripts** | Manuscript list with document type + submission status badges, creation form, detail page with split-pane (Main/Supplementary PDF tabs + Timeline + Review Journal + Bibliography) |
+| **Settings** | Topic CRUD (admin), **user management** (admin: create/delete/reset password/role change with strength validation), change password (all), login log with TXT/CSV export (admin), API costs (admin), **PDF Author Signature** (admin), system info |
+| **About** | Project information, tech stack, **Guided Tour** restart buttons (General + Manuscript) |
 
 ## API Endpoints
 
@@ -459,6 +574,9 @@ openssl rand -base64 32 | tr -d "\n/=+"                    # API_SERVICE_KEY
 | GET | `/api/v1/auth/users` | List users (admin) |
 | POST | `/api/v1/auth/users` | Create user (admin, password 12–20 chars) |
 | PUT | `/api/v1/auth/users/{id}` | Update user role/status (admin) |
+| PUT | `/api/v1/auth/users/{id}/reset-password` | Admin resets a user's password |
+| DELETE | `/api/v1/auth/users/{id}` | Delete user permanently (admin) |
+| GET | `/api/v1/auth/login-log` | Login audit log (admin, paginated) |
 
 ### Papers, Analytics & App Settings
 | Method | Path | Description |
@@ -469,6 +587,13 @@ openssl rand -base64 32 | tr -d "\n/=+"                    # API_SERVICE_KEY
 | POST | `/api/v1/papers/{id}/rate` | Rate paper 1–5 |
 | POST | `/api/v1/papers/{id}/tutor-check` | Set tutor check decision (`ok` / `review` / `no` / null) |
 | GET | `/api/v1/papers/{id}/pdf-file` | Stream the local PDF (auth required) |
+| GET | `/api/v1/papers/{id}/tex-file` | Download .tex source file |
+| GET | `/api/v1/papers/{id}/md-file` | Download .md source file |
+| GET | `/api/v1/papers/{id}/supplementary-file` | Download supplementary file |
+| POST | `/api/v1/papers/{id}/upload-supplementary` | Upload supplementary file |
+| POST | `/api/v1/papers/{id}/extract-pdf-keywords` | Extract keywords from local PDF |
+| GET | `/api/v1/papers/manuscript-status` | Latest submission round decision per manuscript |
+| GET | `/api/v1/papers/section-latest` | Latest timestamps per section (badge system) |
 | GET | `/api/v1/analytics/overview` | Dashboard KPIs |
 | GET | `/api/v1/analytics/timeline` | Discovery timeline data |
 | GET | `/api/v1/analytics/heatmap` | GitHub-style activity heatmap |
@@ -673,6 +798,19 @@ python scripts/merge_zotero_duplicate_collections.py --apply    # merge duplicat
 | v2.13.0 | 2026-04-11 | **Production hardening & VPS deployment**: password validation Pydantic `Field(min_length=12, max_length=20)`, SlowAPI rate limit 5/min on login, `Caddyfile.production` with `resmon.fabioliberti.com` + Let's Encrypt + HSTS + security headers, `docker-compose.production.yml` (ports 80/443/tcp + 443/udp HTTP/3), `.env.production.example` template, strong production secrets generated via `openssl rand` |
 | v2.13.1 | 2026-04-11 | Remove stale `COPY backend/alembic` from Dockerfile (empty dir untracked in git broke VPS build) |
 | v2.13.2 | 2026-04-11 | Documentation: Phase 10 (Docker + VPS deployment) and Phase 11 (Operational hardening roadmap) integrated into `DEVELOPMENT_PLAN.md` and `PROGRESS.md` |
+| v2.15–2.19 | 2026-04-12/14 | **Unified Paper Lifecycle** (Phase 12): `paper_role` column, peer review → paper FK, Review Journal with observations/severity/status/rubric/rating/decision, My Manuscripts page with side-by-side layout, Submission Timeline with deadline tracking, EditableHeader, conference/GitHub/Overleaf URLs, Mark as Published, Bibliography with cascade filters, role-based sidebar |
+| v2.20.0 | 2026-04-14 | Review Journal **read-only for viewer**, darker notes text, **admin edit lock** (Edit/Done toggle on rating/decision/rubric/status) |
+| v2.21.0 | 2026-04-14 | **Overleaf URL** field in paper metadata, submission round upload accepts .pdf/.md/.tex/.txt |
+| v2.22.0 | 2026-04-14 | **Tutor notes**: viewer can add/edit/delete `tutor_feedback` entries in Review Journal with yellow highlight and TUTOR badge |
+| v2.23–2.24 | 2026-04-14 | SubmissionTimeline read-only for viewer, full sidebar for all roles, **manuscript document panel** (PDF/TEX/MD buttons with import/export dropdown), Paper Detail opens in new tab |
+| v2.25.0 | 2026-04-14 | **Comprehensive viewer permissions lockdown**: labels, notes, rating, TutorCheck, upload, Zotero, forms disabled via fieldset for viewer across all pages |
+| v2.25.1–4 | 2026-04-14 | **User Management redesigned**: reset password inline form, delete user, password show/hide toggle, **real-time password strength bar** with 6-criteria validation |
+| v2.26.0–2 | 2026-04-14 | **Login notifications** (Gmail SMTP) + **persistent login log** with admin-only Settings panel, TXT/CSV export |
+| v2.27.0–1 | 2026-04-14 | **Guided Tour** (driver.js): 12-step sidebar tour + 8-step manuscript detail tour, auto-start for tutor/viewer; **editable observations** (text, severity, delete in edit mode) |
+| v2.28.0–6 | 2026-04-14 | **Sidebar NEW badges** (pulsing red dots on 4 review sections), **Extract Keywords from PDF** button for papers without DOI |
+| v2.29.0 | 2026-04-14 | **Document type** classification (Extended Abstract, Full Paper, Conference, Journal Article, Camera Ready, Poster, Preprint) with colored badges across manuscript pages |
+| v2.30.0–4 | 2026-04-14 | **Supplementary file**: upload, tabbed Main/Supplementary PDF viewer, red **S** badge with page count, `supplementary_path` field |
+| v2.31.0–2 | 2026-04-14/15 | **Manuscript submission status** badge in list (latest round decision), green checkmark ✓ on Accepted badges, About Guided Tour section visible to all profiles |
 
 ## Project Structure
 
@@ -709,6 +847,7 @@ RESerch_MON/
 │   │   │   ├── paper_quality_llm.py            ← Opus 4.6 extended thinking
 │   │   │   ├── review_templates.py             ← template registry (Generic, IEEE-TAI, Paper Quality)
 │   │   │   ├── pdf_keywords.py                 ← PDF keyword extractor v2
+│   │   │   ├── email_notify.py                 ← Gmail SMTP login notifications
 │   │   │   ├── app_settings.py                 ← async + sync helpers
 │   │   │   ├── zotero_sync.py                  ← Zotero integration (tutor check tags, paper PDF upload)
 │   │   │   └── …
@@ -742,12 +881,21 @@ RESerch_MON/
 │   │   │   ├── paper-quality/[id]/
 │   │   │   ├── comparison/             ← side-by-side comparison of papers
 │   │   │   └── …
-│   │   ├── components/                 # React components (layout, charts, dashboard)
+│   │   ├── components/                 # React components
+│   │   │   ├── layout/Sidebar.tsx      ← nav items, NEW badges, sidebar tabs
+│   │   │   ├── layout/AppShell.tsx     ← shell + GuidedTour mount
+│   │   │   ├── ReviewJournal.tsx       ← shared component (paper detail + peer review + manuscripts)
+│   │   │   ├── SubmissionTimeline.tsx   ← round tracking with decisions
+│   │   │   ├── ManuscriptBibliography.tsx ← cited papers with cascade filters
+│   │   │   ├── GuidedTour.tsx          ← driver.js interactive tours (sidebar + manuscript)
+│   │   │   └── …
 │   │   ├── hooks/                      # SWR data fetching hooks
 │   │   └── lib/
 │   │       ├── api.ts
 │   │       ├── auth.tsx
 │   │       ├── authHeaders.ts          ← shared helper (Record<string, string>, SSR-safe)
+│   │       ├── paperTypes.ts           ← document type labels and badge styles
+│   │       ├── newBadge.ts             ← sidebar NEW badge tracking (localStorage)
 │   │       ├── types.ts
 │   │       └── utils.ts
 │   ├── public/                         # Static assets + FedCompendium build
@@ -764,7 +912,7 @@ RESerch_MON/
 ├── .env.docker.example                 ← local Docker template
 ├── .env.production.example             ← production template (real .env.production only on VPS)
 ├── ARCHITECTURE.md
-├── DEVELOPMENT_PLAN.md                 ← Phase roadmap (up to Phase 11)
+├── DEVELOPMENT_PLAN.md                 ← Phase roadmap (through Phase 12 + operational hardening)
 ├── PROGRESS.md                         ← Session log
 └── README.md                           ← this file
 ```
