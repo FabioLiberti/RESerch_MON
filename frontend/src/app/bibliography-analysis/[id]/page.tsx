@@ -315,7 +315,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
             <select value={filterKeyword} onChange={e => setFilterKeyword(e.target.value)}
               className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
               <option value="">All keywords</option>
-              {keywordCounts.slice(0, 100).map(([kw]) => (
+              {[...keywordCounts].sort((a, b) => a[0].localeCompare(b[0])).slice(0, 100).map(([kw]) => (
                 <option key={kw} value={kw}>{kw}</option>
               ))}
             </select>
@@ -325,7 +325,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
             <select value={filterLabel} onChange={e => setFilterLabel(e.target.value)}
               className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
               <option value="">All labels</option>
-              {labelCounts.map(([name]) => (
+              {[...labelCounts].sort((a, b) => a[0].localeCompare(b[0])).map(([name]) => (
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
@@ -355,15 +355,15 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
           </div>
         </div>
 
-        {hasFilters && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--muted-foreground)]">
-              {filteredRefs.length} of {refs.length} references match
-            </span>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[var(--muted-foreground)]">
+            {hasFilters ? `${sortedRefs.length} of ${refs.length} references match` : `${refs.length} references`}
+          </span>
+          {hasFilters && (
             <button onClick={() => { setFilterKeyword(""); setFilterLabel(""); setFilterCitation(""); setFilterRating(""); }}
               className="text-[10px] text-red-400 hover:underline">Clear all filters</button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Filtered results table */}
         <div className="overflow-x-auto">
