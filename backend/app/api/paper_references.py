@@ -49,7 +49,7 @@ async def list_references(
 ):
     """List all papers cited by a manuscript, with their metadata."""
     result = await db.execute(
-        select(PaperReference, Paper.title, Paper.doi, Paper.journal, Paper.publication_date, Paper.disabled, Paper.rating, Paper.keywords_json)
+        select(PaperReference, Paper.title, Paper.doi, Paper.journal, Paper.publication_date, Paper.citation_count, Paper.disabled, Paper.rating, Paper.keywords_json)
         .join(Paper, PaperReference.cited_paper_id == Paper.id)
         .where(PaperReference.manuscript_id == manuscript_id)
         .order_by(PaperReference.created_at.asc())
@@ -80,6 +80,7 @@ async def list_references(
                 "doi": ref.doi,
                 "journal": ref.journal,
                 "publication_date": ref.publication_date,
+                "citation_count": ref.citation_count or 0,
                 "disabled": bool(ref.disabled),
                 "rating": ref.rating,
                 "keywords": [k.lower() for k in _json.loads(ref.keywords_json)] if ref.keywords_json else [],

@@ -94,11 +94,18 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
 
   const barMax = (entries: [string, number][]) => Math.max(...entries.map(e => e[1]), 1);
 
-  // --- Filters ---
+  // --- Filters + Sorting ---
   const [filterKeyword, setFilterKeyword] = useState("");
   const [filterLabel, setFilterLabel] = useState("");
   const [filterCitation, setFilterCitation] = useState("");
   const [filterRating, setFilterRating] = useState("");
+  const [sortField, setSortField] = useState<"title" | "citations" | "rating" | "year">("citations");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("desc"); }
+  };
 
   const filteredRefs = useMemo(() => {
     return refs.filter(r => {
@@ -119,6 +126,19 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
       return true;
     });
   }, [refs, filterKeyword, filterLabel, filterCitation, filterRating]);
+
+  const sortedRefs = useMemo(() => {
+    const list = [...filteredRefs];
+    const mul = sortDir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      if (sortField === "title") return mul * a.title.localeCompare(b.title);
+      if (sortField === "citations") return mul * ((a.citation_count || 0) - (b.citation_count || 0));
+      if (sortField === "rating") return mul * ((a.rating || 0) - (b.rating || 0));
+      if (sortField === "year") return mul * ((a.publication_date || "").localeCompare(b.publication_date || ""));
+      return 0;
+    });
+    return list;
+  }, [filteredRefs, sortField, sortDir]);
 
   const hasFilters = filterKeyword || filterLabel || filterCitation || filterRating;
 
@@ -350,15 +370,23 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
-                <th className="text-left py-2 pr-2">Title</th>
-                <th className="text-left py-2 pr-2 w-20">Citations</th>
-                <th className="text-left py-2 pr-2 w-16">Rating</th>
-                <th className="text-left py-2 pr-2 w-16">Year</th>
+                {([
+                  { key: "title" as const, label: "Title", w: "" },
+                  { key: "citations" as const, label: "Citations", w: "w-20" },
+                  { key: "rating" as const, label: "Rating", w: "w-16" },
+                  { key: "year" as const, label: "Year", w: "w-16" },
+                ] as const).map(col => (
+                  <th key={col.key} className={`text-left py-2 pr-2 ${col.w}`}>
+                    <button onClick={() => toggleSort(col.key)} className="hover:text-[var(--foreground)] transition-colors">
+                      {col.label} {sortField === col.key ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </th>
+                ))}
                 <th className="text-left py-2 w-24">Context</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {(hasFilters ? filteredRefs : refs).map(r => (
+              {sortedRefs.map(r => (
                 <tr key={r.id} className="hover:bg-[var(--secondary)] transition-colors">
                   <td className="py-2 pr-2">
                     <a href={`/papers/${r.cited_paper_id}`} target="_blank" rel="noopener noreferrer"
