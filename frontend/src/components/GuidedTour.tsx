@@ -190,15 +190,19 @@ export default function GuidedTour() {
   const [ready, setReady] = useState<"sidebar" | "manuscript" | null>(null);
 
   useEffect(() => {
-    if (!user || isAdmin) return;
+    if (!user) return;
 
     // Tour 1: Sidebar (on Dashboard)
+    // Auto-start only for tutor/viewer; admin can trigger via Restart
     if (pathname === "/" && !localStorage.getItem(TOUR_DONE_KEY)) {
-      const t = setTimeout(() => setReady("sidebar"), 800);
-      return () => clearTimeout(t);
+      if (!isAdmin) {
+        const t = setTimeout(() => setReady("sidebar"), 800);
+        return () => clearTimeout(t);
+      }
     }
 
     // Tour 2: Manuscript detail page
+    // Runs for ALL roles when localStorage key is absent (manual restart or first visit for tutor)
     if (pathname.startsWith("/my-manuscripts/") && pathname !== "/my-manuscripts" && !localStorage.getItem(TOUR_MANUSCRIPT_KEY)) {
       const t = setTimeout(() => setReady("manuscript"), 1000);
       return () => clearTimeout(t);
