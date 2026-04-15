@@ -40,15 +40,19 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
     try:
         async with async_session() as db:
             if topic_filter:
-                # Single topic
-                result = await db.execute(select(Topic).where(Topic.name == topic_filter))
-                topic = result.scalar_one_or_none()
-                if topic:
-                    r = await discovery.discover_papers(db, topic, max_per_source=50)
-                    results = [r]
-                else:
-                    results = []
-                    summary = f"Topic '{topic_filter}' not found"
+                # One or more topics (comma-separated)
+                topic_names = [t.strip() for t in topic_filter.split(",") if t.strip()]
+                results = []
+                for tname in topic_names:
+                    result = await db.execute(select(Topic).where(Topic.name == tname))
+                    topic = result.scalar_one_or_none()
+                    if topic:
+                        r = await discovery.discover_papers(db, topic, max_per_source=50)
+                        results.append(r)
+                    else:
+                        logger.warning(f"Topic '{tname}' not found, skipping")
+                if not results:
+                    summary = f"No matching topics found: {topic_filter}"
                     status = "error"
             else:
                 results = await discovery.discover_all_topics(db, max_per_source=50)

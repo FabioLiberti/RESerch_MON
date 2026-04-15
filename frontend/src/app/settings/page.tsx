@@ -602,6 +602,7 @@ interface JobRunEntry {
 function ScheduledJobsSection() {
   const { data: jobs, mutate: mutateJobs } = useSWR<JobInfo[]>("/api/v1/scheduled-jobs", authFetcher);
   const { data: runs, mutate: mutateRuns } = useSWR<JobRunEntry[]>("/api/v1/scheduled-jobs/runs?limit=20", authFetcher);
+  const { data: topics } = useSWR<{ id: number; name: string }[]>("/api/v1/topics", authFetcher);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [triggering, setTriggering] = useState<number | null>(null);
@@ -612,7 +613,7 @@ function ScheduledJobsSection() {
   const [newType, setNewType] = useState("discovery");
   const [newHour, setNewHour] = useState(6);
   const [newMinute, setNewMinute] = useState(0);
-  const [newTopic, setNewTopic] = useState("");
+  const [newTopics, setNewTopics] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
   // Edit form state
@@ -620,7 +621,7 @@ function ScheduledJobsSection() {
   const [editDesc, setEditDesc] = useState("");
   const [editHour, setEditHour] = useState(0);
   const [editMinute, setEditMinute] = useState(0);
-  const [editTopic, setEditTopic] = useState("");
+  const [editTopics, setEditTopics] = useState<string[]>([]);
 
   const createJob = async () => {
     setCreating(true);
@@ -629,11 +630,11 @@ function ScheduledJobsSection() {
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         label: newLabel.trim(), description: newDesc.trim(), job_type: newType,
-        hour: newHour, minute: newMinute, topic_filter: newTopic.trim() || null,
+        hour: newHour, minute: newMinute, topic_filter: newTopics.length > 0 ? newTopics.join(",") : null,
       }),
     });
     setShowCreate(false);
-    setNewLabel(""); setNewDesc(""); setNewType("discovery"); setNewHour(6); setNewMinute(0); setNewTopic("");
+    setNewLabel(""); setNewDesc(""); setNewType("discovery"); setNewHour(6); setNewMinute(0); setNewTopics([]);
     setCreating(false);
     mutateJobs();
   };
@@ -717,11 +718,27 @@ function ScheduledJobsSection() {
                   className="w-16 px-2 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm text-center" />
               </div>
             </div>
-            {newType === "discovery" && (
+            {newType === "discovery" && topics && topics.length > 0 && (
               <div className="sm:col-span-2">
-                <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Topic Filter (leave empty for all topics)</label>
-                <input value={newTopic} onChange={e => setNewTopic(e.target.value)} placeholder="e.g. Federated Learning in Healthcare"
-                  className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none" />
+                <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">
+                  Topics {newTopics.length === 0 ? "(all)" : `(${newTopics.length} selected)`}
+                </label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {topics.map(t => {
+                    const sel = newTopics.includes(t.name);
+                    return (
+                      <button key={t.id} type="button"
+                        onClick={() => setNewTopics(sel ? newTopics.filter(n => n !== t.name) : [...newTopics, t.name])}
+                        className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-colors ${sel ? "bg-purple-700 text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]"}`}>
+                        {sel ? "✓ " : ""}{t.name}
+                      </button>
+                    );
+                  })}
+                  {newTopics.length > 0 && (
+                    <button type="button" onClick={() => setNewTopics([])}
+                      className="text-[10px] px-2 py-1 rounded-full text-red-400 hover:bg-red-500/10">Clear all</button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -755,13 +772,23 @@ function ScheduledJobsSection() {
                   <input type="number" min={0} max={59} value={editMinute} onChange={e => setEditMinute(Number(e.target.value))}
                     className="w-14 text-xs px-1 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
                   <span className="text-[9px] text-[var(--muted-foreground)]">UTC</span>
-                  {job.job_type === "discovery" && (
-                    <input value={editTopic} onChange={e => setEditTopic(e.target.value)} placeholder="Topic filter (empty = all)"
-                      className="flex-1 px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-xs" />
+                  {job.job_type === "discovery" && topics && topics.length > 0 && (
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {topics.map(t => {
+                        const sel = editTopics.includes(t.name);
+                        return (
+                          <button key={t.id} type="button"
+                            onClick={() => setEditTopics(sel ? editTopics.filter(n => n !== t.name) : [...editTopics, t.name])}
+                            className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${sel ? "bg-purple-700 text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>
+                            {sel ? "✓ " : ""}{t.name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => updateJob(job.id, { label: editLabel, description: editDesc, hour: editHour, minute: editMinute, topic_filter: editTopic || null })}
+                  <button onClick={() => updateJob(job.id, { label: editLabel, description: editDesc, hour: editHour, minute: editMinute, topic_filter: editTopics.length > 0 ? editTopics.join(",") : "" })}
                     className="text-[10px] px-3 py-1.5 rounded bg-emerald-700 text-white font-bold">Save</button>
                   <button onClick={() => setEditingId(null)} className="text-[10px] px-3 py-1.5 rounded hover:bg-[var(--muted)]">Cancel</button>
                 </div>
@@ -774,7 +801,10 @@ function ScheduledJobsSection() {
                     <span className={`w-2 h-2 rounded-full shrink-0 ${job.enabled ? "bg-emerald-500" : "bg-gray-500"}`} />
                     <span className="text-sm font-bold">{job.label}</span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-700 text-white font-bold">{job.job_type === "discovery" ? "DISCOVERY" : "CITATION"}</span>
-                    {job.topic_filter && <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-700 text-white">{job.topic_filter}</span>}
+                    {job.topic_filter && job.topic_filter.split(",").map(t => (
+                      <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-700 text-white">{t}</span>
+                    ))}
+                    {!job.topic_filter && job.job_type === "discovery" && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-600 text-white">ALL TOPICS</span>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] font-mono">
@@ -792,7 +822,7 @@ function ScheduledJobsSection() {
                       className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-50">
                       {triggering === job.id ? "Running..." : "Run Now"}
                     </button>
-                    <button onClick={() => { setEditingId(job.id); setEditLabel(job.label); setEditDesc(job.description); setEditHour(job.hour); setEditMinute(job.minute); setEditTopic(job.topic_filter || ""); }}
+                    <button onClick={() => { setEditingId(job.id); setEditLabel(job.label); setEditDesc(job.description); setEditHour(job.hour); setEditMinute(job.minute); setEditTopics(job.topic_filter ? job.topic_filter.split(",") : []); }}
                       className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)]">Edit</button>
                     <button onClick={() => deleteJob(job.id, job.label)}
                       className="text-[10px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10">Del</button>
