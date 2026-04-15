@@ -398,13 +398,25 @@ propri sottomessi a journal con osservazioni dai reviewer.
 - [ ] Comparison export/import tra localStorage di origini diverse (Mac `:3000` ↔ VPS `resmon.fabioliberti.com`)
 - [ ] **Zotero Group Library Sync** — per-label mapping (label → Group Library ID + collection), artifact selection per-label (PDF, EXT.ABS, Summary, Quick, Deep, Validation, Quality), filtri globali (tutor_check=OK, exclude disabled). Design: tabella `label_group_sync` + `paper_group_sync`. **Prerequisito**: osservare per 2-3 settimane se i tutor scrivono nel Group Library o sono solo lettori — determina se serve sync unidirezionale semplice (~8h) o merge bidirezionale con protezione campi (~12h)
 
-### Completati (sessione 2026-04-14)
+### Completati (sessione 2026-04-14/15)
 
-- [x] **Review Journal read-only for viewer (v2.20.0)** — all edit/add/delete buttons hidden for viewer, darker notes text (`text-foreground`), admin edit-lock (Edit/Done toggle protects rating, decision, rubric, observation status from accidental clicks)
-- [x] **Manuscript development center (v2.21.0)** — `overleaf_url` field in paper metadata (model, schema, API, EditableHeader, header display with emerald icon), submission round upload accepts .pdf/.md/.tex/.txt with extension validation + dynamic file type badge
-- [x] **Tutor notes in manuscript (v2.22.0)** — viewer can add/edit/delete `tutor_feedback` entries in Review Journal (blue TUTOR badge, simplified form, backend enforces source_type restriction for viewer)
+- [x] **Review Journal read-only for viewer (v2.20.0)** — all edit/add/delete buttons hidden for viewer, darker notes text, admin edit-lock
+- [x] **Manuscript development center (v2.21.0–v2.24.1)** — Overleaf URL, multi-format upload, PDF/TEX/MD dropdowns, supplementary file with tabbed viewer
+- [x] **Tutor notes (v2.22.0–v2.35.0)** — tutor_feedback entries with red ! TUTOR badge, addressee multi-select, status workflow (NEW→READ→REPLIED→ACKNOWLEDGED), email notifications at each transition
+- [x] **Viewer permissions lockdown (v2.23.0–v2.25.0)** — comprehensive audit across all pages, fieldset disabled on review forms
+- [x] **User Management (v2.25.1–v2.25.4)** — reset password inline, delete user, password strength bar (6 criteria, show/hide toggle)
+- [x] **Login notifications (v2.26.0–v2.26.2)** — Gmail SMTP, login_log table, Settings panel with TXT/CSV export
+- [x] **Guided Tours (v2.27.0–v2.28.3)** — driver.js sidebar + manuscript tours, sidebar NEW badges
+- [x] **Document type classification (v2.29.0)** — 7 types with colored badges across manuscript pages
+- [x] **Supplementary file (v2.30.0–v2.30.4)** — upload, tabbed viewer, red S badge with page count
+- [x] **Submission status (v2.31.0)** — latest round decision badge in manuscript list
+- [x] **Scheduled Jobs admin (v2.32.0–v2.33.7)** — full CRUD, DB-driven, topic filter multi-select, run logging, email notifications, citation refresh retry with backoff
+- [x] **Development Notes + Bibliography Notes (v2.34.0–v2.34.7)** — per-user notes with edit lock, note icons in list
+- [x] **Bibliography Analysis (v2.34.0–v2.34.7)** — page with 6 charts, cascade filters, sortable table, Year filter
+- [x] **Extract Keywords from PDF (v2.28.4)** — button for papers without DOI
+- [x] **Platform Presentation (v2.34.8)** — PDF documentation in About page
+- [x] **Email integration (v2.26.0)** — Gmail SMTP for login, job completion, tutor note notifications
 
 ### Scalabilità condizionale
 
 - [ ] **PostgreSQL** migration da SQLite (solo quando serve per multi-utente concorrenti o >10k paper)
-- [ ] Email report integration (SendGrid/Gmail SMTP) per notifiche admin

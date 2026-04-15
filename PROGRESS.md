@@ -1,8 +1,62 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.22.0 — Phase 12 complete + Review Journal viewer/tutor + Manuscript dev center
-**Current Version:** v2.22.0
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — All pending items from session 2026-04-11/14 completed: Review Journal read-only + edit lock, Overleaf URL + multi-format upload, tutor notes
+**Current Phase:** v2.35.0 — Full tutor collaboration + manuscript lifecycle + scheduled jobs + bibliography analysis
+**Current Version:** v2.35.0
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Complete tutor notification workflow, manuscript dev center with supplementary files, scheduled job admin panel, bibliography analysis, guided tours, login audit
+
+---
+
+### 2026-04-14/15 — Session: v2.20.0 → v2.35.0 (35+ releases)
+
+**Review Journal & Tutor Notes (v2.20–v2.22, v2.27.1, v2.34.6, v2.35.0):**
+- Review Journal read-only for viewer + admin edit lock (Edit/Done toggle)
+- Tutor notes: source_type `tutor_feedback`, red box with ! TUTOR badge
+- Editable observations (text, severity, delete)
+- Notification system: addressee multi-select, status workflow (NEW→READ→REPLIED→ACKNOWLEDGED), email at each transition
+
+**Manuscript Development Center (v2.21–v2.24, v2.29–v2.31):**
+- Overleaf URL field, multi-format upload (.pdf/.md/.tex/.txt)
+- Document panel with PDF/TEX/MD import-export dropdowns
+- Supplementary file: upload, tabbed Main/Supplementary viewer, red S badge with page count
+- Document type classification (7 types with colored badges)
+- Submission status badge in manuscript list
+- Paper Detail opens in new tab
+
+**Viewer Permissions Lockdown (v2.23–v2.25):**
+- Comprehensive audit: labels, notes, rating, TutorCheck, Zotero, forms disabled for viewer
+- Sidebar: all menus visible, LLM references removed
+- User Management redesigned: reset password inline, delete user, password strength bar (6 criteria)
+
+**Login & Security (v2.25–v2.26):**
+- Login notifications via Gmail SMTP + persistent login_log table
+- Login Log in Settings with TXT/CSV export
+- Password show/hide toggle on all fields
+
+**Guided Tours (v2.27–v2.28):**
+- driver.js: 12-step sidebar tour + 8-step manuscript tour
+- Auto-start for tutor/viewer, manual restart for all from About
+- Sidebar NEW badges (pulsing red dots) on 4 review sections
+
+**Scheduled Jobs Admin (v2.32–v2.33):**
+- Full CRUD: create/edit/delete/enable/disable/trigger jobs from Settings
+- DB-driven (no more hardcoded), topic filter multi-select
+- Run logging with persistent running state + live polling
+- Email notifications per job with topic breakdown
+- Citation refresh: retry with exponential backoff on 429
+- Execution History with View Report link, run ID traceability
+
+**Bibliography & Notes (v2.34):**
+- Development Notes + Bibliography Notes (per-user, edit lock)
+- Bibliography Analysis page: 6 charts + cascade filters + sortable table
+- Extract Keywords from PDF button (papers without DOI)
+- Note icons in manuscript list (! tutor, notepad dev, lens bib)
+
+**Documentation:**
+- README comprehensive update with all v2.20–v2.35 features
+- Platform Presentation PDF in About page
+- Image captions for architecture diagram and feature infographic
+
+**Tags released:** v2.20.0 → v2.35.0 (35+ releases in one session)
 
 ---
 
