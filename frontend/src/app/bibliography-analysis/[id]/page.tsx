@@ -378,15 +378,15 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
         </div>
 
         {/* Filtered results table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className="overflow-x-auto -mx-4 px-4">
+          <table className="w-full text-xs table-fixed min-w-[600px]">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 {([
-                  { key: "title" as const, label: "Title", w: "" },
-                  { key: "citations" as const, label: "Citations", w: "w-20" },
-                  { key: "rating" as const, label: "Rating", w: "w-16" },
-                  { key: "year" as const, label: "Year", w: "w-16" },
+                  { key: "title" as const, label: "Title", w: "w-[45%]" },
+                  { key: "citations" as const, label: "Cit.", w: "w-[12%]" },
+                  { key: "rating" as const, label: "Rating", w: "w-[12%]" },
+                  { key: "year" as const, label: "Year", w: "w-[10%]" },
                 ] as const).map(col => (
                   <th key={col.key} className={`text-left py-2 pr-2 ${col.w}`}>
                     <button onClick={() => toggleSort(col.key)} className="hover:text-[var(--foreground)] transition-colors">
@@ -394,29 +394,29 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
                     </button>
                   </th>
                 ))}
-                <th className="text-left py-2 w-24">Context</th>
+                <th className="text-left py-2 w-[21%]">Context</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
               {sortedRefs.map(r => (
                 <tr key={r.id} className="hover:bg-[var(--secondary)] transition-colors">
-                  <td className="py-2 pr-2">
+                  <td className="py-2 pr-2 break-words">
                     <a href={`/papers/${r.cited_paper_id}`} target="_blank" rel="noopener noreferrer"
-                      className="hover:text-[var(--primary)] line-clamp-1">
+                      className="hover:text-[var(--primary)] line-clamp-2">
                       {r.title}
                     </a>
                     {r.labels.length > 0 && (
-                      <div className="flex gap-1 mt-0.5">
+                      <div className="flex flex-wrap gap-1 mt-0.5">
                         {r.labels.map(l => (
                           <span key={l.name} className="text-[8px] px-1 py-0.5 rounded-full" style={{ backgroundColor: `${l.color}25`, color: l.color }}>{l.name}</span>
                         ))}
                       </div>
                     )}
                   </td>
-                  <td className="py-2 pr-2 font-mono">{r.citation_count || 0}</td>
-                  <td className="py-2 pr-2 text-amber-400">{r.rating ? "★".repeat(r.rating) : "—"}</td>
-                  <td className="py-2 pr-2 font-mono">{r.publication_date?.slice(0, 4) || "—"}</td>
-                  <td className="py-2 capitalize text-[var(--muted-foreground)]">{r.context?.replace("_", " ") || "—"}</td>
+                  <td className="py-2 pr-2 font-mono text-center">{r.citation_count || 0}</td>
+                  <td className="py-2 pr-2 text-amber-400 text-center">{r.rating ? "★".repeat(r.rating) : "—"}</td>
+                  <td className="py-2 pr-2 font-mono text-center">{r.publication_date?.slice(0, 4) || "—"}</td>
+                  <td className="py-2 capitalize text-[var(--muted-foreground)] text-[10px]">{r.context?.replace("_", " ") || "—"}</td>
                 </tr>
               ))}
             </tbody>
