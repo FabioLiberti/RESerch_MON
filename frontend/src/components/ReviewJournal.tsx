@@ -30,6 +30,9 @@ interface ReviewerEntry {
   decision: string | null;
   rubric: { dimension: string; score: number | null; score_max: number }[];
   items: Observation[];
+  addressed_to: string[];
+  note_status: string | null;
+  read_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -100,8 +103,14 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
     authFetcher
   );
 
+  // Users list for addressee selector
+  const { data: usersList } = useSWR<{ username: string; role: string }[]>(
+    "/api/v1/review-journal/users-list", authFetcher
+  );
+
   const [showAddForm, setShowAddForm] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [newAddressedTo, setNewAddressedTo] = useState<string[]>([]);
   const [newSourceType, setNewSourceType] = useState("other");
   const [newDate, setNewDate] = useState("");
   const [newRawText, setNewRawText] = useState("");
@@ -243,7 +252,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
 
       {/* Add Tutor Note Form (viewer) */}
       {!isAdmin && showAddForm && (
-        <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/20 space-y-3">
+        <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/20 space-y-3">
           <input
             value={newLabel}
             onChange={e => setNewLabel(e.target.value)}
@@ -257,6 +266,36 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             rows={4}
             className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none resize-y"
           />
+          {/* Addressee selector */}
+          {usersList && usersList.length > 0 && (
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">
+                Notify {newAddressedTo.length === 0 ? "(none selected — no email)" : `(${newAddressedTo.length} selected)`}
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {usersList.map(u => {
+                  const sel = newAddressedTo.includes(u.username);
+                  return (
+                    <button key={u.username} type="button"
+                      onClick={() => setNewAddressedTo(sel ? newAddressedTo.filter(n => n !== u.username) : [...newAddressedTo, u.username])}
+                      className={cn(
+                        "text-[10px] px-2 py-1 rounded-full font-bold transition-colors",
+                        sel ? "bg-red-700 text-white" : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                      )}>
+                      {sel ? "✓ " : ""}{u.username}
+                      <span className="text-[8px] ml-1 opacity-60">{u.role}</span>
+                    </button>
+                  );
+                })}
+                {newAddressedTo.length > 0 && (
+                  <button type="button" onClick={() => setNewAddressedTo([])}
+                    className="text-[10px] px-2 py-1 rounded-full text-red-400 hover:bg-red-500/10">Clear</button>
+                )}
+                <button type="button" onClick={() => setNewAddressedTo(usersList.map(u => u.username))}
+                  className="text-[10px] px-2 py-1 rounded-full text-[var(--primary)] hover:bg-[var(--primary)]/10">All</button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={async () => {
@@ -272,9 +311,10 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                       received_at: null,
                       raw_text: newRawText || null,
                       items: [],
+                      addressed_to: newAddressedTo.length > 0 ? newAddressedTo : null,
                     }),
                   });
-                  setNewLabel(""); setNewRawText("");
+                  setNewLabel(""); setNewRawText(""); setNewAddressedTo([]);
                   setShowAddForm(false);
                   mutate(`/api/v1/review-journal/${paperId}`);
                 } finally {
@@ -282,7 +322,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 }
               }}
               disabled={!newLabel.trim() || creating}
-              className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-bold hover:bg-red-600 disabled:opacity-50 transition-colors"
             >
               {creating ? "..." : "Add Note"}
             </button>
@@ -399,6 +439,23 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {/* Tutor note status badge */}
+                {isTutorEntry && entry.note_status && (
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold",
+                    entry.note_status === "new" ? "bg-red-600 text-white" :
+                    entry.note_status === "read" ? "bg-blue-600 text-white" :
+                    entry.note_status === "replied" ? "bg-emerald-600 text-white" :
+                    "bg-gray-600 text-white"
+                  )}>
+                    {entry.note_status === "new" ? "NEW" : entry.note_status === "read" ? "READ" : entry.note_status === "replied" ? "REPLIED" : entry.note_status.toUpperCase()}
+                  </span>
+                )}
+                {/* Addressed to */}
+                {isTutorEntry && entry.addressed_to && entry.addressed_to.length > 0 && (
+                  <span className="text-[8px] text-[var(--muted-foreground)]" title={`Addressed to: ${entry.addressed_to.join(", ")}`}>
+                    → {entry.addressed_to.length === 1 ? entry.addressed_to[0] : `${entry.addressed_to.length} users`}
+                  </span>
+                )}
                 {entry.decision && (
                   <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold", DECISION_COLORS[entry.decision] || "bg-gray-600 text-white")}>
                     {DECISION_OPTIONS.find(o => o.value === entry.decision)?.label || entry.decision}
@@ -422,6 +479,60 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
             {/* Expanded content */}
             {isExpanded && (
               <div className="border-t border-[var(--border)] px-4 py-3 space-y-3">
+                {/* Note status actions (for tutor_feedback entries) */}
+                {isTutorEntry && entry.note_status && isAdmin && entry.note_status === "new" && (
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={async () => {
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}/status`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ status: "read" }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="text-[10px] px-3 py-1 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-600"
+                    >
+                      Mark as Read
+                    </button>
+                  </div>
+                )}
+                {isTutorEntry && entry.note_status === "read" && isAdmin && (
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        const reply = prompt("Your reply to this tutor note:");
+                        if (reply === null) return;
+                        fetch(`/api/v1/review-journal/entry/${entry.id}/status`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ status: "replied", response_text: reply }),
+                        }).then(() => mutate(`/api/v1/review-journal/${paperId}`));
+                      }}
+                      className="text-[10px] px-3 py-1 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600"
+                    >
+                      Reply
+                    </button>
+                  </div>
+                )}
+                {isTutorEntry && entry.note_status === "replied" && !isAdmin && (
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={async () => {
+                        await fetch(`/api/v1/review-journal/entry/${entry.id}/status`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ status: "acknowledged" }),
+                        });
+                        mutate(`/api/v1/review-journal/${paperId}`);
+                      }}
+                      className="text-[10px] px-3 py-1 rounded-lg bg-gray-700 text-white font-bold hover:bg-gray-600"
+                    >
+                      Acknowledge
+                    </button>
+                  </div>
+                )}
+
                 {/* Edit lock toggle */}
                 {canEditEntry && (
                   <div className="flex justify-end">

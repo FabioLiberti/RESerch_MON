@@ -52,6 +52,7 @@ class CreateReviewerEntryRequest(BaseModel):
     decision: str | None = None
     rubric: list[RubricDimension] | None = None
     items: list[ObservationItem] = []
+    addressed_to: list[str] | None = None  # usernames to notify
 
 
 class UpdateReviewerEntryRequest(BaseModel):
@@ -85,6 +86,9 @@ def _serialize(entry: ReviewerEntry) -> dict:
         "decision": entry.decision,
         "rubric": entry.rubric,
         "items": entry.items,
+        "addressed_to": entry.addressed_to,
+        "note_status": entry.note_status,
+        "read_at": entry.read_at.isoformat() if entry.read_at else None,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
         "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
     }
@@ -97,6 +101,17 @@ def _storage_dir(paper_id: int) -> Path:
 
 
 # --- Endpoints ---
+
+@router.get("/users-list")
+async def get_users_list(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List active users (username + role) for addressee selection."""
+    from sqlalchemy import select as sel
+    result = await db.execute(sel(User).where(User.is_active == True))  # noqa: E712
+    users = result.scalars().all()
+    return [{"username": u.username, "role": u.role} for u in users if u.username != user.username]
 
 @router.get("/{paper_id}")
 async def list_entries(
@@ -156,6 +171,14 @@ async def create_entry(
     if body.rubric is not None:
         entry.rubric = [r.model_dump() for r in body.rubric]
     entry.items = [item.model_dump() for item in body.items]
+
+    # Tutor feedback: set notification fields
+    if body.source_type == "tutor_feedback":
+        entry.addressed_to = body.addressed_to or []
+        entry.note_status = "new"
+        # Send email to addressed users
+        _send_tutor_note_email(user.username, paper_id, body.raw_text or "", body.addressed_to or [], db)
+
     db.add(entry)
     await db.flush()
     await db.commit()
@@ -274,3 +297,187 @@ async def get_attachment(
         filename=file_path.name,
         media_type=media_type,
     )
+
+
+# --- Note status change ---
+
+class NoteStatusRequest(BaseModel):
+    status: str  # read | replied | acknowledged
+    response_text: str | None = None  # for "replied" status
+
+
+@router.put("/entry/{entry_id}/status")
+async def update_note_status(
+    entry_id: int,
+    body: NoteStatusRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the notification status of a tutor note entry."""
+    entry = await db.get(ReviewerEntry, entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    if entry.source_type != "tutor_feedback":
+        raise HTTPException(status_code=400, detail="Status only applies to tutor feedback entries")
+
+    old_status = entry.note_status
+    entry.note_status = body.status
+
+    if body.status == "read" and not entry.read_at:
+        from datetime import datetime
+        entry.read_at = datetime.utcnow()
+
+    # If replying, add the response as an observation
+    if body.status == "replied" and body.response_text:
+        items = entry.items
+        items.append({
+            "text": body.response_text,
+            "section_ref": None,
+            "severity": "suggestion",
+            "status": "addressed",
+            "response": f"Reply from {user.username}",
+        })
+        entry.items = items
+
+    await db.commit()
+    logger.info(f"Note status updated: entry={entry_id}, {old_status} -> {body.status} by {user.username}")
+
+    # Send notification email
+    _send_status_change_email(entry, user.username, old_status, body.status, body.response_text)
+
+    return _serialize(entry)
+
+
+# --- Email helpers ---
+
+def _send_tutor_note_email(from_user: str, paper_id: int, note_text: str, addressed_to: list[str], db):
+    """Send email to addressed users when a tutor note is created."""
+    import threading
+    try:
+        from app.config import settings
+        if not settings.smtp_user or not settings.smtp_app_password:
+            return
+
+        import smtplib
+        from email.mime.text import MIMEText
+
+        # Fetch email addresses for addressed users
+        import sqlite3
+        conn = sqlite3.connect(str(Path(settings.database_url.replace("sqlite+aiosqlite:///", ""))))
+        recipients = []
+        for username in addressed_to:
+            row = conn.execute("SELECT email FROM users WHERE username = ? AND is_active = 1", (username,)).fetchone()
+            if row and row[0]:
+                recipients.append(row[0])
+        # Also notify admin email
+        if settings.notify_email and settings.notify_email not in recipients:
+            recipients.append(settings.notify_email)
+        conn.close()
+
+        if not recipients:
+            return
+
+        from datetime import datetime
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        subject = f"📝 [RESerch Monitor] New Tutor Note from {from_user}"
+        body = (
+            f"New Tutor Note\n\n"
+            f"From:       {from_user}\n"
+            f"Paper ID:   {paper_id}\n"
+            f"Time:       {now}\n"
+            f"Addressed:  {', '.join(addressed_to) if addressed_to else 'all'}\n"
+            f"\n--- Note ---\n{note_text or '(no text)'}\n\n"
+            f"View: https://resmon.fabioliberti.com/my-manuscripts/{paper_id}\n"
+        )
+
+        msg = MIMEText(body, "plain")
+        msg["Subject"] = subject
+        msg["From"] = settings.smtp_user
+
+        def send():
+            try:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+                    server.login(settings.smtp_user, settings.smtp_app_password)
+                    for rcpt in recipients:
+                        msg.replace_header("To", rcpt) if "To" in msg else msg.__setitem__("To", rcpt)
+                        server.send_message(msg)
+            except Exception as e:
+                logger.warning(f"Tutor note email failed: {e}")
+
+        threading.Thread(target=send, daemon=True).start()
+    except Exception as e:
+        logger.warning(f"Tutor note email setup failed: {e}")
+
+
+def _send_status_change_email(entry: ReviewerEntry, changed_by: str, old_status: str | None, new_status: str, response_text: str | None = None):
+    """Send email when note status changes."""
+    import threading
+    try:
+        from app.config import settings
+        if not settings.smtp_user or not settings.smtp_app_password:
+            return
+
+        import smtplib
+        from email.mime.text import MIMEText
+        import sqlite3
+
+        # Notify the note author + addressed users
+        conn = sqlite3.connect(str(Path(settings.database_url.replace("sqlite+aiosqlite:///", ""))))
+        recipients = set()
+
+        # Author of the note
+        # reviewer_label is the author name — find their email
+        row = conn.execute("SELECT email FROM users WHERE username = ? AND is_active = 1", (entry.reviewer_label,)).fetchone()
+        if row and row[0]:
+            recipients.add(row[0])
+
+        # Addressed users
+        for username in entry.addressed_to:
+            row = conn.execute("SELECT email FROM users WHERE username = ? AND is_active = 1", (username,)).fetchone()
+            if row and row[0]:
+                recipients.add(row[0])
+
+        # Admin
+        if settings.notify_email:
+            recipients.add(settings.notify_email)
+        conn.close()
+
+        if not recipients:
+            return
+
+        from datetime import datetime
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        status_labels = {"read": "Read", "replied": "Replied", "acknowledged": "Acknowledged"}
+        icon = {"read": "👁", "replied": "💬", "acknowledged": "✅"}.get(new_status, "📌")
+
+        subject = f"{icon} [RESerch Monitor] Note {status_labels.get(new_status, new_status)} by {changed_by}"
+        body = (
+            f"Note Status Update\n\n"
+            f"Changed by: {changed_by}\n"
+            f"Status:     {old_status or 'new'} → {new_status}\n"
+            f"Time:       {now}\n"
+            f"Note by:    {entry.reviewer_label}\n"
+            f"Paper ID:   {entry.paper_id}\n"
+        )
+        if response_text:
+            body += f"\n--- Reply ---\n{response_text}\n"
+        body += f"\nView: https://resmon.fabioliberti.com/my-manuscripts/{entry.paper_id}\n"
+
+        msg = MIMEText(body, "plain")
+        msg["Subject"] = subject
+        msg["From"] = settings.smtp_user
+
+        def send():
+            try:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+                    server.login(settings.smtp_user, settings.smtp_app_password)
+                    for rcpt in recipients:
+                        del msg["To"]
+                        msg["To"] = rcpt
+                        server.send_message(msg)
+            except Exception as e:
+                logger.warning(f"Status change email failed: {e}")
+
+        threading.Thread(target=send, daemon=True).start()
+    except Exception as e:
+        logger.warning(f"Status change email setup failed: {e}")

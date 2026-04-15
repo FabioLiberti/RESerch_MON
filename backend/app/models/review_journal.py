@@ -55,6 +55,11 @@ class ReviewerEntry(Base):
     #               "response": "..."}]
     items_json = Column(Text, default="[]")
 
+    # Notification fields (for tutor_feedback entries)
+    addressed_to_json = Column(Text, nullable=True)   # JSON array of usernames: ["admin", "fabio.liberti"]
+    note_status = Column(String(20), nullable=True)    # new | read | replied | acknowledged
+    read_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -65,6 +70,14 @@ class ReviewerEntry(Base):
     @items.setter
     def items(self, value: list[dict]):
         self.items_json = json.dumps(value)
+
+    @property
+    def addressed_to(self) -> list[str]:
+        return json.loads(self.addressed_to_json) if self.addressed_to_json else []
+
+    @addressed_to.setter
+    def addressed_to(self, value: list[str]):
+        self.addressed_to_json = json.dumps(value) if value else None
 
     @property
     def rubric(self) -> list[dict]:
