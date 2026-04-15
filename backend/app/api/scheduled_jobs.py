@@ -74,9 +74,15 @@ async def list_jobs(
 
     out = []
     for job in jobs:
-        # Last run
+        # Check if currently running
+        running_result = await db.execute(
+            select(JobRun).where(JobRun.job_name == job.job_key, JobRun.status == "running").limit(1)
+        )
+        is_running = running_result.scalar_one_or_none() is not None
+
+        # Last completed run
         lr_result = await db.execute(
-            select(JobRun).where(JobRun.job_name == job.job_key).order_by(JobRun.started_at.desc()).limit(1)
+            select(JobRun).where(JobRun.job_name == job.job_key, JobRun.status != "running").order_by(JobRun.started_at.desc()).limit(1)
         )
         last_run = lr_result.scalar_one_or_none()
 
@@ -89,7 +95,9 @@ async def list_jobs(
         except Exception:
             pass
 
-        out.append(_serialize_job(job, last_run, next_run))
+        sj = _serialize_job(job, last_run, next_run)
+        sj["is_running"] = is_running
+        out.append(sj)
 
     return out
 

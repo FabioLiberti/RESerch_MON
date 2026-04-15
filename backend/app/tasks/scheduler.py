@@ -27,6 +27,7 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
 
     logger.info(f"=== Discovery Job '{job_key}' Started (topic={topic_filter or 'ALL'}) ===")
     start = datetime.utcnow()
+    run_id = await _start_run(job_key)
     summary = ""
     error_msg = ""
     status = "ok"
@@ -95,7 +96,7 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
     elapsed = (datetime.utcnow() - start).total_seconds()
     logger.info(f"=== Discovery Job '{job_key}' Complete ({elapsed:.1f}s) ===")
 
-    run_id = await _log_run(job_key, status, elapsed, summary, error_msg)
+    await _finish_run(run_id, status, elapsed, summary, error_msg)
 
     # Generate report AFTER logging (so we have the run_id)
     try:
@@ -114,6 +115,7 @@ async def run_citation_refresh_job(job_key: str, notify: bool = True):
     """Refresh citation counts for all papers via Semantic Scholar."""
     logger.info(f"=== Citation Refresh Job '{job_key}' Started ===")
     start = datetime.utcnow()
+    run_id = await _start_run(job_key)
     summary = ""
     error_msg = ""
     status = "ok"
@@ -134,7 +136,7 @@ async def run_citation_refresh_job(job_key: str, notify: bool = True):
     elapsed = (datetime.utcnow() - start).total_seconds()
     logger.info(f"=== Citation Refresh Job '{job_key}' Complete ({elapsed:.1f}s) ===")
 
-    run_id = await _log_run(job_key, status, elapsed, summary, error_msg)
+    await _finish_run(run_id, status, elapsed, summary, error_msg)
     if notify:
         _send_job_email(f"Citation Refresh: {job_key}", status, summary, elapsed, error_msg, run_id=run_id)
 
@@ -143,26 +145,38 @@ async def run_citation_refresh_job(job_key: str, notify: bool = True):
 # Run logging + email
 # ---------------------------------------------------------------------------
 
-async def _log_run(job_name: str, status: str, duration: float, summary: str = "", error: str = "") -> int | None:
+async def _start_run(job_name: str) -> int | None:
+    """Create a 'running' record at job start. Returns the run ID."""
     try:
         from app.models.scheduled_job import JobRun
         async with async_session() as db:
-            run = JobRun(
-                job_name=job_name,
-                started_at=datetime.utcnow(),
-                duration_seconds=duration,
-                status=status,
-                result_summary=summary,
-                error_message=error or None,
-            )
+            run = JobRun(job_name=job_name, started_at=datetime.utcnow(), status="running")
             db.add(run)
             await db.flush()
             run_id = run.id
             await db.commit()
             return run_id
     except Exception as e:
-        logger.warning(f"Failed to log job run: {e}")
+        logger.warning(f"Failed to start job run: {e}")
         return None
+
+
+async def _finish_run(run_id: int | None, status: str, duration: float, summary: str = "", error: str = ""):
+    """Update a running record to ok/error with results."""
+    if not run_id:
+        return
+    try:
+        from app.models.scheduled_job import JobRun
+        async with async_session() as db:
+            run = await db.get(JobRun, run_id)
+            if run:
+                run.status = status
+                run.duration_seconds = duration
+                run.result_summary = summary
+                run.error_message = error or None
+                await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to finish job run: {e}")
 
 
 def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = "", run_id: int | None = None):

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR, { mutate } from "swr";
 import { api, authFetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -602,6 +602,14 @@ interface JobRunEntry {
 function ScheduledJobsSection() {
   const { data: jobs, mutate: mutateJobs } = useSWR<JobInfo[]>("/api/v1/scheduled-jobs", authFetcher);
   const { data: runs, mutate: mutateRuns } = useSWR<JobRunEntry[]>("/api/v1/scheduled-jobs/runs?limit=20", authFetcher);
+
+  // Auto-poll when any job is running
+  const anyRunning = jobs?.some((j: any) => j.is_running);
+  useEffect(() => {
+    if (!anyRunning) return;
+    const interval = setInterval(() => { mutateJobs(); mutateRuns(); }, 5000);
+    return () => clearInterval(interval);
+  }, [anyRunning, mutateJobs, mutateRuns]);
   const { data: topics } = useSWR<{ id: number; name: string }[]>("/api/v1/topics", authFetcher);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -658,7 +666,8 @@ function ScheduledJobsSection() {
   const triggerJob = async (id: number) => {
     setTriggering(id);
     await fetch(`/api/v1/scheduled-jobs/${id}/run`, { method: "POST", headers: authHeaders() });
-    setTimeout(() => { mutateJobs(); mutateRuns(); setTriggering(null); }, 3000);
+    // Start polling — the is_running flag will keep the UI in "running" state
+    setTimeout(() => { mutateJobs(); setTriggering(null); }, 2000);
   };
 
   const fmtTime = (ts: string | null) =>
@@ -818,9 +827,9 @@ function ScheduledJobsSection() {
                       className={`text-[10px] px-2 py-1 rounded font-bold ${job.enabled ? "bg-emerald-700 text-white" : "bg-red-700 text-white"}`}>
                       {job.enabled ? "Enabled" : "Disabled"}
                     </button>
-                    <button onClick={() => triggerJob(job.id)} disabled={triggering === job.id}
-                      className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-50">
-                      {triggering === job.id ? "Running..." : "Run Now"}
+                    <button onClick={() => triggerJob(job.id)} disabled={triggering === job.id || (job as any).is_running}
+                      className={`text-[10px] px-2 py-1 rounded font-bold disabled:opacity-50 ${(job as any).is_running ? "bg-amber-500 text-black animate-pulse" : "bg-amber-700 text-white hover:bg-amber-600"}`}>
+                      {(job as any).is_running ? "Running..." : triggering === job.id ? "Starting..." : "Run Now"}
                     </button>
                     <button onClick={() => { setEditingId(job.id); setEditLabel(job.label); setEditDesc(job.description); setEditHour(job.hour); setEditMinute(job.minute); setEditTopics(job.topic_filter ? job.topic_filter.split(",") : []); }}
                       className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)]">Edit</button>
@@ -829,6 +838,12 @@ function ScheduledJobsSection() {
                   </div>
                 </div>
                 {job.description && <p className="text-[10px] text-[var(--muted-foreground)]">{job.description}</p>}
+                {(job as any).is_running && (
+                  <div className="flex items-center gap-2 text-[10px] text-amber-400 font-bold animate-pulse">
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    Job in progress...
+                  </div>
+                )}
                 {job.last_run && (
                   <div className="flex items-center gap-3 text-[10px] text-[var(--muted-foreground)]">
                     <span>Last: {fmtTime(job.last_run.started_at)}</span>
