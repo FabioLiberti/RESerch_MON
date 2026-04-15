@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
@@ -93,6 +93,34 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
   const maxCitation = refs.length > 0 ? Math.max(...refs.map(r => r.citation_count || 0)) : 0;
 
   const barMax = (entries: [string, number][]) => Math.max(...entries.map(e => e[1]), 1);
+
+  // --- Filters ---
+  const [filterKeyword, setFilterKeyword] = useState("");
+  const [filterLabel, setFilterLabel] = useState("");
+  const [filterCitation, setFilterCitation] = useState("");
+  const [filterRating, setFilterRating] = useState("");
+
+  const filteredRefs = useMemo(() => {
+    return refs.filter(r => {
+      if (filterKeyword && !r.keywords.includes(filterKeyword)) return false;
+      if (filterLabel && !r.labels.some(l => l.name === filterLabel)) return false;
+      if (filterRating) {
+        if (filterRating === "none" && r.rating != null) return false;
+        if (filterRating !== "none" && r.rating !== Number(filterRating)) return false;
+      }
+      if (filterCitation) {
+        const c = r.citation_count || 0;
+        if (filterCitation === "0" && c !== 0) return false;
+        if (filterCitation === "1-10" && (c < 1 || c > 10)) return false;
+        if (filterCitation === "11-50" && (c < 11 || c > 50)) return false;
+        if (filterCitation === "51-100" && (c < 51 || c > 100)) return false;
+        if (filterCitation === "100+" && c <= 100) return false;
+      }
+      return true;
+    });
+  }, [refs, filterKeyword, filterLabel, filterCitation, filterRating]);
+
+  const hasFilters = filterKeyword || filterLabel || filterCitation || filterRating;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -255,6 +283,104 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Filters + filtered paper list */}
+      <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
+        <h3 className="text-sm font-bold">Filter References</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Keyword</label>
+            <select value={filterKeyword} onChange={e => setFilterKeyword(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
+              <option value="">All keywords</option>
+              {keywordCounts.slice(0, 100).map(([kw]) => (
+                <option key={kw} value={kw}>{kw}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Label</label>
+            <select value={filterLabel} onChange={e => setFilterLabel(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
+              <option value="">All labels</option>
+              {labelCounts.map(([name]) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Citations</label>
+            <select value={filterCitation} onChange={e => setFilterCitation(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
+              <option value="">All</option>
+              <option value="0">0 citations</option>
+              <option value="1-10">1–10</option>
+              <option value="11-50">11–50</option>
+              <option value="51-100">51–100</option>
+              <option value="100+">100+</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Rating</label>
+            <select value={filterRating} onChange={e => setFilterRating(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
+              <option value="">All</option>
+              {[5, 4, 3, 2, 1].map(r => (
+                <option key={r} value={String(r)}>{"★".repeat(r)}{"☆".repeat(5 - r)}</option>
+              ))}
+              <option value="none">No rating</option>
+            </select>
+          </div>
+        </div>
+
+        {hasFilters && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[var(--muted-foreground)]">
+              {filteredRefs.length} of {refs.length} references match
+            </span>
+            <button onClick={() => { setFilterKeyword(""); setFilterLabel(""); setFilterCitation(""); setFilterRating(""); }}
+              className="text-[10px] text-red-400 hover:underline">Clear all filters</button>
+          </div>
+        )}
+
+        {/* Filtered results table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <th className="text-left py-2 pr-2">Title</th>
+                <th className="text-left py-2 pr-2 w-20">Citations</th>
+                <th className="text-left py-2 pr-2 w-16">Rating</th>
+                <th className="text-left py-2 pr-2 w-16">Year</th>
+                <th className="text-left py-2 w-24">Context</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {(hasFilters ? filteredRefs : refs).map(r => (
+                <tr key={r.id} className="hover:bg-[var(--secondary)] transition-colors">
+                  <td className="py-2 pr-2">
+                    <a href={`/papers/${r.cited_paper_id}`} target="_blank" rel="noopener noreferrer"
+                      className="hover:text-[var(--primary)] line-clamp-1">
+                      {r.title}
+                    </a>
+                    {r.labels.length > 0 && (
+                      <div className="flex gap-1 mt-0.5">
+                        {r.labels.map(l => (
+                          <span key={l.name} className="text-[8px] px-1 py-0.5 rounded-full" style={{ backgroundColor: `${l.color}25`, color: l.color }}>{l.name}</span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 pr-2 font-mono">{r.citation_count || 0}</td>
+                  <td className="py-2 pr-2 text-amber-400">{r.rating ? "★".repeat(r.rating) : "—"}</td>
+                  <td className="py-2 pr-2 font-mono">{r.publication_date?.slice(0, 4) || "—"}</td>
+                  <td className="py-2 capitalize text-[var(--muted-foreground)]">{r.context?.replace("_", " ") || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

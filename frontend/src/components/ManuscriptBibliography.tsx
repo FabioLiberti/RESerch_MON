@@ -289,7 +289,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
               <button onClick={exportBibtex} className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600" title="Export as BibTeX">BIB</button>
               <button onClick={exportCsv} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-white hover:bg-emerald-700" title="Export as CSV">CSV</button>
               <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500" title="Analyze bibliography">
+                className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 inline-flex items-center gap-1" title="Analyze bibliography">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                 Analyze
               </a>
             </>
