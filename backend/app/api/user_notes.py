@@ -20,6 +20,32 @@ class SaveNoteRequest(BaseModel):
     content: str
 
 
+@router.get("/has-notes/{paper_id}")
+async def has_notes(
+    paper_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check if a paper has any dev_notes or bib_notes (for icon display)."""
+    from sqlalchemy import func
+    dev = await db.execute(
+        select(func.count()).select_from(UserNote).where(
+            UserNote.paper_id == paper_id, UserNote.note_type == "dev_notes",
+            UserNote.content != "", UserNote.content.isnot(None),
+        )
+    )
+    bib = await db.execute(
+        select(func.count()).select_from(UserNote).where(
+            UserNote.paper_id == paper_id, UserNote.note_type == "bib_notes",
+            UserNote.content != "", UserNote.content.isnot(None),
+        )
+    )
+    return {
+        "has_dev_notes": dev.scalar_one() > 0,
+        "has_bib_notes": bib.scalar_one() > 0,
+    }
+
+
 @router.get("/{paper_id}/{note_type}")
 async def get_notes(
     paper_id: int,
@@ -83,29 +109,3 @@ async def save_note(
 
     await db.commit()
     return {"status": "saved", "paper_id": paper_id, "note_type": note_type}
-
-
-@router.get("/has-notes/{paper_id}")
-async def has_notes(
-    paper_id: int,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Check if a paper has any dev_notes or bib_notes (for icon display)."""
-    from sqlalchemy import func
-    dev = await db.execute(
-        select(func.count()).select_from(UserNote).where(
-            UserNote.paper_id == paper_id, UserNote.note_type == "dev_notes",
-            UserNote.content != "", UserNote.content.isnot(None),
-        )
-    )
-    bib = await db.execute(
-        select(func.count()).select_from(UserNote).where(
-            UserNote.paper_id == paper_id, UserNote.note_type == "bib_notes",
-            UserNote.content != "", UserNote.content.isnot(None),
-        )
-    )
-    return {
-        "has_dev_notes": dev.scalar_one() > 0,
-        "has_bib_notes": bib.scalar_one() > 0,
-    }

@@ -99,6 +99,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
   const [filterLabel, setFilterLabel] = useState("");
   const [filterCitation, setFilterCitation] = useState("");
   const [filterRating, setFilterRating] = useState("");
+  const [filterYear, setFilterYear] = useState("");
   const [sortField, setSortField] = useState<"title" | "citations" | "rating" | "year">("citations");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -115,6 +116,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
         if (filterRating === "none" && r.rating != null) return false;
         if (filterRating !== "none" && r.rating !== Number(filterRating)) return false;
       }
+      if (filterYear && (r.publication_date?.slice(0, 4) || "Unknown") !== filterYear) return false;
       if (filterCitation) {
         const c = r.citation_count || 0;
         if (filterCitation === "0" && c !== 0) return false;
@@ -125,7 +127,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
       }
       return true;
     });
-  }, [refs, filterKeyword, filterLabel, filterCitation, filterRating]);
+  }, [refs, filterKeyword, filterLabel, filterCitation, filterRating, filterYear]);
 
   const sortedRefs = useMemo(() => {
     const list = [...filteredRefs];
@@ -140,7 +142,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
     return list;
   }, [filteredRefs, sortField, sortDir]);
 
-  const hasFilters = filterKeyword || filterLabel || filterCitation || filterRating;
+  const hasFilters = filterKeyword || filterLabel || filterCitation || filterRating || filterYear;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -309,7 +311,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
       {/* Filters + filtered paper list */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
         <h3 className="text-sm font-bold">Filter References</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div>
             <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Keyword</label>
             <select value={filterKeyword} onChange={e => setFilterKeyword(e.target.value)}
@@ -353,6 +355,16 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
               <option value="none">No rating</option>
             </select>
           </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Year</label>
+            <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none">
+              <option value="">All years</option>
+              {yearDist.map(([year]) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
@@ -360,7 +372,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
             {hasFilters ? `${sortedRefs.length} of ${refs.length} references match` : `${refs.length} references`}
           </span>
           {hasFilters && (
-            <button onClick={() => { setFilterKeyword(""); setFilterLabel(""); setFilterCitation(""); setFilterRating(""); }}
+            <button onClick={() => { setFilterKeyword(""); setFilterLabel(""); setFilterCitation(""); setFilterRating(""); setFilterYear(""); }}
               className="text-[10px] text-red-400 hover:underline">Clear all filters</button>
           )}
         </div>

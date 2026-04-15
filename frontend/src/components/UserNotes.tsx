@@ -123,6 +123,19 @@ export default function UserNotes({ paperId, noteType, title, icon, placeholder 
                         className="text-[9px] px-2 py-0.5 rounded bg-[var(--secondary)] hover:bg-[var(--muted)]">
                         Edit
                       </button>
+                      <button onClick={async () => {
+                        if (!confirm("Delete your note?")) return;
+                        await fetch(apiUrl, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", ...authHeaders() },
+                          body: JSON.stringify({ content: "" }),
+                        });
+                        mutate(apiUrl);
+                        mutate(`/api/v1/user-notes/has-notes/${paperId}`);
+                      }}
+                        className="text-[9px] px-2 py-0.5 rounded text-red-400 hover:bg-red-500/10">
+                        Del
+                      </button>
                     </div>
                   </div>
                   <p className="text-xs whitespace-pre-wrap">{myNote.content}</p>
