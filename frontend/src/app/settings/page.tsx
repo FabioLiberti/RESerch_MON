@@ -667,7 +667,7 @@ function ScheduledJobsSection() {
   const exportRunsTxt = () => {
     if (!runs || runs.length === 0) return;
     const lines = runs.map(r =>
-      `Job: ${r.job_name}\nTime: ${r.started_at || "—"}\nDuration: ${r.duration_seconds?.toFixed(1) || "—"}s\nStatus: ${r.status}\nResult: ${r.result_summary || "—"}\n${r.error_message ? `Error: ${r.error_message}\n` : ""}`
+      `ID: #${r.id}\nJob: ${r.job_name}\nTime: ${r.started_at || "—"}\nDuration: ${r.duration_seconds?.toFixed(1) || "—"}s\nStatus: ${r.status}\nResult: ${r.result_summary || "—"}\n${r.error_message ? `Error: ${r.error_message}\n` : ""}`
     );
     const blob = new Blob([lines.join("\n---\n\n")], { type: "text/plain" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
@@ -857,6 +857,7 @@ function ScheduledJobsSection() {
             <table className="w-full text-[10px]">
               <thead>
                 <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                  <th className="text-left py-1 pr-2">ID</th>
                   <th className="text-left py-1 pr-2">Job</th>
                   <th className="text-left py-1 pr-2">Time</th>
                   <th className="text-left py-1 pr-2">Duration</th>
@@ -867,10 +868,10 @@ function ScheduledJobsSection() {
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {runs.map(r => {
-                  // Derive report date from started_at (YYYY-MM-DD)
                   const reportDate = r.started_at ? r.started_at.slice(0, 10) : null;
                   return (
                   <tr key={r.id} className="hover:bg-[var(--secondary)]">
+                    <td className="py-1 pr-2 font-mono text-[var(--muted-foreground)]">#{r.id}</td>
                     <td className="py-1 pr-2 font-medium">{r.job_name}</td>
                     <td className="py-1 pr-2 text-[var(--muted-foreground)]">{fmtTime(r.started_at)}</td>
                     <td className="py-1 pr-2">{r.duration_seconds?.toFixed(1)}s</td>
@@ -924,7 +925,7 @@ function LoginLogSection() {
   const exportTxt = () => {
     if (!logs || logs.length === 0) return;
     const lines = logs.map(l =>
-      `User: ${l.username}\nTime: ${fmtDateUTC(l.timestamp)}\nIP: ${l.ip || "—"}\nUser-Agent: ${l.user_agent || "—"}\nServer: production\n`
+      `ID: #${l.id}\nUser: ${l.username}\nTime: ${fmtDateUTC(l.timestamp)}\nIP: ${l.ip || "—"}\nUser-Agent: ${l.user_agent || "—"}\nServer: production\n`
     );
     const blob = new Blob([lines.join("\n---\n\n")], { type: "text/plain" });
     const a = document.createElement("a");
@@ -936,9 +937,9 @@ function LoginLogSection() {
 
   const exportCsv = () => {
     if (!logs || logs.length === 0) return;
-    const header = "User,Time (UTC),IP,User-Agent,Server\n";
+    const header = "ID,User,Time (UTC),IP,User-Agent,Server\n";
     const rows = logs.map(l =>
-      `"${l.username}","${fmtDateUTC(l.timestamp)}","${l.ip || ""}","${(l.user_agent || "").replace(/"/g, '""')}","production"`
+      `${l.id},"${l.username}","${fmtDateUTC(l.timestamp)}","${l.ip || ""}","${(l.user_agent || "").replace(/"/g, '""')}","production"`
     );
     const blob = new Blob([header + rows.join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
@@ -977,6 +978,7 @@ function LoginLogSection() {
           <table className="w-full text-xs table-fixed">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <th className="text-left py-2 pr-2 w-12">ID</th>
                 <th className="text-left py-2 pr-2 w-24">User</th>
                 <th className="text-left py-2 pr-2 w-44">Date/Time (UTC)</th>
                 <th className="text-left py-2 pr-2 w-32">IP</th>
@@ -986,6 +988,7 @@ function LoginLogSection() {
             <tbody className="divide-y divide-[var(--border)]">
               {logs.map(log => (
                 <tr key={log.id} className="hover:bg-[var(--secondary)] transition-colors">
+                  <td className="py-2 pr-2 font-mono text-[10px] text-[var(--muted-foreground)]">#{log.id}</td>
                   <td className="py-2 pr-2 font-medium">{log.username}</td>
                   <td className="py-2 pr-2 text-[var(--muted-foreground)] font-mono text-[10px]">{fmtDateUTC(log.timestamp)}</td>
                   <td className="py-2 pr-2 font-mono text-[10px]">{log.ip || "—"}</td>

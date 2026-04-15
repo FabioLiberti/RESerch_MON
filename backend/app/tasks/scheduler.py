@@ -99,9 +99,9 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
     elapsed = (datetime.utcnow() - start).total_seconds()
     logger.info(f"=== Discovery Job '{job_key}' Complete ({elapsed:.1f}s) ===")
 
-    await _log_run(job_key, status, elapsed, summary, error_msg)
+    run_id = await _log_run(job_key, status, elapsed, summary, error_msg)
     if notify:
-        _send_job_email(f"Discovery: {job_key}", status, summary, elapsed, error_msg, details)
+        _send_job_email(f"Discovery: {job_key}", status, summary, elapsed, error_msg, details, run_id)
 
 
 async def run_citation_refresh_job(job_key: str, notify: bool = True):
@@ -128,33 +128,38 @@ async def run_citation_refresh_job(job_key: str, notify: bool = True):
     elapsed = (datetime.utcnow() - start).total_seconds()
     logger.info(f"=== Citation Refresh Job '{job_key}' Complete ({elapsed:.1f}s) ===")
 
-    await _log_run(job_key, status, elapsed, summary, error_msg)
+    run_id = await _log_run(job_key, status, elapsed, summary, error_msg)
     if notify:
-        _send_job_email(f"Citation Refresh: {job_key}", status, summary, elapsed, error_msg)
+        _send_job_email(f"Citation Refresh: {job_key}", status, summary, elapsed, error_msg, run_id=run_id)
 
 
 # ---------------------------------------------------------------------------
 # Run logging + email
 # ---------------------------------------------------------------------------
 
-async def _log_run(job_name: str, status: str, duration: float, summary: str = "", error: str = ""):
+async def _log_run(job_name: str, status: str, duration: float, summary: str = "", error: str = "") -> int | None:
     try:
         from app.models.scheduled_job import JobRun
         async with async_session() as db:
-            db.add(JobRun(
+            run = JobRun(
                 job_name=job_name,
                 started_at=datetime.utcnow(),
                 duration_seconds=duration,
                 status=status,
                 result_summary=summary,
                 error_message=error or None,
-            ))
+            )
+            db.add(run)
+            await db.flush()
+            run_id = run.id
             await db.commit()
+            return run_id
     except Exception as e:
         logger.warning(f"Failed to log job run: {e}")
+        return None
 
 
-def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = ""):
+def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = "", run_id: int | None = None):
     try:
         from app.config import settings
         if not settings.smtp_user or not settings.smtp_app_password or not settings.notify_email:
@@ -167,8 +172,10 @@ def _send_job_email(job_label: str, status: str, summary: str, duration: float, 
         now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         icon = "✅" if status == "ok" else "❌"
         subject = f"{icon} [RESerch Monitor] {job_label}: {summary}"
+        run_line = f"Run ID:     #{run_id}\n" if run_id else ""
         body = (
             f"Scheduled Job Report\n\n"
+            f"{run_line}"
             f"Job:        {job_label}\n"
             f"Status:     {status.upper()}\n"
             f"Executed:   {now}\n"
