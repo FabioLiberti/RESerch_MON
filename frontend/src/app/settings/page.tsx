@@ -95,6 +95,9 @@ export default function SettingsPage() {
       {/* PDF Author Signature */}
       {isAdmin && <PdfSignatureSection />}
 
+      {/* Scheduled Jobs — admin only */}
+      {isAdmin && <ScheduledJobsSection />}
+
       {/* Topics Management — admin only */}
       {isAdmin && (<div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
         <div className="flex items-center justify-between mb-4">
@@ -564,6 +567,189 @@ function UserManagement() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+
+// --- Scheduled Jobs ---
+
+interface JobInfo {
+  id: string;
+  label: string;
+  description: string;
+  hour: number;
+  minute: number;
+  enabled: boolean;
+  notify: boolean;
+  next_run: string | null;
+  last_run: { started_at: string | null; duration: number | null; status: string | null; summary: string | null } | null;
+}
+
+interface JobRunEntry {
+  id: number;
+  job_name: string;
+  started_at: string | null;
+  duration_seconds: number | null;
+  status: string;
+  result_summary: string | null;
+  error_message: string | null;
+}
+
+function ScheduledJobsSection() {
+  const { data: jobs, mutate: mutateJobs } = useSWR<JobInfo[]>("/api/v1/scheduled-jobs", authFetcher);
+  const { data: runs } = useSWR<JobRunEntry[]>("/api/v1/scheduled-jobs/runs?limit=20", authFetcher);
+  const [editingJob, setEditingJob] = useState<string | null>(null);
+  const [editHour, setEditHour] = useState(0);
+  const [editMinute, setEditMinute] = useState(0);
+  const [triggering, setTriggering] = useState<string | null>(null);
+
+  const updateJob = async (jobId: string, patch: { hour?: number; minute?: number; enabled?: boolean; notify?: boolean }) => {
+    await fetch(`/api/v1/scheduled-jobs/${jobId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(patch),
+    });
+    mutateJobs();
+    setEditingJob(null);
+  };
+
+  const triggerJob = async (jobId: string) => {
+    setTriggering(jobId);
+    await fetch(`/api/v1/scheduled-jobs/${jobId}/run`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    setTimeout(() => { mutateJobs(); setTriggering(null); }, 2000);
+  };
+
+  const fmtTime = (ts: string | null) =>
+    ts ? new Date(ts).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+
+  const exportRunsTxt = () => {
+    if (!runs || runs.length === 0) return;
+    const lines = runs.map(r =>
+      `Job: ${r.job_name}\nTime: ${r.started_at || "—"}\nDuration: ${r.duration_seconds?.toFixed(1) || "—"}s\nStatus: ${r.status}\nResult: ${r.result_summary || "—"}\n${r.error_message ? `Error: ${r.error_message}\n` : ""}`
+    );
+    const blob = new Blob([lines.join("\n---\n\n")], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `job_runs_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6 space-y-4">
+      <h3 className="font-medium">Scheduled Jobs</h3>
+
+      {/* Job cards */}
+      <div className="space-y-3">
+        {(jobs || []).map(job => (
+          <div key={job.id} className="p-3 rounded-lg bg-[var(--secondary)] space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${job.enabled ? "bg-emerald-500" : "bg-gray-500"}`} />
+                <span className="text-sm font-bold">{job.label}</span>
+                <span className="text-[9px] text-[var(--muted-foreground)]">{job.description}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {/* Schedule display/edit */}
+                {editingJob === job.id ? (
+                  <div className="flex items-center gap-1">
+                    <input type="number" min={0} max={23} value={editHour} onChange={e => setEditHour(Number(e.target.value))}
+                      className="w-12 text-xs px-1 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
+                    <span className="text-xs">:</span>
+                    <input type="number" min={0} max={59} value={editMinute} onChange={e => setEditMinute(Number(e.target.value))}
+                      className="w-12 text-xs px-1 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
+                    <span className="text-[9px] text-[var(--muted-foreground)]">UTC</span>
+                    <button onClick={() => updateJob(job.id, { hour: editHour, minute: editMinute })}
+                      className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white font-bold">Save</button>
+                    <button onClick={() => setEditingJob(null)}
+                      className="text-[10px] px-2 py-1 rounded hover:bg-[var(--muted)]">Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setEditingJob(job.id); setEditHour(job.hour); setEditMinute(job.minute); }}
+                    className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] font-mono" title="Click to change schedule">
+                    {String(job.hour).padStart(2, "0")}:{String(job.minute).padStart(2, "0")} UTC
+                  </button>
+                )}
+
+                {/* Notify toggle */}
+                <button onClick={() => updateJob(job.id, { notify: !job.notify })}
+                  className={`text-[10px] px-2 py-1 rounded font-bold ${job.notify ? "bg-blue-700 text-white" : "bg-gray-600 text-white"}`}
+                  title={job.notify ? "Email notifications ON — click to disable" : "Email notifications OFF — click to enable"}>
+                  {job.notify ? "✉ ON" : "✉ OFF"}
+                </button>
+
+                {/* Enable/disable */}
+                <button onClick={() => updateJob(job.id, { enabled: !job.enabled })}
+                  className={`text-[10px] px-2 py-1 rounded font-bold ${job.enabled ? "bg-emerald-700 text-white" : "bg-red-700 text-white"}`}>
+                  {job.enabled ? "Enabled" : "Disabled"}
+                </button>
+
+                {/* Run now */}
+                <button onClick={() => triggerJob(job.id)}
+                  disabled={triggering === job.id}
+                  className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-50">
+                  {triggering === job.id ? "Running..." : "Run Now"}
+                </button>
+              </div>
+            </div>
+
+            {/* Last run info */}
+            {job.last_run && (
+              <div className="flex items-center gap-3 text-[10px] text-[var(--muted-foreground)]">
+                <span>Last: {fmtTime(job.last_run.started_at)}</span>
+                {job.last_run.duration != null && <span>{job.last_run.duration.toFixed(1)}s</span>}
+                <span className={`font-bold ${job.last_run.status === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+                  {job.last_run.status?.toUpperCase()}
+                </span>
+                {job.last_run.summary && <span>{job.last_run.summary}</span>}
+              </div>
+            )}
+            {job.next_run && (
+              <div className="text-[10px] text-[var(--muted-foreground)]">
+                Next: {fmtTime(job.next_run)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Run history */}
+      {runs && runs.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-[var(--muted-foreground)]">Execution History (last 20)</span>
+            <button onClick={exportRunsTxt} className="text-[10px] px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600">TXT</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                  <th className="text-left py-1 pr-2">Job</th>
+                  <th className="text-left py-1 pr-2">Time</th>
+                  <th className="text-left py-1 pr-2">Duration</th>
+                  <th className="text-left py-1 pr-2">Status</th>
+                  <th className="text-left py-1">Result</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {runs.map(r => (
+                  <tr key={r.id} className="hover:bg-[var(--secondary)]">
+                    <td className="py-1 pr-2 font-medium">{r.job_name}</td>
+                    <td className="py-1 pr-2 text-[var(--muted-foreground)]">{fmtTime(r.started_at)}</td>
+                    <td className="py-1 pr-2">{r.duration_seconds?.toFixed(1)}s</td>
+                    <td className={`py-1 pr-2 font-bold ${r.status === "ok" ? "text-emerald-400" : "text-red-400"}`}>{r.status.toUpperCase()}</td>
+                    <td className="py-1 text-[var(--muted-foreground)]">{r.result_summary || r.error_message || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
