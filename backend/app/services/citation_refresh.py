@@ -86,60 +86,75 @@ async def refresh_citations_batch(db: AsyncSession, paper_ids: list[int] | None 
     if not lookup_map:
         return {"total": len(papers), "updated": 0, "errors": 0, "no_identifier": len(papers)}
 
-    # Process in batches of 500 (S2 batch limit)
+    # Process in batches of 500 (S2 batch limit) with retry on 429
     identifiers = list(lookup_map.keys())
     updated = 0
     errors = 0
     batch_size = 500
+    rate_limited = 0
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         for i in range(0, len(identifiers), batch_size):
             batch = identifiers[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(identifiers) + batch_size - 1) // batch_size
+            logger.info(f"Citation batch {batch_num}/{total_batches}: {len(batch)} papers")
 
-            try:
-                resp = await client.post(
-                    S2_BATCH_URL,
-                    params={"fields": S2_FIELDS},
-                    json={"ids": batch},
-                )
+            # Retry with exponential backoff on 429
+            success = False
+            for attempt in range(4):  # up to 4 attempts
+                try:
+                    resp = await client.post(
+                        S2_BATCH_URL,
+                        params={"fields": S2_FIELDS},
+                        json={"ids": batch},
+                    )
 
-                if resp.status_code != 200:
-                    logger.warning(f"S2 batch API returned {resp.status_code}")
+                    if resp.status_code == 429:
+                        wait = 5 * (2 ** attempt)  # 5, 10, 20, 40 seconds
+                        rate_limited += 1
+                        logger.warning(f"S2 rate limit (429) on batch {batch_num}, waiting {wait}s (attempt {attempt + 1}/4)")
+                        await asyncio.sleep(wait)
+                        continue
+
+                    if resp.status_code != 200:
+                        logger.warning(f"S2 batch API returned {resp.status_code} on batch {batch_num}")
+                        errors += len(batch)
+                        break
+
+                    results = resp.json()
+                    for item in results:
+                        if item is None:
+                            continue
+                        ext_ids = item.get("externalIds", {}) or {}
+                        paper_doi = ext_ids.get("DOI")
+                        s2_id = item.get("paperId")
+                        paper = None
+                        if paper_doi and f"DOI:{paper_doi}" in lookup_map:
+                            paper = lookup_map[f"DOI:{paper_doi}"]
+                        elif s2_id and s2_id in lookup_map:
+                            paper = lookup_map[s2_id]
+                        if not paper:
+                            continue
+                        new_count = item.get("citationCount", 0)
+                        if new_count > paper.citation_count:
+                            paper.citation_count = new_count
+                            updated += 1
+
+                    success = True
+                    break
+
+                except Exception as e:
+                    logger.warning(f"S2 batch request failed: {e}")
                     errors += len(batch)
-                    continue
+                    break
 
-                results = resp.json()
-
-                for item in results:
-                    if item is None:
-                        continue
-
-                    # Match back to paper
-                    ext_ids = item.get("externalIds", {}) or {}
-                    paper_doi = ext_ids.get("DOI")
-                    s2_id = item.get("paperId")
-
-                    paper = None
-                    if paper_doi and f"DOI:{paper_doi}" in lookup_map:
-                        paper = lookup_map[f"DOI:{paper_doi}"]
-                    elif s2_id and s2_id in lookup_map:
-                        paper = lookup_map[s2_id]
-
-                    if not paper:
-                        continue
-
-                    new_count = item.get("citationCount", 0)
-                    if new_count > paper.citation_count:
-                        paper.citation_count = new_count
-                        updated += 1
-
-            except Exception as e:
-                logger.warning(f"S2 batch request failed: {e}")
+            if not success and rate_limited > 0:
                 errors += len(batch)
 
-            # Rate limit: ~1 request per second for batches
+            # Wait between batches to respect rate limits
             if i + batch_size < len(identifiers):
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(3.0)
 
     await db.flush()
 
