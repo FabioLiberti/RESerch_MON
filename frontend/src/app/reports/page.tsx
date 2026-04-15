@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
@@ -25,6 +26,8 @@ export default function ReportsPage() {
   const { data: analysisReports } = useSWR<AnalysisQueueItem[]>("/api/v1/analysis/reports", authFetcher);
   const { data: analysisStatus } = useSWR("/api/v1/analysis/status", authFetcher, { refreshInterval: 5000 });
 
+  const searchParams = useSearchParams();
+
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
@@ -40,6 +43,14 @@ export default function ReportsPage() {
       setReportHtml("<p>Error loading report</p>");
     }
   }, []);
+
+  // Auto-open report from ?date= query parameter
+  useEffect(() => {
+    const dateParam = searchParams.get("date");
+    if (dateParam && !selectedDate) {
+      viewDailyReport(dateParam);
+    }
+  }, [searchParams, selectedDate, viewDailyReport]);
 
   const viewAnalysisReport = useCallback(async (paperId: number) => {
     setSelectedPaperId(paperId);

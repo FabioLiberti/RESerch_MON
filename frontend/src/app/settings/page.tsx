@@ -861,19 +861,32 @@ function ScheduledJobsSection() {
                   <th className="text-left py-1 pr-2">Time</th>
                   <th className="text-left py-1 pr-2">Duration</th>
                   <th className="text-left py-1 pr-2">Status</th>
-                  <th className="text-left py-1">Result</th>
+                  <th className="text-left py-1 pr-2">Result</th>
+                  <th className="text-left py-1"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {runs.map(r => (
+                {runs.map(r => {
+                  // Derive report date from started_at (YYYY-MM-DD)
+                  const reportDate = r.started_at ? r.started_at.slice(0, 10) : null;
+                  return (
                   <tr key={r.id} className="hover:bg-[var(--secondary)]">
                     <td className="py-1 pr-2 font-medium">{r.job_name}</td>
                     <td className="py-1 pr-2 text-[var(--muted-foreground)]">{fmtTime(r.started_at)}</td>
                     <td className="py-1 pr-2">{r.duration_seconds?.toFixed(1)}s</td>
                     <td className={`py-1 pr-2 font-bold ${r.status === "ok" ? "text-emerald-400" : "text-red-400"}`}>{r.status.toUpperCase()}</td>
-                    <td className="py-1 text-[var(--muted-foreground)]">{r.result_summary || r.error_message || "—"}</td>
+                    <td className="py-1 pr-2 text-[var(--muted-foreground)]">{r.result_summary || r.error_message || "—"}</td>
+                    <td className="py-1">
+                      {r.job_name.includes("discovery") && r.status === "ok" && reportDate && (
+                        <a href={`/reports?date=${reportDate}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[9px] px-2 py-0.5 rounded bg-indigo-700 text-white font-bold hover:bg-indigo-600">
+                          View Report
+                        </a>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
