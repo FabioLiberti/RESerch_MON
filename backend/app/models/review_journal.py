@@ -59,6 +59,7 @@ class ReviewerEntry(Base):
     addressed_to_json = Column(Text, nullable=True)   # JSON array of usernames: ["admin", "fabio.liberti"]
     note_status = Column(String(20), nullable=True)    # new | read | replied | acknowledged
     read_at = Column(DateTime, nullable=True)
+    history_json = Column(Text, nullable=True)         # JSON array of {action, user, timestamp, text?}
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -78,6 +79,14 @@ class ReviewerEntry(Base):
     @addressed_to.setter
     def addressed_to(self, value: list[str]):
         self.addressed_to_json = json.dumps(value) if value else None
+
+    @property
+    def history(self) -> list[dict]:
+        return json.loads(self.history_json) if self.history_json else []
+
+    @history.setter
+    def history(self, value: list[dict]):
+        self.history_json = json.dumps(value) if value else None
 
     @property
     def rubric(self) -> list[dict]:

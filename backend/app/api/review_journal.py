@@ -89,6 +89,7 @@ def _serialize(entry: ReviewerEntry) -> dict:
         "addressed_to": entry.addressed_to,
         "note_status": entry.note_status,
         "read_at": entry.read_at.isoformat() if entry.read_at else None,
+        "history": entry.history,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
         "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
     }
@@ -174,9 +175,15 @@ async def create_entry(
 
     # Tutor feedback: set notification fields
     if body.source_type == "tutor_feedback":
+        from datetime import datetime
         entry.addressed_to = body.addressed_to or []
         entry.note_status = "new"
-        # Send email to addressed users
+        entry.history = [{
+            "action": "created",
+            "user": user.username,
+            "timestamp": datetime.utcnow().isoformat(),
+            "text": f"Note created, addressed to: {', '.join(body.addressed_to) if body.addressed_to else 'all'}",
+        }]
         _send_tutor_note_email(user.username, paper_id, body.raw_text or "", body.addressed_to or [], db)
 
     db.add(entry)
@@ -320,12 +327,27 @@ async def update_note_status(
     if entry.source_type != "tutor_feedback":
         raise HTTPException(status_code=400, detail="Status only applies to tutor feedback entries")
 
+    from datetime import datetime
     old_status = entry.note_status
     entry.note_status = body.status
 
     if body.status == "read" and not entry.read_at:
-        from datetime import datetime
         entry.read_at = datetime.utcnow()
+
+    # Append to history
+    action_labels = {"read": "read the note", "replied": "replied", "acknowledged": "acknowledged the reply"}
+    hist = entry.history
+    hist_entry = {
+        "action": body.status,
+        "user": user.username,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    if body.response_text:
+        hist_entry["text"] = body.response_text
+    else:
+        hist_entry["text"] = action_labels.get(body.status, body.status)
+    hist.append(hist_entry)
+    entry.history = hist
 
     # If replying, add the response as an observation
     if body.status == "replied" and body.response_text:

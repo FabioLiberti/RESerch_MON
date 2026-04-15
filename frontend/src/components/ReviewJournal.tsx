@@ -33,6 +33,7 @@ interface ReviewerEntry {
   addressed_to: string[];
   note_status: string | null;
   read_at: string | null;
+  history: { action: string; user: string; timestamp: string; text?: string }[];
   created_at: string | null;
   updated_at: string | null;
 }
@@ -530,6 +531,35 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                     >
                       Acknowledge
                     </button>
+                  </div>
+                )}
+
+                {/* History timeline (tutor notes) */}
+                {isTutorEntry && entry.history && entry.history.length > 0 && (
+                  <div className="rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] p-3 space-y-1.5">
+                    <span className="text-[9px] font-bold text-[var(--muted-foreground)] uppercase">History</span>
+                    <div className="relative pl-4">
+                      <div className="absolute left-1.5 top-1 bottom-1 w-0.5 bg-[var(--border)]" />
+                      {entry.history.map((h, i) => {
+                        const icon = h.action === "created" ? "📝" : h.action === "read" ? "👁" : h.action === "replied" ? "💬" : h.action === "acknowledged" ? "✅" : "📌";
+                        const ts = new Date(h.timestamp).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+                        return (
+                          <div key={i} className="relative flex items-start gap-2 py-1">
+                            <span className="absolute -left-2.5 top-1.5 w-2 h-2 rounded-full bg-[var(--muted-foreground)]" />
+                            <span className="text-[11px] shrink-0">{icon}</span>
+                            <div className="min-w-0">
+                              <span className="text-[10px]">
+                                <span className="font-bold">{h.user}</span>
+                                <span className="text-[var(--muted-foreground)] ml-1">{ts}</span>
+                              </span>
+                              {h.text && (
+                                <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">{h.text}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
