@@ -55,7 +55,7 @@ async def _log_run(job_name: str, status: str, duration: float, summary: str = "
         logger.warning(f"Failed to log job run: {e}")
 
 
-def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = ""):
+def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = ""):
     """Send email notification for a completed job (non-blocking)."""
     try:
         from app.config import settings
@@ -71,14 +71,17 @@ def _send_job_email(job_label: str, status: str, summary: str, duration: float, 
         subject = f"{icon} [RESerch Monitor] {job_label}: {summary}"
         body = (
             f"Scheduled Job Report\n\n"
-            f"Job:      {job_label}\n"
-            f"Status:   {status.upper()}\n"
-            f"Time:     {now}\n"
-            f"Duration: {duration:.1f}s\n"
-            f"Result:   {summary}\n"
+            f"Job:        {job_label}\n"
+            f"Status:     {status.upper()}\n"
+            f"Executed:   {now}\n"
+            f"Duration:   {duration:.1f}s\n"
+            f"Result:     {summary}\n"
+            f"Server:     {settings.app_env}\n"
         )
+        if details:
+            body += f"\n--- Breakdown ---\n{details}\n"
         if error:
-            body += f"Error:    {error}\n"
+            body += f"\nError:      {error}\n"
 
         msg = MIMEText(body, "plain")
         msg["Subject"] = subject
@@ -130,12 +133,29 @@ async def daily_discovery_job():
     export_service = ExportService()
     report_gen = ReportGenerator()
 
+    details = ""
     try:
         async with async_session() as db:
             results = await discovery.discover_all_topics(db, max_per_source=50)
             total_new = sum(r["new_papers"] for r in results)
             summary = f"{total_new} new papers found"
             logger.info(f"Discovery: {summary}")
+
+            # Build breakdown by topic and by source
+            topic_lines = []
+            sources_queried_all: set[str] = set()
+            for r in results:
+                topic_name = r.get("topic", "Unknown")
+                topic_new = r.get("new_papers", 0)
+                topic_total = r.get("total_found", 0)
+                topic_unique = r.get("unique_found", 0)
+                topic_lines.append(f"  {topic_name}: {topic_new} new ({topic_total} found, {topic_unique} unique)")
+                for src in r.get("sources_queried", []):
+                    sources_queried_all.add(src)
+
+            details = "By Topic:\n" + "\n".join(topic_lines) if topic_lines else ""
+            if sources_queried_all:
+                details += f"\n\nSources queried: {', '.join(sorted(sources_queried_all))}"
 
             analyzed = await analysis_service.analyze_all_papers(db)
             logger.info(f"Analysis: {analyzed} papers analyzed")
@@ -162,10 +182,9 @@ async def daily_discovery_job():
 
     await _log_run("discovery", status, elapsed, summary, error_msg)
 
-    # Check if notification is enabled
     config = await _get_job_config()
     if config.get("discovery", {}).get("notify", True):
-        _send_job_email("Daily Discovery", status, summary, elapsed, error_msg)
+        _send_job_email("Daily Discovery", status, summary, elapsed, error_msg, details)
 
 
 async def citation_refresh_job():
