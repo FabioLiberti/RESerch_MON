@@ -261,8 +261,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold flex items-center gap-2 shrink-0 whitespace-nowrap">
           Bibliography
           {refs.length > 0 && (
             <span className="text-xs font-normal text-[var(--muted-foreground)]">
@@ -288,6 +288,10 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
               <button onClick={exportTxt} className="text-[10px] px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600" title="Export as numbered text list">TXT</button>
               <button onClick={exportBibtex} className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600" title="Export as BibTeX">BIB</button>
               <button onClick={exportCsv} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-white hover:bg-emerald-700" title="Export as CSV">CSV</button>
+              <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
+                className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500" title="Analyze bibliography">
+                Analyze
+              </a>
             </>
           )}
           {isAdmin && (

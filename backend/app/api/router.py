@@ -24,6 +24,7 @@ from app.api.review_journal import router as review_journal_router
 from app.api.submission_rounds import router as submission_rounds_router
 from app.api.paper_references import router as paper_references_router
 from app.api.scheduled_jobs import router as scheduled_jobs_router
+from app.api.user_notes import router as user_notes_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -54,3 +55,4 @@ api_router.include_router(review_journal_router, prefix="/review-journal", tags=
 api_router.include_router(submission_rounds_router, prefix="/submission-rounds", tags=["submission-rounds"], dependencies=[Depends(get_current_user)])
 api_router.include_router(paper_references_router, prefix="/paper-references", tags=["paper-references"], dependencies=[Depends(get_current_user)])
 api_router.include_router(scheduled_jobs_router, prefix="/scheduled-jobs", tags=["scheduled-jobs"], dependencies=[Depends(get_current_user)])
+api_router.include_router(user_notes_router, prefix="/user-notes", tags=["user-notes"], dependencies=[Depends(get_current_user)])
