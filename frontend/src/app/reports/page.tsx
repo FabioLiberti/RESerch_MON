@@ -189,7 +189,10 @@ export default function ReportsPage() {
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">{report.report_date}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{report.report_date}</span>
+                      <span className="text-[9px] font-mono text-[var(--muted-foreground)]">#{report.id}</span>
+                    </div>
                     {report.new_papers > 0 && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
                         +{report.new_papers} new
@@ -197,7 +200,7 @@ export default function ReportsPage() {
                     )}
                   </div>
                   <div className="text-xs text-[var(--muted-foreground)] mt-1">
-                    {report.total_papers} total papers &middot; Generated {formatDate(report.generated_at)}
+                    {report.total_papers} total papers &middot; Generated {report.generated_at ? new Date(report.generated_at).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}
                   </div>
                 </button>
               ))

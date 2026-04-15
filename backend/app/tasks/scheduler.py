@@ -82,10 +82,6 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
 
             await export_service.export_json(db)
             await export_service.export_xlsx(db)
-
-            report_path = await report_gen.generate_daily_report(db)
-            logger.info(f"Report: {report_path}")
-
             await db.commit()
 
     except Exception as e:
@@ -100,6 +96,16 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
     logger.info(f"=== Discovery Job '{job_key}' Complete ({elapsed:.1f}s) ===")
 
     run_id = await _log_run(job_key, status, elapsed, summary, error_msg)
+
+    # Generate report AFTER logging (so we have the run_id)
+    try:
+        async with async_session() as db:
+            report_path = await report_gen.generate_daily_report(db, run_id=run_id)
+            await db.commit()
+            logger.info(f"Report: {report_path}")
+    except Exception as e:
+        logger.warning(f"Report generation failed: {e}")
+
     if notify:
         _send_job_email(f"Discovery: {job_key}", status, summary, elapsed, error_msg, details, run_id)
 

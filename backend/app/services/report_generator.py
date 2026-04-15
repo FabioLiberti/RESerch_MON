@@ -63,7 +63,8 @@ REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <h1>FL Research Monitor</h1>
-<p class="subtitle">Daily Report — {{ report_date }}</p>
+<p class="subtitle">Daily Report — {{ report_date }}{% if run_id %} · Run #{{ run_id }}{% endif %}</p>
+<p style="color:#6b6b80;font-size:11px;">Generated: {{ generated_at }}</p>
 
 <div class="stats-grid">
   <div class="stat-card">
@@ -139,7 +140,7 @@ class ReportGenerator:
         self.template = self.env.from_string(REPORT_HTML_TEMPLATE)
 
     async def generate_daily_report(
-        self, db: AsyncSession, report_date: str | None = None
+        self, db: AsyncSession, report_date: str | None = None, run_id: int | None = None
     ) -> Path:
         """Generate HTML report for a given date (default: today)."""
         if not report_date:
@@ -206,6 +207,7 @@ class ReportGenerator:
             })
 
         # Render HTML
+        generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         html = self.template.render(
             report_date=report_date,
             total_papers=total_papers,
@@ -213,6 +215,8 @@ class ReportGenerator:
             with_pdf=with_pdf,
             validated=validated,
             new_papers_list=papers_data,
+            run_id=run_id,
+            generated_at=generated_at,
         )
 
         # Save
