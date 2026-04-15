@@ -368,14 +368,14 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
         return (
           <div key={entry.id} className={cn(
             "rounded-lg border overflow-hidden",
-            isTutorEntry ? "border-amber-500/50 bg-amber-500/5" : "border-[var(--border)]"
+            isTutorEntry ? "border-red-500/50 bg-red-500/5" : "border-[var(--border)]"
           )}>
             {/* Entry header — click to expand/collapse */}
             <button
               onClick={() => toggleExpanded(entry.id)}
               className={cn(
                 "w-full flex items-center justify-between px-4 py-3 text-left transition-colors",
-                isTutorEntry ? "hover:bg-amber-500/10" : "hover:bg-[var(--secondary)]"
+                isTutorEntry ? "hover:bg-red-500/10" : "hover:bg-[var(--secondary)]"
               )}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -385,7 +385,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
                 <div className="min-w-0">
                   <span className="text-sm font-bold">{entry.reviewer_label}</span>
                   {isTutorEntry && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600 text-white font-bold ml-2">TUTOR</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold ml-2">! TUTOR</span>
                   )}
                   <span className="text-[10px] text-[var(--muted-foreground)] ml-2">
                     {SOURCE_TYPE_LABELS[entry.source_type] || entry.source_type}
