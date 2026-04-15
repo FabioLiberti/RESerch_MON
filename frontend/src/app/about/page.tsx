@@ -134,7 +134,7 @@ export default function AboutPage() {
       </div>
 
       {/* Guided Tour */}
-      {!useAuth().isAdmin && (
+      {(
         <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6">
           <h2 className="text-sm font-bold mb-2">Guided Tour</h2>
           <p className="text-xs text-[var(--muted-foreground)] mb-3">
