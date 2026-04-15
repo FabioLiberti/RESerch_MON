@@ -31,6 +31,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
   const { id } = use(params);
   const paperId = Number(id);
   const { data } = useSWR<RefsResponse>(`/api/v1/paper-references/${paperId}`, authFetcher);
+  const { data: paper } = useSWR<any>(`/api/v1/papers/${paperId}`, authFetcher);
   const refs = data?.references || [];
 
   // --- Computed analytics ---
@@ -53,7 +54,7 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
   const citationBuckets = useMemo(() => {
     const buckets = { "0": 0, "1-10": 0, "11-50": 0, "51-100": 0, "100+": 0 };
     refs.forEach(r => {
-      const c = r.citation_count;
+      const c = r.citation_count || 0;
       if (c === 0) buckets["0"]++;
       else if (c <= 10) buckets["1-10"]++;
       else if (c <= 50) buckets["11-50"]++;
@@ -87,9 +88,9 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [refs]);
 
-  const totalCitations = refs.reduce((s, r) => s + r.citation_count, 0);
+  const totalCitations = refs.reduce((s, r) => s + (r.citation_count || 0), 0);
   const avgCitations = refs.length > 0 ? (totalCitations / refs.length).toFixed(1) : "0";
-  const maxCitation = refs.length > 0 ? Math.max(...refs.map(r => r.citation_count)) : 0;
+  const maxCitation = refs.length > 0 ? Math.max(...refs.map(r => r.citation_count || 0)) : 0;
 
   const barMax = (entries: [string, number][]) => Math.max(...entries.map(e => e[1]), 1);
 
@@ -101,7 +102,24 @@ export default function BibliographyAnalysisPage({ params }: { params: Promise<{
           &larr; Back to Manuscript
         </Link>
         <h1 className="text-xl font-bold mt-1">Bibliography Analysis</h1>
-        <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
+        {paper && (
+          <div className="mt-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] p-3">
+            <a href={`/papers/${paperId}`} target="_blank" rel="noopener noreferrer" className="text-sm font-bold hover:text-[var(--primary)] line-clamp-2">
+              {paper.title} ↗
+            </a>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+              {paper.paper_role === "my_manuscript" && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold">MY MANUSCRIPT</span>}
+              {paper.paper_type && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded text-white font-bold" style={{ backgroundColor: paper.paper_type === "extended_abstract" ? "#dc2626" : "#7c3aed" }}>
+                  {paper.paper_type.replace(/_/g, " ").toUpperCase()}
+                </span>
+              )}
+              {paper.journal && <span className="text-xs text-[var(--muted-foreground)] italic">{paper.journal}</span>}
+              {paper.publication_date && <span className="text-xs text-[var(--muted-foreground)]">Submitted: {paper.publication_date}</span>}
+            </div>
+          </div>
+        )}
+        <p className="text-sm text-[var(--muted-foreground)] mt-2">
           {refs.length} references &middot; {totalCitations} total citations &middot; avg {avgCitations} &middot; max {maxCitation}
         </p>
       </div>

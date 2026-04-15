@@ -222,6 +222,7 @@ export default function MyManuscriptsPage() {
                     {(paper as any).has_supplementary && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold" title="Has supplementary file">S</span>
                     )}
+                    <NoteIcons paperId={paper.id} />
                     {(() => {
                       const st = statusMap?.[String(paper.id)];
                       if (!st) return null;
@@ -295,5 +296,26 @@ export default function MyManuscriptsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function NoteIcons({ paperId }: { paperId: number }) {
+  const { data } = useSWR<{ has_dev_notes: boolean; has_bib_notes: boolean }>(
+    `/api/v1/user-notes/has-notes/${paperId}`, authFetcher
+  );
+  if (!data) return null;
+  return (
+    <>
+      {data.has_dev_notes && (
+        <span className="text-amber-400" title="Has development notes">
+          <svg className="w-3.5 h-3.5 inline" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+        </span>
+      )}
+      {data.has_bib_notes && (
+        <span className="text-indigo-400" title="Has bibliography notes">
+          <svg className="w-3.5 h-3.5 inline" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        </span>
+      )}
+    </>
   );
 }
