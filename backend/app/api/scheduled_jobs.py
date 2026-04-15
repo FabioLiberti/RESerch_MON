@@ -1,6 +1,6 @@
-"""API endpoints for scheduled job management (admin only)."""
+"""API endpoints for scheduled job management (admin only) — full CRUD."""
 
-import json
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,19 +10,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import require_admin
 from app.database import get_db
-from app.models.app_setting import AppSetting
-from app.models.job_run import JobRun
+from app.models.scheduled_job import ScheduledJob, JobRun
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class JobConfigUpdate(BaseModel):
+class CreateJobRequest(BaseModel):
+    label: str
+    description: str = ""
+    job_type: str = "discovery"      # discovery | citation_refresh
+    hour: int = 6
+    minute: int = 0
+    enabled: bool = True
+    notify: bool = True
+    topic_filter: str | None = None  # topic name, or None for all
+
+
+class UpdateJobRequest(BaseModel):
+    label: str | None = None
+    description: str | None = None
     hour: int | None = None
     minute: int | None = None
     enabled: bool | None = None
     notify: bool | None = None
+    topic_filter: str | None = None
+
+
+def _serialize_job(job: ScheduledJob, last_run: JobRun | None = None, next_run_iso: str | None = None) -> dict:
+    return {
+        "id": job.id,
+        "job_key": job.job_key,
+        "label": job.label,
+        "description": job.description,
+        "job_type": job.job_type,
+        "hour": job.hour,
+        "minute": job.minute,
+        "enabled": job.enabled,
+        "notify": job.notify,
+        "topic_filter": job.topic_filter,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "next_run": next_run_iso,
+        "last_run": {
+            "started_at": last_run.started_at.isoformat() if last_run and last_run.started_at else None,
+            "duration": last_run.duration_seconds if last_run else None,
+            "status": last_run.status if last_run else None,
+            "summary": last_run.result_summary if last_run else None,
+        } if last_run else None,
+    }
 
 
 @router.get("")
@@ -30,120 +66,156 @@ async def list_jobs(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all scheduled jobs with config and next/last run info."""
-    from app.tasks.scheduler import DEFAULT_JOBS, scheduler
+    """List all scheduled jobs with last run info."""
+    from app.tasks.scheduler import scheduler
 
-    # Load saved config
-    result = await db.execute(select(AppSetting).where(AppSetting.key == "scheduled_jobs"))
-    setting = result.scalar_one_or_none()
-    saved_config = json.loads(setting.value) if setting and setting.value else {}
+    result = await db.execute(select(ScheduledJob).order_by(ScheduledJob.id))
+    jobs = result.scalars().all()
 
-    jobs = []
-    for job_id, defaults in DEFAULT_JOBS.items():
-        conf = {**defaults, **saved_config.get(job_id, {})}
-
-        # Get last run
-        last_run_result = await db.execute(
-            select(JobRun)
-            .where(JobRun.job_name == job_id)
-            .order_by(JobRun.started_at.desc())
-            .limit(1)
+    out = []
+    for job in jobs:
+        # Last run
+        lr_result = await db.execute(
+            select(JobRun).where(JobRun.job_name == job.job_key).order_by(JobRun.started_at.desc()).limit(1)
         )
-        last_run = last_run_result.scalar_one_or_none()
+        last_run = lr_result.scalar_one_or_none()
 
-        # Get next run from APScheduler
+        # Next run from APScheduler
         next_run = None
         try:
-            apjob = scheduler.get_job(job_id)
+            apjob = scheduler.get_job(job.job_key)
             if apjob and apjob.next_run_time:
                 next_run = apjob.next_run_time.isoformat()
         except Exception:
             pass
 
-        jobs.append({
-            "id": job_id,
-            "label": conf.get("label", job_id),
-            "description": conf.get("description", ""),
-            "hour": conf.get("hour", 0),
-            "minute": conf.get("minute", 0),
-            "enabled": conf.get("enabled", True),
-            "notify": conf.get("notify", True),
-            "next_run": next_run,
-            "last_run": {
-                "started_at": last_run.started_at.isoformat() if last_run else None,
-                "duration": last_run.duration_seconds if last_run else None,
-                "status": last_run.status if last_run else None,
-                "summary": last_run.result_summary if last_run else None,
-            } if last_run else None,
-        })
+        out.append(_serialize_job(job, last_run, next_run))
 
-    return jobs
+    return out
+
+
+@router.post("")
+async def create_job(
+    body: CreateJobRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new scheduled job."""
+    if body.job_type not in ("discovery", "citation_refresh"):
+        raise HTTPException(400, "job_type must be 'discovery' or 'citation_refresh'")
+
+    # Generate unique key
+    import re
+    base_key = re.sub(r'[^a-z0-9]+', '_', body.label.lower()).strip('_')
+    job_key = base_key
+    suffix = 1
+    while True:
+        existing = await db.execute(select(ScheduledJob).where(ScheduledJob.job_key == job_key))
+        if existing.scalar_one_or_none() is None:
+            break
+        suffix += 1
+        job_key = f"{base_key}_{suffix}"
+
+    job = ScheduledJob(
+        job_key=job_key,
+        label=body.label,
+        description=body.description,
+        job_type=body.job_type,
+        hour=body.hour,
+        minute=body.minute,
+        enabled=body.enabled,
+        notify=body.notify,
+        topic_filter=body.topic_filter if body.job_type == "discovery" else None,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    # Reload scheduler
+    from app.tasks.scheduler import reload_scheduler
+    await reload_scheduler()
+
+    return _serialize_job(job)
 
 
 @router.put("/{job_id}")
 async def update_job(
-    job_id: str,
-    body: JobConfigUpdate,
+    job_id: int,
+    body: UpdateJobRequest,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update a job's schedule, enabled state, or notification preference."""
-    from app.tasks.scheduler import DEFAULT_JOBS, _apply_schedule
+    """Update a scheduled job."""
+    job = await db.get(ScheduledJob, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
 
-    if job_id not in DEFAULT_JOBS:
-        raise HTTPException(404, f"Unknown job: {job_id}")
-
-    # Load existing config
-    result = await db.execute(select(AppSetting).where(AppSetting.key == "scheduled_jobs"))
-    setting = result.scalar_one_or_none()
-    config = json.loads(setting.value) if setting and setting.value else {}
-
-    # Merge updates
-    if job_id not in config:
-        config[job_id] = {}
+    if body.label is not None:
+        job.label = body.label
+    if body.description is not None:
+        job.description = body.description
     if body.hour is not None:
-        config[job_id]["hour"] = body.hour
+        job.hour = body.hour
     if body.minute is not None:
-        config[job_id]["minute"] = body.minute
+        job.minute = body.minute
     if body.enabled is not None:
-        config[job_id]["enabled"] = body.enabled
+        job.enabled = body.enabled
     if body.notify is not None:
-        config[job_id]["notify"] = body.notify
+        job.notify = body.notify
+    if body.topic_filter is not None:
+        job.topic_filter = body.topic_filter or None
 
-    # Save to DB
-    if setting:
-        setting.value = json.dumps(config)
-    else:
-        db.add(AppSetting(key="scheduled_jobs", value=json.dumps(config)))
     await db.commit()
 
-    # Re-apply schedule
-    full_config = {k: {**v, **config.get(k, {})} for k, v in DEFAULT_JOBS.items()}
-    _apply_schedule(full_config)
+    from app.tasks.scheduler import reload_scheduler
+    await reload_scheduler()
 
-    return {"status": "updated", "job_id": job_id}
+    return {"status": "updated", "job_id": job.id}
+
+
+@router.delete("/{job_id}")
+async def delete_job(
+    job_id: int,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a scheduled job permanently."""
+    job = await db.get(ScheduledJob, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    await db.delete(job)
+    await db.commit()
+
+    from app.tasks.scheduler import reload_scheduler
+    await reload_scheduler()
+
+    return {"status": "deleted", "job_id": job_id}
 
 
 @router.post("/{job_id}/run")
 async def trigger_job(
-    job_id: str,
+    job_id: int,
     admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     """Trigger a job to run immediately."""
-    from app.tasks.scheduler import daily_discovery_job, citation_refresh_job
-    import asyncio
+    from app.tasks.scheduler import JOB_TYPE_FUNCS
 
-    funcs = {
-        "discovery": daily_discovery_job,
-        "citation_refresh": citation_refresh_job,
-    }
-    func = funcs.get(job_id)
+    job = await db.get(ScheduledJob, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    func = JOB_TYPE_FUNCS.get(job.job_type)
     if not func:
-        raise HTTPException(404, f"Unknown job: {job_id}")
+        raise HTTPException(400, f"Unknown job_type: {job.job_type}")
 
-    # Run in background
-    asyncio.ensure_future(func())
-    return {"status": "triggered", "job_id": job_id}
+    kwargs = {"job_key": job.job_key, "notify": job.notify}
+    if job.job_type == "discovery" and job.topic_filter:
+        kwargs["topic_filter"] = job.topic_filter
+
+    asyncio.ensure_future(func(**kwargs))
+    return {"status": "triggered", "job_key": job.job_key}
 
 
 @router.get("/runs")
@@ -168,4 +240,13 @@ async def get_job_runs(
             "error_message": r.error_message,
         }
         for r in runs
+    ]
+
+
+@router.get("/types")
+async def get_job_types(admin: User = Depends(require_admin)):
+    """List available job types for the creation form."""
+    return [
+        {"value": "discovery", "label": "Discovery", "description": "Search for new papers across academic sources"},
+        {"value": "citation_refresh", "label": "Citation Refresh", "description": "Refresh citation counts via Semantic Scholar"},
     ]

@@ -575,13 +575,16 @@ function UserManagement() {
 // --- Scheduled Jobs ---
 
 interface JobInfo {
-  id: string;
+  id: number;
+  job_key: string;
   label: string;
   description: string;
+  job_type: string;
   hour: number;
   minute: number;
   enabled: boolean;
   notify: boolean;
+  topic_filter: string | null;
   next_run: string | null;
   last_run: { started_at: string | null; duration: number | null; status: string | null; summary: string | null } | null;
 }
@@ -598,29 +601,63 @@ interface JobRunEntry {
 
 function ScheduledJobsSection() {
   const { data: jobs, mutate: mutateJobs } = useSWR<JobInfo[]>("/api/v1/scheduled-jobs", authFetcher);
-  const { data: runs } = useSWR<JobRunEntry[]>("/api/v1/scheduled-jobs/runs?limit=20", authFetcher);
-  const [editingJob, setEditingJob] = useState<string | null>(null);
+  const { data: runs, mutate: mutateRuns } = useSWR<JobRunEntry[]>("/api/v1/scheduled-jobs/runs?limit=20", authFetcher);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [triggering, setTriggering] = useState<number | null>(null);
+
+  // Create form state
+  const [newLabel, setNewLabel] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newType, setNewType] = useState("discovery");
+  const [newHour, setNewHour] = useState(6);
+  const [newMinute, setNewMinute] = useState(0);
+  const [newTopic, setNewTopic] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  // Edit form state
+  const [editLabel, setEditLabel] = useState("");
+  const [editDesc, setEditDesc] = useState("");
   const [editHour, setEditHour] = useState(0);
   const [editMinute, setEditMinute] = useState(0);
-  const [triggering, setTriggering] = useState<string | null>(null);
+  const [editTopic, setEditTopic] = useState("");
 
-  const updateJob = async (jobId: string, patch: { hour?: number; minute?: number; enabled?: boolean; notify?: boolean }) => {
-    await fetch(`/api/v1/scheduled-jobs/${jobId}`, {
+  const createJob = async () => {
+    setCreating(true);
+    await fetch("/api/v1/scheduled-jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({
+        label: newLabel.trim(), description: newDesc.trim(), job_type: newType,
+        hour: newHour, minute: newMinute, topic_filter: newTopic.trim() || null,
+      }),
+    });
+    setShowCreate(false);
+    setNewLabel(""); setNewDesc(""); setNewType("discovery"); setNewHour(6); setNewMinute(0); setNewTopic("");
+    setCreating(false);
+    mutateJobs();
+  };
+
+  const updateJob = async (id: number, patch: Record<string, unknown>) => {
+    await fetch(`/api/v1/scheduled-jobs/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(patch),
     });
+    setEditingId(null);
     mutateJobs();
-    setEditingJob(null);
   };
 
-  const triggerJob = async (jobId: string) => {
-    setTriggering(jobId);
-    await fetch(`/api/v1/scheduled-jobs/${jobId}/run`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-    setTimeout(() => { mutateJobs(); setTriggering(null); }, 2000);
+  const deleteJob = async (id: number, label: string) => {
+    if (!confirm(`Delete job "${label}" permanently?`)) return;
+    await fetch(`/api/v1/scheduled-jobs/${id}`, { method: "DELETE", headers: authHeaders() });
+    mutateJobs();
+  };
+
+  const triggerJob = async (id: number) => {
+    setTriggering(id);
+    await fetch(`/api/v1/scheduled-jobs/${id}/run`, { method: "POST", headers: authHeaders() });
+    setTimeout(() => { mutateJobs(); mutateRuns(); setTriggering(null); }, 3000);
   };
 
   const fmtTime = (ts: string | null) =>
@@ -632,86 +669,148 @@ function ScheduledJobsSection() {
       `Job: ${r.job_name}\nTime: ${r.started_at || "—"}\nDuration: ${r.duration_seconds?.toFixed(1) || "—"}s\nStatus: ${r.status}\nResult: ${r.result_summary || "—"}\n${r.error_message ? `Error: ${r.error_message}\n` : ""}`
     );
     const blob = new Blob([lines.join("\n---\n\n")], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `job_runs_${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `job_runs_${new Date().toISOString().slice(0, 10)}.txt`; a.click(); URL.revokeObjectURL(a.href);
   };
 
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-6 space-y-4">
-      <h3 className="font-medium">Scheduled Jobs</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-medium">Scheduled Jobs</h3>
+        <button onClick={() => setShowCreate(!showCreate)}
+          className="px-3 py-1.5 text-sm rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600">
+          + Create Job
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="p-4 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Label</label>
+              <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Discovery FL Healthcare"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Job Type</label>
+              <select value={newType} onChange={e => setNewType(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none">
+                <option value="discovery">Discovery</option>
+                <option value="citation_refresh">Citation Refresh</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Description</label>
+            <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="What this job does"
+              className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Schedule (UTC)</label>
+              <div className="flex items-center gap-1">
+                <input type="number" min={0} max={23} value={newHour} onChange={e => setNewHour(Number(e.target.value))}
+                  className="w-16 px-2 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm text-center" />
+                <span>:</span>
+                <input type="number" min={0} max={59} value={newMinute} onChange={e => setNewMinute(Number(e.target.value))}
+                  className="w-16 px-2 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm text-center" />
+              </div>
+            </div>
+            {newType === "discovery" && (
+              <div className="sm:col-span-2">
+                <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Topic Filter (leave empty for all topics)</label>
+                <input value={newTopic} onChange={e => setNewTopic(e.target.value)} placeholder="e.g. Federated Learning in Healthcare"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none" />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={createJob} disabled={creating || !newLabel.trim()}
+              className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-600 disabled:opacity-50">
+              {creating ? "Creating..." : "Create"}
+            </button>
+            <button onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-lg bg-[var(--card)] text-sm hover:bg-[var(--muted)]">Cancel</button>
+          </div>
+        </div>
+      )}
 
       {/* Job cards */}
       <div className="space-y-3">
         {(jobs || []).map(job => (
           <div key={job.id} className="p-3 rounded-lg bg-[var(--secondary)] space-y-2">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${job.enabled ? "bg-emerald-500" : "bg-gray-500"}`} />
-                <span className="text-sm font-bold">{job.label}</span>
-                <span className="text-[9px] text-[var(--muted-foreground)]">{job.description}</span>
+            {editingId === job.id ? (
+              /* Edit mode */
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input value={editLabel} onChange={e => setEditLabel(e.target.value)} placeholder="Label"
+                    className="px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-xs" />
+                  <input value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Description"
+                    className="px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-xs" />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="number" min={0} max={23} value={editHour} onChange={e => setEditHour(Number(e.target.value))}
+                    className="w-14 text-xs px-1 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
+                  <span className="text-xs">:</span>
+                  <input type="number" min={0} max={59} value={editMinute} onChange={e => setEditMinute(Number(e.target.value))}
+                    className="w-14 text-xs px-1 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
+                  <span className="text-[9px] text-[var(--muted-foreground)]">UTC</span>
+                  {job.job_type === "discovery" && (
+                    <input value={editTopic} onChange={e => setEditTopic(e.target.value)} placeholder="Topic filter (empty = all)"
+                      className="flex-1 px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-xs" />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => updateJob(job.id, { label: editLabel, description: editDesc, hour: editHour, minute: editMinute, topic_filter: editTopic || null })}
+                    className="text-[10px] px-3 py-1.5 rounded bg-emerald-700 text-white font-bold">Save</button>
+                  <button onClick={() => setEditingId(null)} className="text-[10px] px-3 py-1.5 rounded hover:bg-[var(--muted)]">Cancel</button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                {/* Schedule display/edit */}
-                {editingJob === job.id ? (
-                  <div className="flex items-center gap-1">
-                    <input type="number" min={0} max={23} value={editHour} onChange={e => setEditHour(Number(e.target.value))}
-                      className="w-12 text-xs px-1 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
-                    <span className="text-xs">:</span>
-                    <input type="number" min={0} max={59} value={editMinute} onChange={e => setEditMinute(Number(e.target.value))}
-                      className="w-12 text-xs px-1 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-center" />
-                    <span className="text-[9px] text-[var(--muted-foreground)]">UTC</span>
-                    <button onClick={() => updateJob(job.id, { hour: editHour, minute: editMinute })}
-                      className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white font-bold">Save</button>
-                    <button onClick={() => setEditingJob(null)}
-                      className="text-[10px] px-2 py-1 rounded hover:bg-[var(--muted)]">Cancel</button>
+            ) : (
+              /* Display mode */
+              <>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${job.enabled ? "bg-emerald-500" : "bg-gray-500"}`} />
+                    <span className="text-sm font-bold">{job.label}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-700 text-white font-bold">{job.job_type === "discovery" ? "DISCOVERY" : "CITATION"}</span>
+                    {job.topic_filter && <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-700 text-white">{job.topic_filter}</span>}
                   </div>
-                ) : (
-                  <button onClick={() => { setEditingJob(job.id); setEditHour(job.hour); setEditMinute(job.minute); }}
-                    className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] font-mono" title="Click to change schedule">
-                    {String(job.hour).padStart(2, "0")}:{String(job.minute).padStart(2, "0")} UTC
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] font-mono">
+                      {String(job.hour).padStart(2, "0")}:{String(job.minute).padStart(2, "0")} UTC
+                    </span>
+                    <button onClick={() => updateJob(job.id, { notify: !job.notify })}
+                      className={`text-[10px] px-2 py-1 rounded font-bold ${job.notify ? "bg-blue-700 text-white" : "bg-gray-600 text-white"}`}>
+                      {job.notify ? "✉ ON" : "✉ OFF"}
+                    </button>
+                    <button onClick={() => updateJob(job.id, { enabled: !job.enabled })}
+                      className={`text-[10px] px-2 py-1 rounded font-bold ${job.enabled ? "bg-emerald-700 text-white" : "bg-red-700 text-white"}`}>
+                      {job.enabled ? "Enabled" : "Disabled"}
+                    </button>
+                    <button onClick={() => triggerJob(job.id)} disabled={triggering === job.id}
+                      className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-50">
+                      {triggering === job.id ? "Running..." : "Run Now"}
+                    </button>
+                    <button onClick={() => { setEditingId(job.id); setEditLabel(job.label); setEditDesc(job.description); setEditHour(job.hour); setEditMinute(job.minute); setEditTopic(job.topic_filter || ""); }}
+                      className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)]">Edit</button>
+                    <button onClick={() => deleteJob(job.id, job.label)}
+                      className="text-[10px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10">Del</button>
+                  </div>
+                </div>
+                {job.description && <p className="text-[10px] text-[var(--muted-foreground)]">{job.description}</p>}
+                {job.last_run && (
+                  <div className="flex items-center gap-3 text-[10px] text-[var(--muted-foreground)]">
+                    <span>Last: {fmtTime(job.last_run.started_at)}</span>
+                    {job.last_run.duration != null && <span>{job.last_run.duration.toFixed(1)}s</span>}
+                    <span className={`font-bold ${job.last_run.status === "ok" ? "text-emerald-400" : "text-red-400"}`}>
+                      {job.last_run.status?.toUpperCase()}
+                    </span>
+                    {job.last_run.summary && <span>{job.last_run.summary}</span>}
+                  </div>
                 )}
-
-                {/* Notify toggle */}
-                <button onClick={() => updateJob(job.id, { notify: !job.notify })}
-                  className={`text-[10px] px-2 py-1 rounded font-bold ${job.notify ? "bg-blue-700 text-white" : "bg-gray-600 text-white"}`}
-                  title={job.notify ? "Email notifications ON — click to disable" : "Email notifications OFF — click to enable"}>
-                  {job.notify ? "✉ ON" : "✉ OFF"}
-                </button>
-
-                {/* Enable/disable */}
-                <button onClick={() => updateJob(job.id, { enabled: !job.enabled })}
-                  className={`text-[10px] px-2 py-1 rounded font-bold ${job.enabled ? "bg-emerald-700 text-white" : "bg-red-700 text-white"}`}>
-                  {job.enabled ? "Enabled" : "Disabled"}
-                </button>
-
-                {/* Run now */}
-                <button onClick={() => triggerJob(job.id)}
-                  disabled={triggering === job.id}
-                  className="text-[10px] px-2 py-1 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-50">
-                  {triggering === job.id ? "Running..." : "Run Now"}
-                </button>
-              </div>
-            </div>
-
-            {/* Last run info */}
-            {job.last_run && (
-              <div className="flex items-center gap-3 text-[10px] text-[var(--muted-foreground)]">
-                <span>Last: {fmtTime(job.last_run.started_at)}</span>
-                {job.last_run.duration != null && <span>{job.last_run.duration.toFixed(1)}s</span>}
-                <span className={`font-bold ${job.last_run.status === "ok" ? "text-emerald-400" : "text-red-400"}`}>
-                  {job.last_run.status?.toUpperCase()}
-                </span>
-                {job.last_run.summary && <span>{job.last_run.summary}</span>}
-              </div>
-            )}
-            {job.next_run && (
-              <div className="text-[10px] text-[var(--muted-foreground)]">
-                Next: {fmtTime(job.next_run)}
-              </div>
+                {job.next_run && <div className="text-[10px] text-[var(--muted-foreground)]">Next: {fmtTime(job.next_run)}</div>}
+              </>
             )}
           </div>
         ))}

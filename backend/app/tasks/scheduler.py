@@ -1,46 +1,141 @@
-"""APScheduler integration for automated paper discovery — config-driven with run logging."""
+"""APScheduler integration — DB-driven job configuration with run logging and email notifications."""
 
-import json
 import logging
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database import async_session
-from app.services.analysis import AnalysisService
-from app.services.discovery import DiscoveryService
-from app.services.export_service import ExportService
-from app.services.report_generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
-# Default job configurations
-DEFAULT_JOBS = {
-    "discovery": {
-        "label": "Daily Discovery",
-        "description": "Discover new papers across all topics and sources",
-        "hour": 6,
-        "minute": 0,
-        "enabled": True,
-        "notify": True,
-    },
-    "citation_refresh": {
-        "label": "Citation Refresh",
-        "description": "Refresh citation counts via Semantic Scholar",
-        "hour": 7,
-        "minute": 0,
-        "enabled": True,
-        "notify": True,
-    },
-}
 
+# ---------------------------------------------------------------------------
+# Job execution functions
+# ---------------------------------------------------------------------------
+
+async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True):
+    """Run paper discovery. If topic_filter is set, only that topic is searched."""
+    from app.services.discovery import DiscoveryService
+    from app.services.analysis import AnalysisService
+    from app.services.export_service import ExportService
+    from app.services.report_generator import ReportGenerator
+    from sqlalchemy import select
+    from app.models.topic import Topic
+
+    logger.info(f"=== Discovery Job '{job_key}' Started (topic={topic_filter or 'ALL'}) ===")
+    start = datetime.utcnow()
+    summary = ""
+    error_msg = ""
+    status = "ok"
+    details = ""
+
+    discovery = DiscoveryService(download_pdfs=True, validate=True)
+    analysis_service = AnalysisService()
+    export_service = ExportService()
+    report_gen = ReportGenerator()
+
+    try:
+        async with async_session() as db:
+            if topic_filter:
+                # Single topic
+                result = await db.execute(select(Topic).where(Topic.name == topic_filter))
+                topic = result.scalar_one_or_none()
+                if topic:
+                    r = await discovery.discover_papers(db, topic, max_per_source=50)
+                    results = [r]
+                else:
+                    results = []
+                    summary = f"Topic '{topic_filter}' not found"
+                    status = "error"
+            else:
+                results = await discovery.discover_all_topics(db, max_per_source=50)
+
+            if results:
+                total_new = sum(r.get("new_papers", 0) for r in results)
+                summary = f"{total_new} new papers found"
+
+                # Build breakdown
+                topic_lines = []
+                sources_all: set[str] = set()
+                for r in results:
+                    t_name = r.get("topic", "Unknown")
+                    t_new = r.get("new_papers", 0)
+                    t_total = r.get("total_found", 0)
+                    t_unique = r.get("unique_found", 0)
+                    topic_lines.append(f"  {t_name}: {t_new} new ({t_total} found, {t_unique} unique)")
+                    for src in r.get("sources_queried", []):
+                        sources_all.add(src)
+
+                details = "By Topic:\n" + "\n".join(topic_lines) if topic_lines else ""
+                if sources_all:
+                    details += f"\n\nSources queried: {', '.join(sorted(sources_all))}"
+
+            analyzed = await analysis_service.analyze_all_papers(db)
+            logger.info(f"Analysis: {analyzed} papers analyzed")
+
+            await export_service.export_json(db)
+            await export_service.export_xlsx(db)
+
+            report_path = await report_gen.generate_daily_report(db)
+            logger.info(f"Report: {report_path}")
+
+            await db.commit()
+
+    except Exception as e:
+        logger.error(f"Discovery job '{job_key}' error: {e}", exc_info=True)
+        status = "error"
+        error_msg = str(e)
+        summary = summary or "Failed"
+    finally:
+        await discovery.close()
+
+    elapsed = (datetime.utcnow() - start).total_seconds()
+    logger.info(f"=== Discovery Job '{job_key}' Complete ({elapsed:.1f}s) ===")
+
+    await _log_run(job_key, status, elapsed, summary, error_msg)
+    if notify:
+        _send_job_email(f"Discovery: {job_key}", status, summary, elapsed, error_msg, details)
+
+
+async def run_citation_refresh_job(job_key: str, notify: bool = True):
+    """Refresh citation counts for all papers via Semantic Scholar."""
+    logger.info(f"=== Citation Refresh Job '{job_key}' Started ===")
+    start = datetime.utcnow()
+    summary = ""
+    error_msg = ""
+    status = "ok"
+
+    try:
+        from app.services.citation_refresh import refresh_citations_batch
+        async with async_session() as db:
+            result = await refresh_citations_batch(db)
+            await db.commit()
+            summary = f"{result['total']} checked, {result['updated']} updated, {result.get('errors', 0)} errors"
+            logger.info(f"Citations: {summary}")
+    except Exception as e:
+        logger.error(f"Citation refresh job '{job_key}' error: {e}", exc_info=True)
+        status = "error"
+        error_msg = str(e)
+        summary = "Failed"
+
+    elapsed = (datetime.utcnow() - start).total_seconds()
+    logger.info(f"=== Citation Refresh Job '{job_key}' Complete ({elapsed:.1f}s) ===")
+
+    await _log_run(job_key, status, elapsed, summary, error_msg)
+    if notify:
+        _send_job_email(f"Citation Refresh: {job_key}", status, summary, elapsed, error_msg)
+
+
+# ---------------------------------------------------------------------------
+# Run logging + email
+# ---------------------------------------------------------------------------
 
 async def _log_run(job_name: str, status: str, duration: float, summary: str = "", error: str = ""):
-    """Persist a job run record."""
     try:
-        from app.models.job_run import JobRun
+        from app.models.scheduled_job import JobRun
         async with async_session() as db:
             db.add(JobRun(
                 job_name=job_name,
@@ -56,7 +151,6 @@ async def _log_run(job_name: str, status: str, duration: float, summary: str = "
 
 
 def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = ""):
-    """Send email notification for a completed job (non-blocking)."""
     try:
         from app.config import settings
         if not settings.smtp_user or not settings.smtp_app_password or not settings.notify_email:
@@ -101,159 +195,89 @@ def _send_job_email(job_label: str, status: str, summary: str, duration: float, 
         pass
 
 
-async def _get_job_config() -> dict:
-    """Load job configuration from app_settings, falling back to defaults."""
-    config = dict(DEFAULT_JOBS)
-    try:
-        from app.models.app_setting import AppSetting
-        from sqlalchemy import select
-        async with async_session() as db:
-            result = await db.execute(select(AppSetting).where(AppSetting.key == "scheduled_jobs"))
-            setting = result.scalar_one_or_none()
-            if setting and setting.value:
-                saved = json.loads(setting.value)
-                for k, v in saved.items():
-                    if k in config:
-                        config[k].update(v)
-    except Exception as e:
-        logger.warning(f"Failed to load job config, using defaults: {e}")
-    return config
+# ---------------------------------------------------------------------------
+# Scheduler setup — reads jobs from DB
+# ---------------------------------------------------------------------------
+
+JOB_TYPE_FUNCS = {
+    "discovery": run_discovery_job,
+    "citation_refresh": run_citation_refresh_job,
+}
 
 
-async def daily_discovery_job():
-    """Run daily paper discovery across all topics and sources."""
-    logger.info("=== Daily Discovery Job Started ===")
-    start = datetime.utcnow()
-    summary = ""
-    error_msg = ""
-    status = "ok"
-
-    discovery = DiscoveryService(download_pdfs=True, validate=True)
-    analysis_service = AnalysisService()
-    export_service = ExportService()
-    report_gen = ReportGenerator()
-
-    details = ""
-    try:
-        async with async_session() as db:
-            results = await discovery.discover_all_topics(db, max_per_source=50)
-            total_new = sum(r["new_papers"] for r in results)
-            summary = f"{total_new} new papers found"
-            logger.info(f"Discovery: {summary}")
-
-            # Build breakdown by topic and by source
-            topic_lines = []
-            sources_queried_all: set[str] = set()
-            for r in results:
-                topic_name = r.get("topic", "Unknown")
-                topic_new = r.get("new_papers", 0)
-                topic_total = r.get("total_found", 0)
-                topic_unique = r.get("unique_found", 0)
-                topic_lines.append(f"  {topic_name}: {topic_new} new ({topic_total} found, {topic_unique} unique)")
-                for src in r.get("sources_queried", []):
-                    sources_queried_all.add(src)
-
-            details = "By Topic:\n" + "\n".join(topic_lines) if topic_lines else ""
-            if sources_queried_all:
-                details += f"\n\nSources queried: {', '.join(sorted(sources_queried_all))}"
-
-            analyzed = await analysis_service.analyze_all_papers(db)
-            logger.info(f"Analysis: {analyzed} papers analyzed")
-
-            await export_service.export_json(db)
-            await export_service.export_xlsx(db)
-            logger.info("Exports: JSON + XLSX generated")
-
-            report_path = await report_gen.generate_daily_report(db)
-            logger.info(f"Report: {report_path}")
-
-            await db.commit()
-
-    except Exception as e:
-        logger.error(f"Daily job error: {e}", exc_info=True)
-        status = "error"
-        error_msg = str(e)
-        summary = summary or "Failed"
-    finally:
-        await discovery.close()
-
-    elapsed = (datetime.utcnow() - start).total_seconds()
-    logger.info(f"=== Daily Discovery Job Complete ({elapsed:.1f}s) ===")
-
-    await _log_run("discovery", status, elapsed, summary, error_msg)
-
-    config = await _get_job_config()
-    if config.get("discovery", {}).get("notify", True):
-        _send_job_email("Daily Discovery", status, summary, elapsed, error_msg, details)
-
-
-async def citation_refresh_job():
-    """Refresh citation counts for all papers via Semantic Scholar."""
-    logger.info("=== Citation Refresh Job Started ===")
-    start = datetime.utcnow()
-    summary = ""
-    error_msg = ""
-    status = "ok"
+async def _load_and_schedule():
+    """Load all enabled jobs from DB and register them with APScheduler."""
+    from app.models.scheduled_job import ScheduledJob
+    from sqlalchemy import select
 
     try:
-        from app.services.citation_refresh import refresh_citations_batch
         async with async_session() as db:
-            result = await refresh_citations_batch(db)
-            await db.commit()
-            summary = f"{result['total']} checked, {result['updated']} updated, {result.get('errors', 0)} errors"
-            logger.info(f"Citations: {summary}")
+            result = await db.execute(select(ScheduledJob).where(ScheduledJob.enabled == True))  # noqa: E712
+            jobs = result.scalars().all()
+
+            for job in jobs:
+                func = JOB_TYPE_FUNCS.get(job.job_type)
+                if not func:
+                    logger.warning(f"Unknown job_type '{job.job_type}' for job '{job.job_key}'")
+                    continue
+
+                kwargs = {"job_key": job.job_key, "notify": job.notify}
+                if job.job_type == "discovery" and job.topic_filter:
+                    kwargs["topic_filter"] = job.topic_filter
+
+                scheduler.add_job(
+                    func, "cron",
+                    hour=job.hour, minute=job.minute,
+                    id=job.job_key,
+                    replace_existing=True,
+                    kwargs=kwargs,
+                )
+                logger.info(f"Job '{job.job_key}' ({job.job_type}) scheduled at {job.hour:02d}:{job.minute:02d} UTC")
+
     except Exception as e:
-        logger.error(f"Citation refresh error: {e}", exc_info=True)
-        status = "error"
-        error_msg = str(e)
-        summary = "Failed"
-
-    elapsed = (datetime.utcnow() - start).total_seconds()
-    logger.info(f"=== Citation Refresh Job Complete ({elapsed:.1f}s) ===")
-
-    await _log_run("citation_refresh", status, elapsed, summary, error_msg)
-
-    config = await _get_job_config()
-    if config.get("citation_refresh", {}).get("notify", True):
-        _send_job_email("Citation Refresh", status, summary, elapsed, error_msg)
+        logger.warning(f"Failed to load jobs from DB, seeding defaults: {e}")
+        await _seed_default_jobs()
+        await _load_and_schedule()
 
 
-def _apply_schedule(config: dict):
-    """Apply job schedule from config dict. Call after scheduler.start()."""
-    job_funcs = {
-        "discovery": daily_discovery_job,
-        "citation_refresh": citation_refresh_job,
-    }
-    for job_id, job_conf in config.items():
-        func = job_funcs.get(job_id)
-        if not func:
-            continue
-        if job_conf.get("enabled", True):
-            scheduler.add_job(
-                func, "cron",
-                hour=job_conf.get("hour", 6),
-                minute=job_conf.get("minute", 0),
-                id=job_id,
-                replace_existing=True,
-            )
-            logger.info(f"Job '{job_id}' scheduled at {job_conf.get('hour', 6):02d}:{job_conf.get('minute', 0):02d} UTC")
-        else:
-            try:
-                scheduler.remove_job(job_id)
-                logger.info(f"Job '{job_id}' disabled")
-            except Exception:
-                pass
+async def _seed_default_jobs():
+    """Create the two default jobs if the table is empty."""
+    from app.models.scheduled_job import ScheduledJob
+    from sqlalchemy import select
+
+    async with async_session() as db:
+        existing = await db.execute(select(ScheduledJob).limit(1))
+        if existing.scalar_one_or_none() is not None:
+            return  # Already seeded
+
+        db.add(ScheduledJob(
+            job_key="discovery",
+            label="Daily Discovery",
+            description="Discover new papers across all topics and sources",
+            job_type="discovery",
+            hour=6, minute=0,
+            enabled=True, notify=True,
+        ))
+        db.add(ScheduledJob(
+            job_key="citation_refresh",
+            label="Citation Refresh",
+            description="Refresh citation counts via Semantic Scholar",
+            job_type="citation_refresh",
+            hour=7, minute=0,
+            enabled=True, notify=True,
+        ))
+        await db.commit()
+        logger.info("Default scheduled jobs seeded")
 
 
 def setup_scheduler():
-    """Configure and return the scheduler with default config."""
+    """Configure and return the scheduler."""
     import asyncio
 
     async def _setup():
-        config = await _get_job_config()
-        _apply_schedule(config)
+        await _seed_default_jobs()
+        await _load_and_schedule()
 
-    # Run async config loader
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
@@ -261,8 +285,15 @@ def setup_scheduler():
         else:
             loop.run_until_complete(_setup())
     except RuntimeError:
-        # Fallback: use defaults synchronously
-        _apply_schedule(DEFAULT_JOBS)
+        pass
 
     logger.info("Scheduler configured")
     return scheduler
+
+
+async def reload_scheduler():
+    """Reload all jobs from DB — call after any CRUD operation."""
+    # Remove all existing jobs
+    for job in scheduler.get_jobs():
+        job.remove()
+    await _load_and_schedule()
