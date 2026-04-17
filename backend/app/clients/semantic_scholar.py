@@ -47,7 +47,12 @@ class SemanticScholarClient(BaseAPIClient):
             # Open access filter
             if kwargs.get("open_access"):
                 params["openAccessPdf"] = ""
-            # Min citations — S2 supports fieldsOfStudy but not minCitations in search; filter post-fetch
+            # Sort: citations or date (default: relevance)
+            sort_by = kwargs.get("sort_by", "date")
+            if sort_by == "citations":
+                params["sort"] = "citationCount:desc"
+            elif sort_by == "date":
+                params["sort"] = "publicationDate:desc"
 
             try:
                 response = await self._request(

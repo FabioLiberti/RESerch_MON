@@ -245,6 +245,8 @@ async def trigger_job(
             kwargs["year_from"] = job.year_from
         if job.year_to:
             kwargs["year_to"] = job.year_to
+        if job.sort_by:
+            kwargs["sort_by"] = job.sort_by
 
     asyncio.ensure_future(func(**kwargs))
     return {"status": "triggered", "job_key": job.job_key}

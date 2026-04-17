@@ -26,6 +26,7 @@ class ScheduledJob(Base):
     year_from = Column(Integer, nullable=True)     # optional year filter for backfill
     year_to = Column(Integer, nullable=True)       # optional year filter for backfill
     run_once = Column(Boolean, default=False)      # auto-disable after first execution
+    sort_by = Column(String(20), default="date")   # date | citations (for S2/Elsevier)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

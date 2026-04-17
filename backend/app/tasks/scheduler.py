@@ -16,7 +16,7 @@ scheduler = AsyncIOScheduler()
 # Job execution functions
 # ---------------------------------------------------------------------------
 
-async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True, max_per_source: int = 50, year_from: int | None = None, year_to: int | None = None):
+async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True, max_per_source: int = 50, year_from: int | None = None, year_to: int | None = None, sort_by: str = "date"):
     """Run paper discovery. If topic_filter is set, only that topic is searched."""
     from app.services.discovery import DiscoveryService
     from app.services.analysis import AnalysisService
@@ -44,6 +44,8 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
         search_kwargs["year_from"] = year_from
     if year_to:
         search_kwargs["year_to"] = year_to
+    if sort_by and sort_by != "date":
+        search_kwargs["sort_by"] = sort_by
 
     try:
         async with async_session() as db:
@@ -295,6 +297,8 @@ async def _load_and_schedule():
                         kwargs["year_from"] = job.year_from
                     if job.year_to:
                         kwargs["year_to"] = job.year_to
+                    if job.sort_by:
+                        kwargs["sort_by"] = job.sort_by
 
                 scheduler.add_job(
                     func, "cron",

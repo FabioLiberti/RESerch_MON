@@ -51,11 +51,17 @@ class ElsevierClient(BaseAPIClient):
         page_size = min(25, max_results)  # Scopus default is 25
 
         while len(results) < max_results:
+            # Sort: citedby-count for backfill, date for daily
+            sort_param = "-coverDate"  # default: newest first
+            if kwargs.get("sort_by") == "citations":
+                sort_param = "-citedby-count"
+
             params = {
                 "query": query,
                 "start": str(start),
                 "count": str(page_size),
                 "view": "STANDARD",
+                "sort": sort_param,
             }
             try:
                 response = await self._request(
