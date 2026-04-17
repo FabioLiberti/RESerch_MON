@@ -16,7 +16,7 @@ scheduler = AsyncIOScheduler()
 # Job execution functions
 # ---------------------------------------------------------------------------
 
-async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True):
+async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True, max_per_source: int = 50):
     """Run paper discovery. If topic_filter is set, only that topic is searched."""
     from app.services.discovery import DiscoveryService
     from app.services.analysis import AnalysisService
@@ -48,7 +48,7 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
                     result = await db.execute(select(Topic).where(Topic.name == tname))
                     topic = result.scalar_one_or_none()
                     if topic:
-                        r = await discovery.discover_papers(db, topic, max_per_source=50)
+                        r = await discovery.discover_papers(db, topic, max_per_source=max_per_source)
                         results.append(r)
                     else:
                         logger.warning(f"Topic '{tname}' not found, skipping")
@@ -56,7 +56,7 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
                     summary = f"No matching topics found: {topic_filter}"
                     status = "error"
             else:
-                results = await discovery.discover_all_topics(db, max_per_source=50)
+                results = await discovery.discover_all_topics(db, max_per_source=max_per_source)
 
             if results:
                 total_new = sum(r.get("new_papers", 0) for r in results)
@@ -257,8 +257,10 @@ async def _load_and_schedule():
                     continue
 
                 kwargs = {"job_key": job.job_key, "notify": job.notify}
-                if job.job_type == "discovery" and job.topic_filter:
-                    kwargs["topic_filter"] = job.topic_filter
+                if job.job_type == "discovery":
+                    if job.topic_filter:
+                        kwargs["topic_filter"] = job.topic_filter
+                    kwargs["max_per_source"] = job.max_per_source or 50
 
                 scheduler.add_job(
                     func, "cron",

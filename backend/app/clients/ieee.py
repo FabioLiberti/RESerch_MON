@@ -71,67 +71,73 @@ class IEEEXploreClient(BaseAPIClient):
         return results
 
     async def _search_web(self, query: str, max_results: int, **kwargs) -> list[RawPaperResult]:
-        """Search via IEEE web endpoint (no API key needed, rate limited)."""
+        """Search via IEEE web endpoint with pagination, sorted by date (newest first)."""
         import time
 
-        # Rate limit: wait between requests
-        now = time.monotonic()
-        elapsed = now - self._web_last_request
-        if elapsed < WEB_RATE_LIMIT_SECONDS:
-            wait = WEB_RATE_LIMIT_SECONDS - elapsed
-            logger.info(f"[ieee-web] Rate limiting: waiting {wait:.0f}s")
-            await asyncio.sleep(wait)
+        page_size = min(max_results, 100)  # IEEE max per page = 100
+        total_pages = (max_results + page_size - 1) // page_size
+        all_results: list[RawPaperResult] = []
 
-        body: dict = {
-            "queryText": query,
-            "returnType": "SEARCH",
-            "matchPubs": True,
-            "rowsPerPage": min(max_results, 100),
-            "pageNumber": 1,
-        }
-        # Year range filter
-        if kwargs.get("year_from") or kwargs.get("year_to"):
-            ranges = []
-            if kwargs.get("year_from"):
-                ranges.append(f"{kwargs['year_from']}")
-            if kwargs.get("year_to"):
-                if ranges:
-                    ranges[0] = f"{ranges[0]}_{kwargs['year_to']}"
-                else:
-                    ranges.append(f"1990_{kwargs['year_to']}")
-            body["ranges"] = ranges
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            for page_num in range(1, total_pages + 1):
+                # Rate limit between pages
+                now = time.monotonic()
+                elapsed = now - self._web_last_request
+                if elapsed < WEB_RATE_LIMIT_SECONDS:
+                    wait = WEB_RATE_LIMIT_SECONDS - elapsed
+                    logger.info(f"[ieee-web] Rate limiting: waiting {wait:.0f}s")
+                    await asyncio.sleep(wait)
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-                resp = await client.post(IEEE_WEB_SEARCH_URL, json=body, headers=IEEE_WEB_HEADERS)
-                self._web_last_request = time.monotonic()
+                body: dict = {
+                    "queryText": query,
+                    "returnType": "SEARCH",
+                    "matchPubs": True,
+                    "rowsPerPage": page_size,
+                    "pageNumber": page_num,
+                    "sortType": "newest",  # Sort by publication date, newest first
+                }
+                # Year range filter
+                if kwargs.get("year_from") or kwargs.get("year_to"):
+                    yf = kwargs.get("year_from", 1990)
+                    yt = kwargs.get("year_to", 2030)
+                    body["ranges"] = [f"{yf}_{yt}"]
 
-                if resp.status_code == 429:
-                    logger.warning("[ieee-web] Rate limited (429), waiting 60s and retrying")
-                    await asyncio.sleep(60)
+                try:
                     resp = await client.post(IEEE_WEB_SEARCH_URL, json=body, headers=IEEE_WEB_HEADERS)
                     self._web_last_request = time.monotonic()
 
-                if resp.status_code != 200:
-                    logger.error(f"[ieee-web] HTTP {resp.status_code}")
-                    return []
+                    if resp.status_code == 429:
+                        logger.warning(f"[ieee-web] Rate limited (429) on page {page_num}, waiting 60s")
+                        await asyncio.sleep(60)
+                        resp = await client.post(IEEE_WEB_SEARCH_URL, json=body, headers=IEEE_WEB_HEADERS)
+                        self._web_last_request = time.monotonic()
 
-                data = resp.json()
+                    if resp.status_code != 200:
+                        logger.error(f"[ieee-web] HTTP {resp.status_code} on page {page_num}")
+                        break
 
-        except Exception as e:
-            logger.error(f"[ieee-web] Search error: {e}")
-            return []
+                    data = resp.json()
 
-        records = data.get("records", [])
-        total = data.get("totalRecords", 0)
-        results = []
-        for record in records:
-            parsed = self._parse_web(record)
-            if parsed:
-                results.append(parsed)
+                except Exception as e:
+                    logger.error(f"[ieee-web] Search error on page {page_num}: {e}")
+                    break
 
-        logger.info(f"[ieee-web] Found {len(results)} papers (total: {total}) for: {query[:80]}")
-        return results
+                records = data.get("records", [])
+                total_available = data.get("totalRecords", 0)
+
+                for record in records:
+                    parsed = self._parse_web(record)
+                    if parsed:
+                        all_results.append(parsed)
+
+                logger.info(f"[ieee-web] Page {page_num}: {len(records)} papers (total available: {total_available}, collected: {len(all_results)}/{max_results})")
+
+                # Stop if we have enough or no more pages
+                if len(all_results) >= max_results or len(records) < page_size:
+                    break
+
+        logger.info(f"[ieee-web] Found {len(all_results)} papers for: {query[:80]}")
+        return all_results[:max_results]
 
     # --- Parsers ---
 

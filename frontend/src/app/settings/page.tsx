@@ -621,6 +621,7 @@ function ScheduledJobsSection() {
   const [newType, setNewType] = useState("discovery");
   const [newHour, setNewHour] = useState(6);
   const [newMinute, setNewMinute] = useState(0);
+  const [newMaxPerSource, setNewMaxPerSource] = useState(50);
   const [newTopics, setNewTopics] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
@@ -638,7 +639,7 @@ function ScheduledJobsSection() {
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         label: newLabel.trim(), description: newDesc.trim(), job_type: newType,
-        hour: newHour, minute: newMinute, topic_filter: newTopics.length > 0 ? newTopics.join(",") : null,
+        hour: newHour, minute: newMinute, topic_filter: newTopics.length > 0 ? newTopics.join(",") : null, max_per_source: newMaxPerSource,
       }),
     });
     setShowCreate(false);
@@ -716,7 +717,7 @@ function ScheduledJobsSection() {
             <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="What this job does"
               className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Schedule (UTC)</label>
               <div className="flex items-center gap-1">
@@ -727,6 +728,19 @@ function ScheduledJobsSection() {
                   className="w-16 px-2 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm text-center" />
               </div>
             </div>
+            {newType === "discovery" && (
+              <div>
+                <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Max per source</label>
+                <select value={newMaxPerSource} onChange={e => setNewMaxPerSource(Number(e.target.value))}
+                  className="w-full px-2 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-sm">
+                  <option value={50}>50 (daily)</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500 (backfill)</option>
+                  <option value={1000}>1000 (deep backfill)</option>
+                </select>
+              </div>
+            )}
             {newType === "discovery" && topics && topics.length > 0 && (
               <div className="sm:col-span-2">
                 <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">
@@ -814,6 +828,9 @@ function ScheduledJobsSection() {
                       <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-700 text-white">{t}</span>
                     ))}
                     {!job.topic_filter && job.job_type === "discovery" && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-600 text-white">ALL TOPICS</span>}
+                    {job.job_type === "discovery" && (job as any).max_per_source && (job as any).max_per_source !== 50 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-700 text-white">{(job as any).max_per_source}/src</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] font-mono">

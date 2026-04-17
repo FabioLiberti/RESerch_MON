@@ -26,6 +26,7 @@ class CreateJobRequest(BaseModel):
     enabled: bool = True
     notify: bool = True
     topic_filter: str | None = None  # topic name, or None for all
+    max_per_source: int = 50
 
 
 class UpdateJobRequest(BaseModel):
@@ -34,6 +35,7 @@ class UpdateJobRequest(BaseModel):
     hour: int | None = None
     minute: int | None = None
     enabled: bool | None = None
+    max_per_source: int | None = None
     notify: bool | None = None
     topic_filter: str | None = None
 
@@ -50,6 +52,7 @@ def _serialize_job(job: ScheduledJob, last_run: JobRun | None = None, next_run_i
         "enabled": job.enabled,
         "notify": job.notify,
         "topic_filter": job.topic_filter,
+        "max_per_source": job.max_per_source or 50,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "next_run": next_run_iso,
         "last_run": {
@@ -134,6 +137,7 @@ async def create_job(
         enabled=body.enabled,
         notify=body.notify,
         topic_filter=body.topic_filter if body.job_type == "discovery" else None,
+        max_per_source=body.max_per_source,
     )
     db.add(job)
     await db.commit()
@@ -172,6 +176,8 @@ async def update_job(
         job.notify = body.notify
     if body.topic_filter is not None:
         job.topic_filter = body.topic_filter or None
+    if body.max_per_source is not None:
+        job.max_per_source = body.max_per_source
 
     await db.commit()
 
@@ -219,8 +225,10 @@ async def trigger_job(
         raise HTTPException(400, f"Unknown job_type: {job.job_type}")
 
     kwargs = {"job_key": job.job_key, "notify": job.notify}
-    if job.job_type == "discovery" and job.topic_filter:
-        kwargs["topic_filter"] = job.topic_filter
+    if job.job_type == "discovery":
+        if job.topic_filter:
+            kwargs["topic_filter"] = job.topic_filter
+        kwargs["max_per_source"] = job.max_per_source or 50
 
     asyncio.ensure_future(func(**kwargs))
     return {"status": "triggered", "job_key": job.job_key}
