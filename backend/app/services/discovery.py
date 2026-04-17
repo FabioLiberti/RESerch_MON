@@ -54,6 +54,7 @@ class DiscoveryService:
         topic: Topic,
         sources: list[str] | None = None,
         max_per_source: int = 50,
+        **search_kwargs,
     ) -> dict:
         """Discover papers for a topic across all sources.
 
@@ -88,15 +89,15 @@ class DiscoveryService:
                 logger.info(f"Searching {source_name} for topic '{topic.name}': {query[:80]}")
 
                 if source_name == "biorxiv":
-                    results = await client.search(query, max_results=max_per_source)
+                    results = await client.search(query, max_results=max_per_source, **search_kwargs)
                     # Also search medRxiv for healthcare topics
                     if "healthcare" in topic.name.lower() or "medical" in " ".join(topic.keywords).lower():
                         medrxiv_results = await client.search(
-                            query, max_results=max_per_source, server="medrxiv"
+                            query, max_results=max_per_source, server="medrxiv", **search_kwargs
                         )
                         results.extend(medrxiv_results)
                 else:
-                    results = await client.search(query, max_results=max_per_source)
+                    results = await client.search(query, max_results=max_per_source, **search_kwargs)
 
                 fetch_log.papers_found = len(results)
                 fetch_log.status = "success"
@@ -306,7 +307,7 @@ class DiscoveryService:
             db.add(pt)
 
     async def discover_all_topics(
-        self, db: AsyncSession, max_per_source: int = 50
+        self, db: AsyncSession, max_per_source: int = 50, **search_kwargs
     ) -> list[dict]:
         """Run discovery for all configured topics."""
         result = await db.execute(select(Topic))
@@ -314,7 +315,7 @@ class DiscoveryService:
 
         results = []
         for topic in topics:
-            topic_result = await self.discover_papers(db, topic, max_per_source=max_per_source)
+            topic_result = await self.discover_papers(db, topic, max_per_source=max_per_source, **search_kwargs)
             results.append(topic_result)
 
         return results

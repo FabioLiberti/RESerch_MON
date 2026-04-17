@@ -16,7 +16,7 @@ scheduler = AsyncIOScheduler()
 # Job execution functions
 # ---------------------------------------------------------------------------
 
-async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True, max_per_source: int = 50):
+async def run_discovery_job(job_key: str, topic_filter: str | None = None, notify: bool = True, max_per_source: int = 50, year_from: int | None = None, year_to: int | None = None):
     """Run paper discovery. If topic_filter is set, only that topic is searched."""
     from app.services.discovery import DiscoveryService
     from app.services.analysis import AnalysisService
@@ -38,17 +38,23 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
     export_service = ExportService()
     report_gen = ReportGenerator()
 
+    # Build search kwargs for year filtering
+    search_kwargs: dict = {}
+    if year_from:
+        search_kwargs["year_from"] = year_from
+    if year_to:
+        search_kwargs["year_to"] = year_to
+
     try:
         async with async_session() as db:
             if topic_filter:
-                # One or more topics (comma-separated)
                 topic_names = [t.strip() for t in topic_filter.split(",") if t.strip()]
                 results = []
                 for tname in topic_names:
                     result = await db.execute(select(Topic).where(Topic.name == tname))
                     topic = result.scalar_one_or_none()
                     if topic:
-                        r = await discovery.discover_papers(db, topic, max_per_source=max_per_source)
+                        r = await discovery.discover_papers(db, topic, max_per_source=max_per_source, **search_kwargs)
                         results.append(r)
                     else:
                         logger.warning(f"Topic '{tname}' not found, skipping")
@@ -56,7 +62,7 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
                     summary = f"No matching topics found: {topic_filter}"
                     status = "error"
             else:
-                results = await discovery.discover_all_topics(db, max_per_source=max_per_source)
+                results = await discovery.discover_all_topics(db, max_per_source=max_per_source, **search_kwargs)
 
             if results:
                 total_new = sum(r.get("new_papers", 0) for r in results)
@@ -261,6 +267,10 @@ async def _load_and_schedule():
                     if job.topic_filter:
                         kwargs["topic_filter"] = job.topic_filter
                     kwargs["max_per_source"] = job.max_per_source or 50
+                    if job.year_from:
+                        kwargs["year_from"] = job.year_from
+                    if job.year_to:
+                        kwargs["year_to"] = job.year_to
 
                 scheduler.add_job(
                     func, "cron",

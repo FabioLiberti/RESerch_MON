@@ -27,6 +27,8 @@ class CreateJobRequest(BaseModel):
     notify: bool = True
     topic_filter: str | None = None  # topic name, or None for all
     max_per_source: int = 50
+    year_from: int | None = None
+    year_to: int | None = None
 
 
 class UpdateJobRequest(BaseModel):
@@ -36,6 +38,8 @@ class UpdateJobRequest(BaseModel):
     minute: int | None = None
     enabled: bool | None = None
     max_per_source: int | None = None
+    year_from: int | None = None
+    year_to: int | None = None
     notify: bool | None = None
     topic_filter: str | None = None
 
@@ -53,6 +57,8 @@ def _serialize_job(job: ScheduledJob, last_run: JobRun | None = None, next_run_i
         "notify": job.notify,
         "topic_filter": job.topic_filter,
         "max_per_source": job.max_per_source or 50,
+        "year_from": job.year_from,
+        "year_to": job.year_to,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "next_run": next_run_iso,
         "last_run": {
@@ -138,6 +144,8 @@ async def create_job(
         notify=body.notify,
         topic_filter=body.topic_filter if body.job_type == "discovery" else None,
         max_per_source=body.max_per_source,
+        year_from=body.year_from,
+        year_to=body.year_to,
     )
     db.add(job)
     await db.commit()
@@ -178,6 +186,10 @@ async def update_job(
         job.topic_filter = body.topic_filter or None
     if body.max_per_source is not None:
         job.max_per_source = body.max_per_source
+    if body.year_from is not None:
+        job.year_from = body.year_from or None
+    if body.year_to is not None:
+        job.year_to = body.year_to or None
 
     await db.commit()
 
@@ -229,6 +241,10 @@ async def trigger_job(
         if job.topic_filter:
             kwargs["topic_filter"] = job.topic_filter
         kwargs["max_per_source"] = job.max_per_source or 50
+        if job.year_from:
+            kwargs["year_from"] = job.year_from
+        if job.year_to:
+            kwargs["year_to"] = job.year_to
 
     asyncio.ensure_future(func(**kwargs))
     return {"status": "triggered", "job_key": job.job_key}
