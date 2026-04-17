@@ -86,6 +86,7 @@ class SmartSearchJob(Base):
     sources_json = Column(Text, nullable=False)
     max_per_source = Column(Integer, default=10)
     search_mode = Column(String(20), default="keywords")  # keywords, title, author, doi
+    filters_json = Column(Text, nullable=True)  # JSON: {year_from, year_to, min_citations, open_access}
     status = Column(String(20), default="pending")  # pending, running, done, failed
     results_json = Column(Text, nullable=True)  # JSON array of search results
     queries_used_json = Column(Text, nullable=True)

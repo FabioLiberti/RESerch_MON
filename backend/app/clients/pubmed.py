@@ -20,7 +20,7 @@ class PubMedClient(BaseAPIClient):
             params["api_key"] = settings.ncbi_api_key
         return params
 
-    async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
+    async def search(self, query: str, max_results: int = 50, **kwargs) -> list[RawPaperResult]:
         """Search PubMed and return paper results."""
         # Step 1: esearch to get PMIDs
         params = {
@@ -31,6 +31,13 @@ class PubMedClient(BaseAPIClient):
             "sort": "date",
             "usehistory": "y",
         }
+        # Apply year filter
+        if kwargs.get("year_from"):
+            params["mindate"] = f"{kwargs['year_from']}/01/01"
+            params["datetype"] = "pdat"
+        if kwargs.get("year_to"):
+            params["maxdate"] = f"{kwargs['year_to']}/12/31"
+            params["datetype"] = "pdat"
         response = await self._request("GET", "/esearch.fcgi", params=params)
         root = ET.fromstring(response.text)
 

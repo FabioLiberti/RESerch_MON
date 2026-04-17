@@ -33,14 +33,14 @@ class IEEEXploreClient(BaseAPIClient):
         super().__init__()
         self._web_last_request = 0.0
 
-    async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
+    async def search(self, query: str, max_results: int = 50, **kwargs) -> list[RawPaperResult]:
         """Search IEEE Xplore. Uses official API if key configured, else web fallback."""
         if settings.ieee_api_key:
-            return await self._search_official(query, max_results)
+            return await self._search_official(query, max_results, **kwargs)
         else:
-            return await self._search_web(query, max_results)
+            return await self._search_web(query, max_results, **kwargs)
 
-    async def _search_official(self, query: str, max_results: int) -> list[RawPaperResult]:
+    async def _search_official(self, query: str, max_results: int, **kwargs) -> list[RawPaperResult]:
         """Search via official IEEE Xplore API (requires API key)."""
         params = {
             "apikey": settings.ieee_api_key,
@@ -70,7 +70,7 @@ class IEEEXploreClient(BaseAPIClient):
         logger.info(f"[ieee] Official API: {len(results)} papers for: {query[:80]}")
         return results
 
-    async def _search_web(self, query: str, max_results: int) -> list[RawPaperResult]:
+    async def _search_web(self, query: str, max_results: int, **kwargs) -> list[RawPaperResult]:
         """Search via IEEE web endpoint (no API key needed, rate limited)."""
         import time
 
@@ -82,13 +82,24 @@ class IEEEXploreClient(BaseAPIClient):
             logger.info(f"[ieee-web] Rate limiting: waiting {wait:.0f}s")
             await asyncio.sleep(wait)
 
-        body = {
+        body: dict = {
             "queryText": query,
             "returnType": "SEARCH",
             "matchPubs": True,
             "rowsPerPage": min(max_results, 100),
             "pageNumber": 1,
         }
+        # Year range filter
+        if kwargs.get("year_from") or kwargs.get("year_to"):
+            ranges = []
+            if kwargs.get("year_from"):
+                ranges.append(f"{kwargs['year_from']}")
+            if kwargs.get("year_to"):
+                if ranges:
+                    ranges[0] = f"{ranges[0]}_{kwargs['year_to']}"
+                else:
+                    ranges.append(f"1990_{kwargs['year_to']}")
+            body["ranges"] = ranges
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:

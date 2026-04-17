@@ -18,6 +18,7 @@ class BioRxivClient(BaseAPIClient):
         query: str,
         max_results: int = 50,
         server: str = "biorxiv",
+        **kwargs,
         days_back: int = 30,
     ) -> list[RawPaperResult]:
         """Search bioRxiv/medRxiv by fetching recent papers and filtering locally.

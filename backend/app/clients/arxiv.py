@@ -43,8 +43,13 @@ class ArXivClient(BaseAPIClient):
     base_url = "https://export.arxiv.org/api"
     requests_per_second = 0.2  # 1 request per 5 seconds (arXiv is strict)
 
-    async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
+    async def search(self, query: str, max_results: int = 50, **kwargs) -> list[RawPaperResult]:
         """Search arXiv for papers."""
+        # Append year filter to query if provided
+        if kwargs.get("year_from") or kwargs.get("year_to"):
+            yf = kwargs.get("year_from", 1990)
+            yt = kwargs.get("year_to", 2030)
+            query = f"{query} AND submittedDate:[{yf}01010000 TO {yt}12312359]"
         params = {
             "search_query": query,
             "start": "0",

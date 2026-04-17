@@ -49,11 +49,19 @@ def _get_clients():
 
 # --- Schemas ---
 
+class SearchFilters(BaseModel):
+    year_from: int | None = None
+    year_to: int | None = None
+    min_citations: int | None = None
+    open_access: bool | None = None
+
+
 class SearchRequest(BaseModel):
     keywords: list[str]
     sources: list[str] = ["pubmed", "arxiv", "biorxiv"]
     max_per_source: int = 10
     mode: str = "keywords"  # keywords, title, author, doi
+    filters: SearchFilters | None = None
 
 
 class SaveRequest(BaseModel):
@@ -81,6 +89,7 @@ async def _run_smart_search(job_id: int):
 
         try:
             search_mode = job.search_mode if hasattr(job, "search_mode") and job.search_mode else "keywords"
+            filters = json.loads(job.filters_json) if job.filters_json else {}
             queries = generate_queries(job.keywords, mode=search_mode)
             job.queries_used = queries
             clients = _get_clients()
@@ -119,7 +128,7 @@ async def _run_smart_search(job_id: int):
                         result = await client.fetch_metadata(lookup_id)
                         results = [result] if result else []
                     else:
-                        results = await client.search(query, max_results=job.max_per_source)
+                        results = await client.search(query, max_results=job.max_per_source, **{k: v for k, v in filters.items() if v is not None})
 
                     all_results.extend(results)
                     logger.info(f"[smart_search:{job_id}] {source_name}: {len(results)} results")
@@ -192,6 +201,8 @@ async def start_search(
     job = SmartSearchJob(max_per_source=body.max_per_source, search_mode=body.mode)
     job.keywords = body.keywords
     job.sources = body.sources
+    if body.filters:
+        job.filters_json = json.dumps(body.filters.model_dump(exclude_none=True))
     db.add(job)
     await db.flush()
 

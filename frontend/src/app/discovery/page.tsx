@@ -959,11 +959,16 @@ function SmartSearchSection() {
     localStorage.setItem("smart-search-start", String(Date.now()));
 
     try {
+      const filters: Record<string, number | boolean> = {};
+      if (filterYearFrom) filters.year_from = parseInt(filterYearFrom);
+      if (filterYearTo) filters.year_to = parseInt(filterYearTo);
+      if (filterMinCitations) filters.min_citations = parseInt(filterMinCitations);
       const res = await api.smartSearch({
         keywords: kws,
         sources: Array.from(selectedSources),
         max_per_source: maxPerSource,
         mode: searchMode,
+        filters: Object.keys(filters).length > 0 ? filters : undefined,
       });
       setJobId(res.job_id);
       localStorage.setItem("smart-search-job-id", String(res.job_id));
@@ -1151,10 +1156,34 @@ function SmartSearchSection() {
                       </ul>
                     </div>
                     <div className="pt-2 border-t border-[var(--border)]">
+                      <p className="font-medium text-[var(--foreground)] mb-1">Server-side Filters:</p>
+                      <p>Filters are applied <strong>at the source</strong> before results are returned — fewer, more precise results.</p>
+                      <table className="w-full text-[10px] mt-1 border-collapse">
+                        <thead>
+                          <tr className="border-b border-[var(--border)]">
+                            <th className="text-left py-0.5">Filter</th>
+                            <th className="text-center py-0.5">PubMed</th>
+                            <th className="text-center py-0.5">arXiv</th>
+                            <th className="text-center py-0.5">S2</th>
+                            <th className="text-center py-0.5">IEEE</th>
+                            <th className="text-center py-0.5">bioRxiv</th>
+                            <th className="text-center py-0.5">Elsevier</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr><td>Year range</td><td className="text-center text-emerald-400">✓</td><td className="text-center text-emerald-400">✓</td><td className="text-center text-emerald-400">✓</td><td className="text-center text-emerald-400">✓</td><td className="text-center text-red-400">—</td><td className="text-center text-emerald-400">✓</td></tr>
+                          <tr><td>Min citations</td><td className="text-center text-red-400">—</td><td className="text-center text-red-400">—</td><td className="text-center text-amber-400">post</td><td className="text-center text-red-400">—</td><td className="text-center text-red-400">—</td><td className="text-center text-amber-400">post</td></tr>
+                          <tr><td>Open Access</td><td className="text-center text-amber-400">post</td><td className="text-center text-emerald-400">all OA</td><td className="text-center text-emerald-400">✓</td><td className="text-center text-red-400">—</td><td className="text-center text-emerald-400">all OA</td><td className="text-center text-emerald-400">✓</td></tr>
+                        </tbody>
+                      </table>
+                      <p className="mt-1 text-[9px]">✓ = server-side, post = filtered after download, — = not supported</p>
+                    </div>
+                    <div className="pt-2 border-t border-[var(--border)]">
                       <p className="font-medium text-[var(--foreground)] mb-1">Tips:</p>
                       <ul className="space-y-0.5">
                         <li>2-3 keywords give the best balance</li>
                         <li>4+ keywords may be too restrictive</li>
+                        <li>Year filter is the most effective — supported by 5/6 sources</li>
                         <li>Use &quot;Save as Topic&quot; to reuse this search in scheduled Discovery</li>
                       </ul>
                     </div>
@@ -1297,9 +1326,9 @@ function SmartSearchSection() {
           </div>
         </div>
 
-        {/* Filters: year range, min citations */}
+        {/* Server-side filters: applied at source before download */}
         <div className="flex items-center gap-3 flex-wrap mt-2">
-          <span className="text-[10px] text-[var(--muted-foreground)]">Filters:</span>
+          <span className="text-[10px] text-[var(--muted-foreground)] font-bold">Search Filters:</span>
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-[var(--muted-foreground)]">Year</span>
             <input type="number" min={1990} max={2030} value={filterYearFrom} onChange={e => setFilterYearFrom(e.target.value)}

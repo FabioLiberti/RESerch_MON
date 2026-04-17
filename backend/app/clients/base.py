@@ -133,8 +133,15 @@ class BaseAPIClient:
 
         raise RuntimeError(f"[{self.source_name}] All {self.max_retries} retries exhausted")
 
-    async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
-        """Search for papers. Override in subclasses."""
+    async def search(self, query: str, max_results: int = 50, **kwargs) -> list[RawPaperResult]:
+        """Search for papers. Override in subclasses.
+
+        Supported kwargs (applied per-source where API supports it):
+            year_from (int): minimum publication year
+            year_to (int): maximum publication year
+            min_citations (int): minimum citation count
+            open_access (bool): only open access papers
+        """
         raise NotImplementedError
 
     async def fetch_metadata(self, identifier: str) -> RawPaperResult | None:

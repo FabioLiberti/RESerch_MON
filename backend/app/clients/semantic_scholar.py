@@ -26,7 +26,7 @@ class SemanticScholarClient(BaseAPIClient):
             headers["x-api-key"] = settings.semantic_scholar_api_key
         return headers
 
-    async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
+    async def search(self, query: str, max_results: int = 50, **kwargs) -> list[RawPaperResult]:
         """Search Semantic Scholar for papers."""
         results = []
         offset = 0
@@ -39,6 +39,15 @@ class SemanticScholarClient(BaseAPIClient):
                 "offset": str(offset),
                 "limit": str(limit),
             }
+            # Year filter
+            if kwargs.get("year_from") or kwargs.get("year_to"):
+                yf = kwargs.get("year_from", "")
+                yt = kwargs.get("year_to", "")
+                params["year"] = f"{yf}-{yt}" if yf and yt else str(yf or yt)
+            # Open access filter
+            if kwargs.get("open_access"):
+                params["openAccessPdf"] = ""
+            # Min citations — S2 supports fieldsOfStudy but not minCitations in search; filter post-fetch
 
             try:
                 response = await self._request(

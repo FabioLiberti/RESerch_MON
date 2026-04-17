@@ -27,11 +27,24 @@ class ElsevierClient(BaseAPIClient):
     def is_configured(self) -> bool:
         return bool(settings.elsevier_api_key)
 
-    async def search(self, query: str, max_results: int = 50) -> list[RawPaperResult]:
+    async def search(self, query: str, max_results: int = 50, **kwargs) -> list[RawPaperResult]:
         """Search Scopus for papers matching query."""
         if not self.is_configured():
             logger.warning("[elsevier] API key not configured")
             return []
+
+        # Append year filter to Scopus query
+        if kwargs.get("year_from") or kwargs.get("year_to"):
+            yf = kwargs.get("year_from")
+            yt = kwargs.get("year_to")
+            if yf and yt:
+                query = f"({query}) AND PUBYEAR > {yf - 1} AND PUBYEAR < {yt + 1}"
+            elif yf:
+                query = f"({query}) AND PUBYEAR > {yf - 1}"
+            elif yt:
+                query = f"({query}) AND PUBYEAR < {yt + 1}"
+        if kwargs.get("open_access"):
+            query = f"({query}) AND OPENACCESS(1)"
 
         results: list[RawPaperResult] = []
         start = 0

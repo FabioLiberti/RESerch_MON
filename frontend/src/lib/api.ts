@@ -180,7 +180,7 @@ export const api = {
   getAnalysisHistory: (paperId: number) => fetchAPI<any>(`/analysis/${paperId}/history`),
 
   // Smart Search
-  smartSearch: (data: { keywords: string[]; sources: string[]; max_per_source: number; mode?: string }) =>
+  smartSearch: (data: { keywords: string[]; sources: string[]; max_per_source: number; mode?: string; filters?: { year_from?: number; year_to?: number; min_citations?: number; open_access?: boolean } }) =>
     fetch("/api/v1/smart-search/search", {
       method: "POST",
       headers: getAuthHeaders(),
