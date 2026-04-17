@@ -1053,15 +1053,14 @@ function SmartSearchSection() {
   const [smartExpanded, setSmartExpanded] = useState(false);
   // Apply filters and sorting to results
   const filteredResults = results?.filter(r => {
-    if (filterYearFrom) {
-      const year = parseInt(r.publication_date?.slice(0, 4) || "0");
-      if (year < parseInt(filterYearFrom)) return false;
+    if (filterYearFrom || filterYearTo) {
+      const yearStr = r.publication_date?.slice(0, 4);
+      if (!yearStr) return true; // keep papers without date
+      const year = parseInt(yearStr);
+      if (filterYearFrom && year < parseInt(filterYearFrom)) return false;
+      if (filterYearTo && year > parseInt(filterYearTo)) return false;
     }
-    if (filterYearTo) {
-      const year = parseInt(r.publication_date?.slice(0, 4) || "9999");
-      if (year > parseInt(filterYearTo)) return false;
-    }
-    if (filterMinCitations && r.citation_count < parseInt(filterMinCitations)) return false;
+    if (filterMinCitations && (r.citation_count || 0) < parseInt(filterMinCitations)) return false;
     return true;
   }) || null;
 
