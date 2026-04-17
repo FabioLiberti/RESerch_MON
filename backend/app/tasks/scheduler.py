@@ -99,6 +99,7 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
     await _finish_run(run_id, status, elapsed, summary, error_msg)
 
     # Generate report AFTER logging (so we have the run_id)
+    report_date = datetime.utcnow().strftime("%Y-%m-%d")
     try:
         async with async_session() as db:
             report_path = await report_gen.generate_daily_report(db, run_id=run_id)
@@ -108,7 +109,8 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
         logger.warning(f"Report generation failed: {e}")
 
     if notify:
-        _send_job_email(f"Discovery: {job_key}", status, summary, elapsed, error_msg, details, run_id)
+        report_link = f"https://resmon.fabioliberti.com/reports?date={report_date}"
+        _send_job_email(f"Discovery: {job_key}", status, summary, elapsed, error_msg, details, run_id, report_link)
 
 
 async def run_citation_refresh_job(job_key: str, notify: bool = True):
@@ -179,7 +181,7 @@ async def _finish_run(run_id: int | None, status: str, duration: float, summary:
         logger.warning(f"Failed to finish job run: {e}")
 
 
-def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = "", run_id: int | None = None):
+def _send_job_email(job_label: str, status: str, summary: str, duration: float, error: str = "", details: str = "", run_id: int | None = None, report_link: str | None = None):
     try:
         from app.config import settings
         if not settings.smtp_user or not settings.smtp_app_password or not settings.notify_email:
@@ -207,6 +209,8 @@ def _send_job_email(job_label: str, status: str, summary: str, duration: float, 
             body += f"\n--- Breakdown ---\n{details}\n"
         if error:
             body += f"\nError:      {error}\n"
+        if report_link:
+            body += f"\n--- Report ---\nView full report: {report_link}\n"
 
         msg = MIMEText(body, "plain")
         msg["Subject"] = subject
