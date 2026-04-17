@@ -891,6 +891,12 @@ function SmartSearchSection() {
   const [savingTopic, setSavingTopic] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Filter & sort options
+  const [filterYearFrom, setFilterYearFrom] = useState("");
+  const [filterYearTo, setFilterYearTo] = useState("");
+  const [filterMinCitations, setFilterMinCitations] = useState("");
+  const [sortResults, setSortResults] = useState<"relevance" | "title" | "date" | "citations">("relevance");
+
   // Poll for job status when a job is active
   const { data: jobStatus, error: jobError } = useSWR(
     jobId ? `/api/v1/smart-search/status/${jobId}` : null,
@@ -1045,8 +1051,29 @@ function SmartSearchSection() {
 
   const [showInfo, setShowInfo] = useState(false);
   const [smartExpanded, setSmartExpanded] = useState(false);
-  const newCount = results?.filter((r) => !r.already_in_db).length || 0;
-  const dbCount = results?.filter((r) => r.already_in_db).length || 0;
+  // Apply filters and sorting to results
+  const filteredResults = results?.filter(r => {
+    if (filterYearFrom) {
+      const year = parseInt(r.publication_date?.slice(0, 4) || "0");
+      if (year < parseInt(filterYearFrom)) return false;
+    }
+    if (filterYearTo) {
+      const year = parseInt(r.publication_date?.slice(0, 4) || "9999");
+      if (year > parseInt(filterYearTo)) return false;
+    }
+    if (filterMinCitations && r.citation_count < parseInt(filterMinCitations)) return false;
+    return true;
+  }) || null;
+
+  const sortedResults = filteredResults ? [...filteredResults].sort((a, b) => {
+    if (sortResults === "title") return a.title.localeCompare(b.title);
+    if (sortResults === "date") return (b.publication_date || "").localeCompare(a.publication_date || "");
+    if (sortResults === "citations") return (b.citation_count || 0) - (a.citation_count || 0);
+    return 0; // relevance = original order
+  }) : null;
+
+  const newCount = sortedResults?.filter((r) => !r.already_in_db).length || 0;
+  const dbCount = sortedResults?.filter((r) => r.already_in_db).length || 0;
 
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
@@ -1270,7 +1297,47 @@ function SmartSearchSection() {
             </select>
           </div>
         </div>
+
+        {/* Filters: year range, min citations */}
+        <div className="flex items-center gap-3 flex-wrap mt-2">
+          <span className="text-[10px] text-[var(--muted-foreground)]">Filters:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[var(--muted-foreground)]">Year</span>
+            <input type="number" min={1990} max={2030} value={filterYearFrom} onChange={e => setFilterYearFrom(e.target.value)}
+              placeholder="from" className="w-16 px-1.5 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-[10px] text-center" />
+            <span className="text-[10px]">–</span>
+            <input type="number" min={1990} max={2030} value={filterYearTo} onChange={e => setFilterYearTo(e.target.value)}
+              placeholder="to" className="w-16 px-1.5 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-[10px] text-center" />
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[var(--muted-foreground)]">Min citations</span>
+            <input type="number" min={0} value={filterMinCitations} onChange={e => setFilterMinCitations(e.target.value)}
+              placeholder="0" className="w-14 px-1.5 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-[10px] text-center" />
+          </div>
+        </div>
       </div>
+
+      {/* Sort selector (shown when results exist) */}
+      {results && results.length > 0 && (
+        <div className="flex items-center gap-2 mt-3">
+          <span className="text-[10px] text-[var(--muted-foreground)]">Sort by:</span>
+          <div className="flex gap-0.5 p-0.5 rounded-lg bg-[var(--secondary)]">
+            {([
+              { key: "relevance", label: "Relevance" },
+              { key: "title", label: "Title A–Z" },
+              { key: "date", label: "Date ↓" },
+              { key: "citations", label: "Citations ↓" },
+            ] as const).map(s => (
+              <button key={s.key} onClick={() => setSortResults(s.key)}
+                className={cn("px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                  sortResults === s.key ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm" : "text-[var(--muted-foreground)]"
+                )}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Message */}
       {message && (
@@ -1304,10 +1371,13 @@ function SmartSearchSection() {
           )}
 
           {/* Results header (only when results exist) */}
-          {results.length > 0 && (
+          {sortedResults && sortedResults.length > 0 && (
           <div className="flex items-center justify-between">
             <div className="text-sm">
-              <span className="font-medium">{results.length} papers</span>
+              <span className="font-medium">{sortedResults.length} papers</span>
+              {results && sortedResults.length < results.length && (
+                <span className="text-[var(--muted-foreground)]"> (filtered from {results.length})</span>
+              )}
               <span className="text-[var(--muted-foreground)]">
                 {" "}({newCount} new, {dbCount} already in DB)
               </span>
@@ -1327,7 +1397,7 @@ function SmartSearchSection() {
 
           {/* Results list */}
           <div className="space-y-1 max-h-[500px] overflow-y-auto overflow-x-hidden">
-            {results.map((r, i) => (
+            {(sortedResults || []).map((r, i) => (
               <div
                 key={i}
                 className={cn(
@@ -1388,6 +1458,11 @@ function SmartSearchSection() {
                     {r.authors.length > 0 && (
                       <span className="text-[10px] text-[var(--muted-foreground)] truncate max-w-48">
                         {r.authors.slice(0, 3).join(", ")}{r.authors.length > 3 ? " et al." : ""}
+                      </span>
+                    )}
+                    {r.citation_count > 0 && (
+                      <span className="text-[10px] text-[var(--muted-foreground)]">
+                        {r.citation_count} cit.
                       </span>
                     )}
                     {r.already_in_db && (
