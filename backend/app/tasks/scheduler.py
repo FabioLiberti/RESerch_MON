@@ -104,6 +104,9 @@ async def run_discovery_job(job_key: str, topic_filter: str | None = None, notif
 
     await _finish_run(run_id, status, elapsed, summary, error_msg)
 
+    # Auto-disable run_once jobs
+    await _auto_disable_if_run_once(job_key)
+
     # Generate report AFTER logging (so we have the run_id)
     report_date = datetime.utcnow().strftime("%Y-%m-%d")
     try:
@@ -145,6 +148,7 @@ async def run_citation_refresh_job(job_key: str, notify: bool = True):
     logger.info(f"=== Citation Refresh Job '{job_key}' Complete ({elapsed:.1f}s) ===")
 
     await _finish_run(run_id, status, elapsed, summary, error_msg)
+    await _auto_disable_if_run_once(job_key)
     if notify:
         _send_job_email(f"Citation Refresh: {job_key}", status, summary, elapsed, error_msg, run_id=run_id)
 
@@ -167,6 +171,26 @@ async def _start_run(job_name: str) -> int | None:
     except Exception as e:
         logger.warning(f"Failed to start job run: {e}")
         return None
+
+
+async def _auto_disable_if_run_once(job_key: str):
+    """If job has run_once=True, disable it and remove from scheduler after execution."""
+    try:
+        from app.models.scheduled_job import ScheduledJob
+        from sqlalchemy import select
+        async with async_session() as db:
+            result = await db.execute(select(ScheduledJob).where(ScheduledJob.job_key == job_key))
+            job = result.scalar_one_or_none()
+            if job and job.run_once and job.enabled:
+                job.enabled = False
+                await db.commit()
+                logger.info(f"Job '{job_key}' auto-disabled (run_once)")
+                try:
+                    scheduler.remove_job(job_key)
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning(f"Auto-disable check failed for '{job_key}': {e}")
 
 
 async def _finish_run(run_id: int | None, status: str, duration: float, summary: str = "", error: str = ""):

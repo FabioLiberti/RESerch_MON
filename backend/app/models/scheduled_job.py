@@ -25,6 +25,7 @@ class ScheduledJob(Base):
     max_per_source = Column(Integer, default=50)  # papers per source (50 daily, 500 backfill)
     year_from = Column(Integer, nullable=True)     # optional year filter for backfill
     year_to = Column(Integer, nullable=True)       # optional year filter for backfill
+    run_once = Column(Boolean, default=False)      # auto-disable after first execution
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
