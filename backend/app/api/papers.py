@@ -156,6 +156,7 @@ async def list_papers(
     on_zotero: bool | None = None,
     disabled: bool | None = None,
     min_rating: int | None = None,
+    min_citations: int | None = None,
     q: str | None = None,  # Unified search: title, abstract, DOI, author
     search: str | None = None,
     keyword: str | None = None,
@@ -198,6 +199,8 @@ async def list_papers(
         query = query.where((Paper.disabled.is_(False)) | (Paper.disabled.is_(None)))
     if min_rating is not None:
         query = query.where(Paper.rating >= min_rating)
+    if min_citations is not None:
+        query = query.where(Paper.citation_count >= min_citations)
     if q:
         # Unified search across title, abstract, DOI, and author name
         like_q = f"%{q}%"

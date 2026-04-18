@@ -44,6 +44,7 @@ export default function PapersPage() {
   const [qualityFilter, setQualityFilter] = useState("");
   const [tutorCheckFilter, setTutorCheckFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [minCitationsFilter, setMinCitationsFilter] = useState("");
   const [zoteroSyncing, setZoteroSyncing] = useState(false);
 
   // Sync URL params with state
@@ -133,6 +134,7 @@ export default function PapersPage() {
   if (qualityFilter) params.quality = qualityFilter;
   if (tutorCheckFilter) params.tutor_check = tutorCheckFilter;
   if (roleFilter) params.paper_role = roleFilter;
+  if (minCitationsFilter) params.min_citations = minCitationsFilter;
 
   // Apply source filter based on tab + dropdown
   if (activeTab === "compendium") {
@@ -363,6 +365,19 @@ export default function PapersPage() {
           <option value="4">★★★★ 4+</option>
           <option value="5">★★★★★ 5</option>
         </select>
+        <select
+          value={minCitationsFilter}
+          onChange={(e) => { setMinCitationsFilter(e.target.value); setPage(1); }}
+          className={cls(minCitationsFilter)}
+        >
+          <option value="">Citations: All</option>
+          <option value="1">1+ citations</option>
+          <option value="5">5+ citations</option>
+          <option value="10">10+ citations</option>
+          <option value="50">50+ citations</option>
+          <option value="100">100+ citations</option>
+          <option value="500">500+ citations</option>
+        </select>
         {(allFlTechniques || []).length > 0 && (
           <select
             value={flTechFilter}
@@ -465,7 +480,7 @@ export default function PapersPage() {
         {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter || tutorCheckFilter || roleFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setRoleFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setRoleFilter(""); setMinCitationsFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
@@ -640,12 +655,30 @@ export default function PapersPage() {
                   />
                 </th>
               )}
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3">Title</th>
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-28 hidden sm:table-cell">Date</th>
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-32 hidden md:table-cell">Sources</th>
-              <th className="text-left text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-24 hidden lg:table-cell">Type</th>
-              <th className="text-center text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-20 hidden sm:table-cell">Citations</th>
-              <th className="text-center text-xs font-medium text-[var(--muted-foreground)] px-4 py-3 w-16 hidden md:table-cell">PDF</th>
+              {[
+                { key: "title", label: "Title", align: "text-left", hide: "" },
+                { key: "publication_date", label: "Date", align: "text-left", hide: "hidden sm:table-cell", w: "w-28" },
+                { key: null, label: "Sources", align: "text-left", hide: "hidden md:table-cell", w: "w-32" },
+                { key: null, label: "Type", align: "text-left", hide: "hidden lg:table-cell", w: "w-24" },
+                { key: "citation_count", label: "Citations", align: "text-center", hide: "hidden sm:table-cell", w: "w-20" },
+                { key: null, label: "PDF", align: "text-center", hide: "hidden md:table-cell", w: "w-16" },
+              ].map(col => (
+                <th key={col.label} className={`${col.align} text-xs font-medium px-4 py-3 ${col.w || ""} ${col.hide}`}>
+                  {col.key ? (
+                    <button
+                      onClick={() => {
+                        if (sortBy === col.key) setSortOrder(sortOrder === "desc" ? "asc" : "desc");
+                        else { setSortBy(col.key); setSortOrder("desc"); }
+                      }}
+                      className={`hover:text-[var(--foreground)] transition-colors ${sortBy === col.key ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}
+                    >
+                      {col.label} {sortBy === col.key ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  ) : (
+                    <span className="text-[var(--muted-foreground)]">{col.label}</span>
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
