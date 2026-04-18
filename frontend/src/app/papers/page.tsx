@@ -470,12 +470,14 @@ export default function PapersPage() {
         >
           <option value="">Type: All</option>
           <option value="journal_article">Journal Article</option>
-          <option value="conference">Conference</option>
           <option value="preprint">Preprint</option>
+          <option value="conference">Conference</option>
+          <option value="review">Review</option>
           <option value="extended_abstract">Extended Abstract</option>
           <option value="full_paper">Full Paper</option>
           <option value="camera_ready">Camera Ready</option>
           <option value="poster">Poster</option>
+          <option value="manuscript">Manuscript</option>
         </select>
         <select
           value={`${sortBy}:${sortOrder}`}
