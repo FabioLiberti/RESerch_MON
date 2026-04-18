@@ -170,6 +170,7 @@ async def list_papers(
     quality: str | None = None,  # any, excellent, good, adequate, weak, unreliable, none
     tutor_check: str | None = None,  # ok | review | no | none
     paper_role: str | None = None,  # bibliography | reviewing | my_manuscript
+    paper_type: str | None = None,  # journal_article | preprint | conference | extended_abstract | ...
     db: AsyncSession = Depends(get_db),
 ):
     """List papers with filtering, sorting, and pagination."""
@@ -303,6 +304,8 @@ async def list_papers(
     if paper_role:
         if paper_role in ("bibliography", "reviewing", "my_manuscript"):
             query = query.where(Paper.paper_role == paper_role)
+    if paper_type:
+        query = query.where(Paper.paper_type == paper_type)
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())

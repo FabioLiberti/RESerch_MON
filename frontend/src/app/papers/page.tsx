@@ -44,6 +44,7 @@ export default function PapersPage() {
   const [qualityFilter, setQualityFilter] = useState("");
   const [tutorCheckFilter, setTutorCheckFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [minCitationsFilter, setMinCitationsFilter] = useState("");
   const [zoteroSyncing, setZoteroSyncing] = useState(false);
 
@@ -134,6 +135,7 @@ export default function PapersPage() {
   if (qualityFilter) params.quality = qualityFilter;
   if (tutorCheckFilter) params.tutor_check = tutorCheckFilter;
   if (roleFilter) params.paper_role = roleFilter;
+  if (typeFilter) params.paper_type = typeFilter;
   if (minCitationsFilter) params.min_citations = minCitationsFilter;
 
   // Apply source filter based on tab + dropdown
@@ -462,6 +464,20 @@ export default function PapersPage() {
           <option value="my_manuscript">My Manuscript</option>
         </select>
         <select
+          value={typeFilter}
+          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+          className={cls(typeFilter)}
+        >
+          <option value="">Type: All</option>
+          <option value="journal_article">Journal Article</option>
+          <option value="conference">Conference</option>
+          <option value="preprint">Preprint</option>
+          <option value="extended_abstract">Extended Abstract</option>
+          <option value="full_paper">Full Paper</option>
+          <option value="camera_ready">Camera Ready</option>
+          <option value="poster">Poster</option>
+        </select>
+        <select
           value={`${sortBy}:${sortOrder}`}
           onChange={(e) => { const [s, o] = e.target.value.split(":"); setSortBy(s); setSortOrder(o); setPage(1); }}
           className="px-4 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none"
@@ -480,7 +496,7 @@ export default function PapersPage() {
         {(search || authorFilter || doiFilter || topicFilter || sourceFilter || keywordFilter || labelFilter || pdfFilter || zoteroFilter || disabledFilter || ratingFilter || flTechFilter || datasetFilter || methodTagFilter || validationFilter || qualityFilter || tutorCheckFilter || roleFilter) && (
           <button
             onClick={() => {
-              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setRoleFilter(""); setMinCitationsFilter(""); setPage(1);
+              setSearch(""); setAuthorFilter(""); setDoiFilter(""); setTopicFilter(""); setSourceFilter(""); setKeywordFilter(""); setLabelFilter(""); setPdfFilter(""); setZoteroFilter(""); setDisabledFilter(""); setRatingFilter(""); setFlTechFilter(""); setDatasetFilter(""); setMethodTagFilter(""); setValidationFilter(""); setQualityFilter(""); setTutorCheckFilter(""); setRoleFilter(""); setTypeFilter(""); setMinCitationsFilter(""); setPage(1);
             }}
             className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
           >
