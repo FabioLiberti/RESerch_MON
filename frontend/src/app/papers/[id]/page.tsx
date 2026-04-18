@@ -539,19 +539,30 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3">
         {/* Primary: open paper at source */}
-        {paper.doi && (
-          <a
-            href={`https://doi.org/${paper.doi}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            Open Paper
-          </a>
-        )}
+        {(() => {
+          const url = paper.doi
+            ? `https://doi.org/${paper.doi}`
+            : paper.external_ids?.arxiv_id
+            ? `https://arxiv.org/abs/${paper.external_ids.arxiv_id}`
+            : paper.external_ids?.s2_id
+            ? `https://www.semanticscholar.org/paper/${paper.external_ids.s2_id}`
+            : paper.external_ids?.pmid
+            ? `https://pubmed.ncbi.nlm.nih.gov/${paper.external_ids.pmid}`
+            : null;
+          return url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Open Paper
+            </a>
+          ) : null;
+        })()}
 
         {/* PDF — local file or external link */}
         {paper.has_pdf ? (
