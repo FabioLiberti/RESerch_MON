@@ -890,6 +890,7 @@ function SmartSearchSection() {
   const [topicName, setTopicName] = useState("");
   const [savingTopic, setSavingTopic] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Filter & sort options
   const [filterYearFrom, setFilterYearFrom] = useState("");
@@ -917,17 +918,19 @@ function SmartSearchSection() {
   if (jobStatus?.status === "done" && jobStatus.results && !results) {
     setResults(jobStatus.results);
     setQueriesUsed(jobStatus.queries_used || {});
+    setIsSearching(false);
     localStorage.removeItem("smart-search-job-id");
   }
   if (jobStatus?.status === "failed" && !message) {
     setMessage({ type: "error", text: jobStatus.error_message || "Search failed" });
     setJobId(null);
+    setIsSearching(false);
     localStorage.removeItem("smart-search-job-id");
   }
 
   if (!isAdmin) return null;
 
-  const searching = jobId !== null && !results;
+  const searching = isSearching || (jobId !== null && !results);
 
   // Auto-expand when searching
   useEffect(() => {
@@ -945,8 +948,9 @@ function SmartSearchSection() {
 
   const doSearch = async () => {
     const kws = keywords.split(",").map((k) => k.trim()).filter(Boolean);
-    if (!kws.length) return;
+    if (!kws.length || isSearching) return;
 
+    setIsSearching(true);
     setResults(null);
     setMessage(null);
     setSelectedPapers(new Set());
@@ -974,6 +978,7 @@ function SmartSearchSection() {
       localStorage.setItem("smart-search-job-id", String(res.job_id));
     } catch (e: any) {
       setMessage({ type: "error", text: e.message || "Search failed" });
+      setIsSearching(false);
     }
   };
 
@@ -1043,6 +1048,7 @@ function SmartSearchSection() {
   const newSearch = () => {
     setJobId(null);
     setResults(null);
+    setIsSearching(false);
     setSelectedPapers(new Set());
     setMessage(null);
     setQueriesUsed({});
@@ -1231,7 +1237,7 @@ function SmartSearchSection() {
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && doSearch()}
+              onKeyDown={(e) => e.key === "Enter" && !searching && doSearch()}
               onFocus={() => searchMode === "keywords" && setShowSuggestions(true)}
               placeholder={
                 searchMode === "keywords" ? "Keywords separated by comma (e.g. federated learning, blockchain)" :
