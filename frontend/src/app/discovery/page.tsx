@@ -429,7 +429,7 @@ function ImportBibliography() {
             <div className="flex gap-4 text-sm">
               <span><strong>{stats.total_dois}</strong> DOIs found</span>
               <span className="text-emerald-400"><strong>{stats.resolved}</strong> resolved</span>
-              <span className="text-[var(--muted-foreground)]"><strong>{stats.already_in_db}</strong> already in DB</span>
+              <span className="text-[var(--muted-foreground)]"><strong>{stats.already_in_db}</strong> DB</span>
               {stats.not_found > 0 && (
                 <span className="text-red-400"><strong>{stats.not_found}</strong> not found</span>
               )}
@@ -468,9 +468,9 @@ function ImportBibliography() {
                     />
                     <div className="flex-1 min-w-0">
                       {r.status === "already_in_db" && r.db_paper_id ? (
-                        <Link href={`/papers/${r.db_paper_id}`} className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                        <a href={`/papers/${r.db_paper_id}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
                           {r.title || r.doi}
-                        </Link>
+                        </a>
                       ) : r.title ? (
                         <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
                           {r.title}
@@ -488,7 +488,7 @@ function ImportBibliography() {
                           </span>
                         )}
                         {r.status === "already_in_db" && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900 text-sky-100 font-semibold">already in DB</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900 text-sky-100 font-semibold">DB</span>
                         )}
                         {r.status === "not_found" && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-100 font-semibold">not found in S2</span>
@@ -1410,7 +1410,7 @@ function SmartSearchSection() {
                 <span className="text-[var(--muted-foreground)]"> (filtered from {results.length})</span>
               )}
               <span className="text-[var(--muted-foreground)]">
-                {" "}({newCount} new, {dbCount} already in DB)
+                {" "}({newCount} new, {dbCount} DB)
               </span>
             </div>
             <div className="flex gap-2">
@@ -1449,9 +1449,9 @@ function SmartSearchSection() {
                 />
                 <div className="flex-1 min-w-0">
                   {r.already_in_db && r.db_paper_id ? (
-                    <Link href={`/papers/${r.db_paper_id}`} className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                    <a href={`/papers/${r.db_paper_id}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
                       {r.title}
-                    </Link>
+                    </a>
                   ) : r.doi ? (
                     <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
                       {r.title}
@@ -1498,7 +1498,7 @@ function SmartSearchSection() {
                     )}
                     {r.already_in_db && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900 text-sky-100 font-semibold">
-                        already in DB
+                        DB
                       </span>
                     )}
                     {r.open_access && !r.already_in_db && (

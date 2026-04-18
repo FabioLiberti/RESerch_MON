@@ -279,6 +279,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
               Mark as Published
             </button>
           )}
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-900 text-sky-100 font-semibold">
+            DB
+          </span>
           {paper.validated && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
               Validated
