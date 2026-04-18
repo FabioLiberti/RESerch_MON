@@ -482,6 +482,47 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
+      {/* Paper Info — collapsible */}
+      <details className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
+        <summary className="px-4 py-3 text-xs font-medium text-[var(--muted-foreground)] cursor-pointer hover:text-[var(--foreground)]">
+          Paper Info
+        </summary>
+        <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div>
+            <span className="text-[var(--muted-foreground)] block">Added to DB</span>
+            <span className="font-medium">{paper.created_at ? new Date(paper.created_at).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+          </div>
+          <div>
+            <span className="text-[var(--muted-foreground)] block">Import method</span>
+            <span className="font-medium">{paper.created_via?.replace(/_/g, " ") || "legacy"}</span>
+          </div>
+          <div>
+            <span className="text-[var(--muted-foreground)] block">Paper ID</span>
+            <span className="font-mono font-medium">#{paperId}</span>
+          </div>
+          <div>
+            <span className="text-[var(--muted-foreground)] block">Role</span>
+            <span className="font-medium capitalize">{paper.paper_role?.replace(/_/g, " ") || "bibliography"}</span>
+          </div>
+          {paper.doi && (
+            <div className="col-span-2">
+              <span className="text-[var(--muted-foreground)] block">DOI</span>
+              <span className="font-mono text-[10px]">{paper.doi}</span>
+            </div>
+          )}
+          {paper.external_ids && Object.keys(paper.external_ids).length > 0 && (
+            <div className="col-span-2">
+              <span className="text-[var(--muted-foreground)] block">External IDs</span>
+              <div className="flex flex-wrap gap-2 mt-0.5">
+                {Object.entries(paper.external_ids).filter(([, v]) => v).map(([k, v]) => (
+                  <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--secondary)] font-mono">{k}: {String(v).slice(0, 20)}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </details>
+
       {/* Metadata */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Sources */}

@@ -670,9 +670,14 @@ export default function PapersPage() {
                         if (sortBy === col.key) setSortOrder(sortOrder === "desc" ? "asc" : "desc");
                         else { setSortBy(col.key); setSortOrder("desc"); }
                       }}
-                      className={`hover:text-[var(--foreground)] transition-colors ${sortBy === col.key ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}
+                      className={`hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1 ${sortBy === col.key ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}
                     >
-                      {col.label} {sortBy === col.key ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+                      {col.label}
+                      {sortBy === col.key ? (
+                        <span className="text-[var(--primary)]">{sortOrder === "asc" ? "▲" : "▼"}</span>
+                      ) : (
+                        <span className="opacity-30">⇅</span>
+                      )}
                     </button>
                   ) : (
                     <span className="text-[var(--muted-foreground)]">{col.label}</span>
