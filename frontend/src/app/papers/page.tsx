@@ -318,32 +318,48 @@ export default function PapersPage() {
               ))}
           </select>
         )}
-        <select
-          value={keywordFilter}
-          onChange={(e) => { setKeywordFilter(e.target.value); setPage(1); }}
-          className={`${cls(keywordFilter)} max-w-52`}
-        >
-          <option value="">All Keywords</option>
-          {(Array.isArray(allKeywords) ? allKeywords : [])
-            .filter((k: KeywordCount) => k.count >= 3)
-            .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
-            .map((k: KeywordCount) => (
-              <option key={k.keyword} value={k.keyword}>
-                {k.keyword} ({k.count})
-              </option>
-            ))}
-        </select>
+        <div className="relative">
+          <input
+            type="text"
+            value={keywordFilter}
+            onChange={(e) => { setKeywordFilter(e.target.value); setPage(1); }}
+            placeholder="Keyword..."
+            list="kw-datalist"
+            className={`${cls(keywordFilter)} max-w-52 px-2 py-1.5`}
+          />
+          {keywordFilter && (
+            <button onClick={() => { setKeywordFilter(""); setPage(1); }}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">&times;</button>
+          )}
+          <datalist id="kw-datalist">
+            {(Array.isArray(allKeywords) ? allKeywords : [])
+              .filter((k: KeywordCount) => k.count >= 2)
+              .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
+              .map((k: KeywordCount) => (
+                <option key={k.keyword} value={k.keyword}>{k.keyword} ({k.count})</option>
+              ))}
+          </datalist>
+        </div>
         {(allLabels || []).length > 0 && (
-          <select
-            value={labelFilter}
-            onChange={(e) => { setLabelFilter(e.target.value); setPage(1); }}
-            className={`${cls(labelFilter)} max-w-44`}
-          >
-            <option value="">All Labels</option>
-            {(allLabels || []).map((l) => (
-              <option key={l.id} value={l.name}>{l.name}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              value={labelFilter}
+              onChange={(e) => { setLabelFilter(e.target.value); setPage(1); }}
+              placeholder="Label..."
+              list="label-datalist"
+              className={`${cls(labelFilter)} max-w-44 px-2 py-1.5`}
+            />
+            {labelFilter && (
+              <button onClick={() => { setLabelFilter(""); setPage(1); }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">&times;</button>
+            )}
+            <datalist id="label-datalist">
+              {(allLabels || []).sort((a, b) => a.name.localeCompare(b.name)).map((l) => (
+                <option key={l.id} value={l.name} />
+              ))}
+            </datalist>
+          </div>
         )}
         <select
           value={pdfFilter}
