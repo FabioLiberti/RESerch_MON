@@ -6,6 +6,7 @@ import TimelineChart from "@/components/dashboard/TimelineChart";
 import SourcePieChart from "@/components/dashboard/SourcePieChart";
 import TopicTreemap from "@/components/dashboard/TopicTreemap";
 import KeywordCloud from "@/components/dashboard/KeywordCloud";
+import LabelCloud from "@/components/dashboard/LabelCloud";
 import RecentPapers from "@/components/dashboard/RecentPapers";
 import HeatmapCalendar from "@/components/charts/HeatmapCalendar";
 import { useOverview, useTimeline, useHeatmap } from "@/hooks/useAnalytics";
@@ -64,10 +65,13 @@ export default function DashboardPage() {
         <SourcePieChart data={overview?.sources} />
       </div>
 
-      {/* Topics + Keywords Row */}
+      {/* Topics + Keywords + Labels Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TopicTreemap data={overview?.topics} />
         <KeywordCloud />
+      </div>
+      <div className="grid grid-cols-1">
+        <LabelCloud />
       </div>
 
       {/* Recent Papers */}
