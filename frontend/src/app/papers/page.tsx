@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
@@ -318,48 +318,26 @@ export default function PapersPage() {
               ))}
           </select>
         )}
-        <div className="relative">
-          <input
-            type="text"
-            value={keywordFilter}
-            onChange={(e) => { setKeywordFilter(e.target.value); setPage(1); }}
-            placeholder="Keyword..."
-            list="kw-datalist"
-            className={`${cls(keywordFilter)} max-w-52 px-2 py-1.5`}
-          />
-          {keywordFilter && (
-            <button onClick={() => { setKeywordFilter(""); setPage(1); }}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">&times;</button>
-          )}
-          <datalist id="kw-datalist">
-            {(Array.isArray(allKeywords) ? allKeywords : [])
-              .filter((k: KeywordCount) => k.count >= 2)
-              .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
-              .map((k: KeywordCount) => (
-                <option key={k.keyword} value={k.keyword} label={`${k.keyword} (${k.count})`} />
-              ))}
-          </datalist>
-        </div>
+        <FilterDropdown
+          value={keywordFilter}
+          onChange={(v) => { setKeywordFilter(v); setPage(1); }}
+          placeholder="Keyword..."
+          options={(Array.isArray(allKeywords) ? allKeywords : [])
+            .filter((k: KeywordCount) => k.count >= 2)
+            .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
+            .map((k: KeywordCount) => ({ value: k.keyword, label: k.keyword, count: k.count }))}
+          className="max-w-52"
+        />
         {(allLabels || []).length > 0 && (
-          <div className="relative">
-            <input
-              type="text"
-              value={labelFilter}
-              onChange={(e) => { setLabelFilter(e.target.value); setPage(1); }}
-              placeholder="Label..."
-              list="label-datalist"
-              className={`${cls(labelFilter)} max-w-44 px-2 py-1.5`}
-            />
-            {labelFilter && (
-              <button onClick={() => { setLabelFilter(""); setPage(1); }}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">&times;</button>
-            )}
-            <datalist id="label-datalist">
-              {(allLabels || []).sort((a, b) => a.name.localeCompare(b.name)).map((l) => (
-                <option key={l.id} value={l.name} label={`${l.name}${l.paper_count ? ` (${l.paper_count})` : ""}`} />
-              ))}
-            </datalist>
-          </div>
+          <FilterDropdown
+            value={labelFilter}
+            onChange={(v) => { setLabelFilter(v); setPage(1); }}
+            placeholder="Label..."
+            options={(allLabels || [])
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((l) => ({ value: l.name, label: l.name, count: l.paper_count || 0 }))}
+            className="max-w-44"
+          />
         )}
         <select
           value={pdfFilter}
@@ -1018,6 +996,73 @@ export default function PapersPage() {
             Next
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+
+// --- Filter Dropdown with search (replaces datalist to avoid browser double-line) ---
+
+function FilterDropdown({ value, onChange, placeholder, options, className = "" }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: { value: string; label: string; count?: number }[];
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = options.filter(o =>
+    o.label.toLowerCase().includes((open ? search : "").toLowerCase())
+  ).slice(0, 50);
+
+  const handleSelect = (v: string) => {
+    onChange(v);
+    setSearch("");
+    setOpen(false);
+  };
+
+  return (
+    <div className={`relative ${className}`}>
+      <div className="flex items-center">
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? search : value}
+          onChange={(e) => { setSearch(e.target.value); if (!open) setOpen(true); }}
+          onFocus={() => { setOpen(true); setSearch(""); }}
+          placeholder={value || placeholder}
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 focus:outline-none ${
+            value ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--secondary)] text-[var(--muted-foreground)]"
+          }`}
+        />
+        {value && (
+          <button onClick={() => { onChange(""); setSearch(""); setOpen(false); }}
+            className="absolute right-1.5 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]">&times;</button>
+        )}
+      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(""); }} />
+          <div className="absolute left-0 top-full mt-1 z-50 w-64 max-h-60 overflow-y-auto rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-[var(--muted-foreground)]">No matches</div>
+            ) : (
+              filtered.map(o => (
+                <button key={o.value} onClick={() => handleSelect(o.value)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-[var(--secondary)] transition-colors">
+                  <span className="truncate">{o.label}</span>
+                  {o.count != null && o.count > 0 && (
+                    <span className="text-[9px] text-[var(--muted-foreground)] shrink-0 ml-2">{o.count}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   );
