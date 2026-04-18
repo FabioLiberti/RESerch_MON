@@ -105,7 +105,7 @@ export default function PapersPage() {
   };
 
   const { data: allKeywords } = useSWR<KeywordCount[]>("/api/v1/papers/keywords/all", authFetcher);
-  const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>("/api/v1/labels", authFetcher);
+  const { data: allLabels } = useSWR<{ id: number; name: string; color: string; paper_count?: number }[]>("/api/v1/labels", authFetcher);
   const { data: allFlTechniques } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/fl-techniques/all", authFetcher);
   const { data: allDatasets } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/datasets/all", authFetcher);
   const { data: allMethodTags } = useSWR<{ name: string; count: number }[]>("/api/v1/papers/method-tags/all", authFetcher);
@@ -336,7 +336,7 @@ export default function PapersPage() {
               .filter((k: KeywordCount) => k.count >= 2)
               .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
               .map((k: KeywordCount) => (
-                <option key={k.keyword} value={k.keyword}>{k.keyword} ({k.count})</option>
+                <option key={k.keyword} value={k.keyword} label={`${k.keyword} (${k.count})`} />
               ))}
           </datalist>
         </div>
@@ -356,7 +356,7 @@ export default function PapersPage() {
             )}
             <datalist id="label-datalist">
               {(allLabels || []).sort((a, b) => a.name.localeCompare(b.name)).map((l) => (
-                <option key={l.id} value={l.name} />
+                <option key={l.id} value={l.name} label={`${l.name}${l.paper_count ? ` (${l.paper_count})` : ""}`} />
               ))}
             </datalist>
           </div>
