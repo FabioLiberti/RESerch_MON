@@ -613,6 +613,17 @@ async def get_manuscript_status(db: AsyncSession = Depends(get_db)):
     return status
 
 
+@router.get("/type-stats")
+async def get_type_stats(db: AsyncSession = Depends(get_db)):
+    """Return paper count per paper_type."""
+    result = await db.execute(
+        select(Paper.paper_type, func.count(Paper.id))
+        .group_by(Paper.paper_type)
+        .order_by(func.count(Paper.id).desc())
+    )
+    return [{"type": r[0] or "unknown", "count": r[1]} for r in result.all()]
+
+
 @router.get("/section-latest")
 async def get_section_latest(db: AsyncSession = Depends(get_db)):
     """Return the latest updated_at per section for badge system."""
