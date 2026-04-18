@@ -31,8 +31,8 @@ export default function PapersPage() {
   const [doiFilter, setDoiFilter] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
-  const [keywordFilter, setKeywordFilter] = useState("");
-  const [labelFilter, setLabelFilter] = useState("");
+  const [keywordFilter, setKeywordFilter] = useState("");  // comma-separated for multi
+  const [labelFilter, setLabelFilter] = useState("");      // comma-separated for multi
   const [pdfFilter, setPdfFilter] = useState("");
   const [zoteroFilter, setZoteroFilter] = useState("");
   const [disabledFilter, setDisabledFilter] = useState("");
@@ -319,9 +319,10 @@ export default function PapersPage() {
           </select>
         )}
         <FilterDropdown
-          value={keywordFilter}
-          onChange={(v) => { setKeywordFilter(v); setPage(1); }}
+          values={keywordFilter ? keywordFilter.split(",").map(s => s.trim()).filter(Boolean) : []}
+          onChange={(vals) => { setKeywordFilter(vals.join(",")); setPage(1); }}
           placeholder="Keyword..."
+          tagLabel="keyword"
           options={(Array.isArray(allKeywords) ? allKeywords : [])
             .filter((k: KeywordCount) => k.count >= 2)
             .sort((a: KeywordCount, b: KeywordCount) => a.keyword.localeCompare(b.keyword))
@@ -330,9 +331,10 @@ export default function PapersPage() {
         />
         {(allLabels || []).length > 0 && (
           <FilterDropdown
-            value={labelFilter}
-            onChange={(v) => { setLabelFilter(v); setPage(1); }}
+            values={labelFilter ? labelFilter.split(",").map(s => s.trim()).filter(Boolean) : []}
+            onChange={(vals) => { setLabelFilter(vals.join(",")); setPage(1); }}
             placeholder="Label..."
+            tagLabel="label"
             options={(allLabels || [])
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((l) => ({ value: l.name, label: l.name, count: l.paper_count || 0 }))}
@@ -647,19 +649,34 @@ export default function PapersPage() {
         </div>
       )}
 
-      {/* Active keyword badge */}
+      {/* Active keyword tags */}
       {keywordFilter && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-[var(--muted-foreground)]">Filtered by keyword:</span>
-          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
-            {keywordFilter}
-            <button
-              onClick={() => { setKeywordFilter(""); setPage(1); }}
-              className="ml-1 hover:text-[var(--foreground)]"
-            >
-              &times;
-            </button>
-          </span>
+          {keywordFilter.split(",").map(kw => kw.trim()).filter(Boolean).map(kw => (
+            <span key={kw} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
+              {kw}
+              <button onClick={() => {
+                const remaining = keywordFilter.split(",").map(k => k.trim()).filter(k => k && k !== kw).join(",");
+                setKeywordFilter(remaining); setPage(1);
+              }} className="ml-0.5 hover:text-[var(--foreground)]">&times;</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Active label tags */}
+      {labelFilter && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-[var(--muted-foreground)]">Filtered by label:</span>
+          {labelFilter.split(",").map(l => l.trim()).filter(Boolean).map(l => (
+            <span key={l} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-400">
+              {l}
+              <button onClick={() => {
+                const remaining = labelFilter.split(",").map(k => k.trim()).filter(k => k && k !== l).join(",");
+                setLabelFilter(remaining); setPage(1);
+              }} className="ml-0.5 hover:text-[var(--foreground)]">&times;</button>
+            </span>
+          ))}
         </div>
       )}
 
@@ -1002,12 +1019,13 @@ export default function PapersPage() {
 }
 
 
-// --- Filter Dropdown with search (replaces datalist to avoid browser double-line) ---
+// --- Multi-select Filter Dropdown ---
 
-function FilterDropdown({ value, onChange, placeholder, options, className = "" }: {
-  value: string;
-  onChange: (v: string) => void;
+function FilterDropdown({ values, onChange, placeholder, tagLabel, options, className = "" }: {
+  values: string[];
+  onChange: (vals: string[]) => void;
   placeholder: string;
+  tagLabel: string;
   options: { value: string; label: string; count?: number }[];
   className?: string;
 }) {
@@ -1015,14 +1033,18 @@ function FilterDropdown({ value, onChange, placeholder, options, className = "" 
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const selectedSet = new Set(values);
   const filtered = options.filter(o =>
-    o.label.toLowerCase().includes((open ? search : "").toLowerCase())
+    !selectedSet.has(o.value) && o.label.toLowerCase().includes(search.toLowerCase())
   ).slice(0, 50);
 
-  const handleSelect = (v: string) => {
-    onChange(v);
+  const addValue = (v: string) => {
+    onChange([...values, v]);
     setSearch("");
-    setOpen(false);
+  };
+
+  const removeValue = (v: string) => {
+    onChange(values.filter(x => x !== v));
   };
 
   return (
@@ -1031,16 +1053,16 @@ function FilterDropdown({ value, onChange, placeholder, options, className = "" 
         <input
           ref={inputRef}
           type="text"
-          value={open ? search : value}
+          value={search}
           onChange={(e) => { setSearch(e.target.value); if (!open) setOpen(true); }}
-          onFocus={() => { setOpen(true); setSearch(""); }}
-          placeholder={value || placeholder}
+          onFocus={() => setOpen(true)}
+          placeholder={values.length > 0 ? `+ ${tagLabel}...` : placeholder}
           className={`w-full text-xs rounded-lg border px-2 py-1.5 pr-6 focus:outline-none ${
-            value ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--secondary)] text-[var(--muted-foreground)]"
+            values.length > 0 ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--secondary)] text-[var(--muted-foreground)]"
           }`}
         />
-        {value && (
-          <button onClick={(e) => { e.stopPropagation(); onChange(""); setSearch(""); setOpen(false); }}
+        {values.length > 0 && (
+          <button onClick={(e) => { e.stopPropagation(); onChange([]); setSearch(""); setOpen(false); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-[var(--muted)] text-[10px] text-[var(--muted-foreground)] hover:bg-red-500 hover:text-white transition-colors">&times;</button>
         )}
       </div>
@@ -1048,19 +1070,18 @@ function FilterDropdown({ value, onChange, placeholder, options, className = "" 
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(""); }} />
           <div className="absolute left-0 top-full mt-1 z-50 w-80 max-h-60 overflow-y-auto rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl">
-            {/* Clear / All option */}
-            {value && (
-              <button onClick={() => handleSelect("")}
+            {values.length > 0 && (
+              <button onClick={() => { onChange([]); setSearch(""); setOpen(false); }}
                 className="w-full flex items-center px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors border-b border-[var(--border)]">
-                Clear filter
+                Clear all ({values.length})
               </button>
             )}
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-[var(--muted-foreground)]">No matches</div>
+              <div className="px-3 py-2 text-xs text-[var(--muted-foreground)]">{search ? "No matches" : "All selected"}</div>
             ) : (
               filtered.map(o => (
-                <button key={o.value} onClick={() => handleSelect(o.value)}
-                  className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-[var(--secondary)] transition-colors ${value === o.value ? "bg-[var(--primary)]/10 font-bold" : ""}`}>
+                <button key={o.value} onClick={() => addValue(o.value)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-[var(--secondary)] transition-colors">
                   <span className="truncate flex-1 mr-2">{o.label}</span>
                   {o.count != null && o.count > 0 && (
                     <span className="text-[9px] text-[var(--muted-foreground)] shrink-0">{o.count}</span>

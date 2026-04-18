@@ -218,9 +218,11 @@ async def list_papers(
         like_term = f"%{search}%"
         query = query.where(Paper.title.ilike(like_term) | Paper.abstract.ilike(like_term))
     if keyword:
-        # Search in JSON array stored as text
-        kw_term = f'%"{keyword}"%'
-        query = query.where(Paper.keywords_json.ilike(kw_term))
+        # Support comma-separated keywords (AND logic)
+        for kw in keyword.split(","):
+            kw = kw.strip()
+            if kw:
+                query = query.where(Paper.keywords_json.ilike(f'%"{kw}"%'))
     if author:
         query = query.join(PaperAuthor, PaperAuthor.paper_id == Paper.id).join(
             Author, Author.id == PaperAuthor.author_id
@@ -228,9 +230,12 @@ async def list_papers(
     if doi:
         query = query.where(Paper.doi.ilike(f"%{doi}%"))
     if label:
-        query = query.join(PaperLabel, PaperLabel.paper_id == Paper.id).join(
-            Label, Label.id == PaperLabel.label_id
-        ).where(Label.name == label)
+        # Support comma-separated labels (AND logic)
+        for lbl in label.split(","):
+            lbl = lbl.strip()
+            if lbl:
+                sub = select(PaperLabel.paper_id).join(Label, Label.id == PaperLabel.label_id).where(Label.name == lbl)
+                query = query.where(Paper.id.in_(sub))
     if fl_technique:
         from app.models.structured_analysis import StructuredAnalysis
         # Case-insensitive partial match to handle variations
