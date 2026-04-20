@@ -445,6 +445,119 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl, def
         </p>
       )}
 
+      {!collapsed && items.length > 0 && (() => {
+        // --- Horizontal timeline visualization ---
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const allDates = [...items.map(i => i.date), todayStr].map(d => new Date(d).getTime());
+        const minT = Math.min(...allDates);
+        const maxT = Math.max(...allDates);
+        const paddingMs = Math.max((maxT - minT) * 0.08, 7 * 86400000); // 8% or min 7 days
+        const rangeMin = minT - paddingMs;
+        const rangeMax = maxT + paddingMs;
+        const span = rangeMax - rangeMin || 1;
+        const pos = (dateStr: string) => ((new Date(dateStr).getTime() - rangeMin) / span) * 100;
+        const todayPos = pos(todayStr);
+        const sortedItems = [...items].sort((a, b) => a.date.localeCompare(b.date));
+
+        return (
+          <div className="rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] px-4 pt-10 pb-14 overflow-x-auto">
+            <div className="relative min-w-[600px]" style={{ height: "90px" }}>
+              {/* Axis line */}
+              <div className="absolute inset-x-0 top-1/2 h-0.5 bg-[var(--border)]" />
+
+              {/* Month tick marks (start/end) */}
+              <div className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 text-[9px] text-[var(--muted-foreground)] font-mono">
+                <div className="absolute left-1/2 -translate-x-1/2 -top-5">{new Date(rangeMin).toISOString().slice(0, 7)}</div>
+                <div className="w-0.5 h-3 bg-[var(--border)]" />
+              </div>
+              <div className="absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/2 text-[9px] text-[var(--muted-foreground)] font-mono">
+                <div className="absolute left-1/2 -translate-x-1/2 -top-5">{new Date(rangeMax).toISOString().slice(0, 7)}</div>
+                <div className="w-0.5 h-3 bg-[var(--border)]" />
+              </div>
+
+              {/* TODAY marker */}
+              {todayPos >= 0 && todayPos <= 100 && (
+                <div
+                  className="absolute top-0 bottom-0 pointer-events-none"
+                  style={{ left: `${todayPos}%` }}
+                >
+                  <div className="absolute left-0 top-0 bottom-0 border-l-2 border-dashed border-red-500/70" />
+                  <div className="absolute -left-6 -top-8 text-[9px] font-bold text-red-400 whitespace-nowrap bg-[var(--card)] px-1 rounded">
+                    TODAY
+                  </div>
+                </div>
+              )}
+
+              {/* Event markers */}
+              {sortedItems.map((kd, idx) => {
+                const u = urgency(kd.date, kd.is_done);
+                const p = pos(kd.date);
+                const above = idx % 2 === 0;
+                const dotCls =
+                  u === "done" ? "bg-emerald-500 border-emerald-700" :
+                  u === "overdue" ? "bg-red-500 border-red-700 animate-pulse" :
+                  u === "urgent" ? "bg-amber-500 border-amber-700" :
+                  u === "upcoming" ? "bg-blue-500 border-blue-700" :
+                  "bg-gray-400 border-gray-600";
+                const labelCls =
+                  u === "done" ? "text-emerald-400" :
+                  u === "overdue" ? "text-red-400 font-bold" :
+                  u === "urgent" ? "text-amber-400 font-bold" :
+                  u === "upcoming" ? "text-blue-300" :
+                  "text-[var(--muted-foreground)]";
+                return (
+                  <div
+                    key={kd.id}
+                    className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 group"
+                    style={{ left: `${p}%` }}
+                  >
+                    <button
+                      onClick={() => isAdmin && startEdit(kd)}
+                      className={cn(
+                        "w-4 h-4 rounded-full border-2 shadow-lg hover:scale-125 transition-transform",
+                        dotCls,
+                        isAdmin ? "cursor-pointer" : "cursor-default"
+                      )}
+                      title={`${kd.label} — ${kd.date} (${daysFromNow(kd.date)})`}
+                    />
+                    {/* Label stem */}
+                    <div
+                      className={cn(
+                        "absolute left-1/2 -translate-x-1/2 w-px bg-[var(--border)]",
+                        above ? "bottom-full h-4 mb-1" : "top-full h-4 mt-1"
+                      )}
+                    />
+                    {/* Label content */}
+                    <div
+                      className={cn(
+                        "absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap pointer-events-none",
+                        above ? "bottom-full mb-5" : "top-full mt-5"
+                      )}
+                    >
+                      <div className={cn("text-[9px] leading-tight", labelCls, kd.is_done && "line-through")}>
+                        {kd.label.length > 28 ? kd.label.slice(0, 26) + "…" : kd.label}
+                      </div>
+                      <div className="text-[8px] text-[var(--muted-foreground)] font-mono mt-0.5">
+                        {kd.date}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-3 mt-2 text-[9px] text-[var(--muted-foreground)] flex-wrap">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> done</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> overdue</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> urgent (≤7d)</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> upcoming (≤30d)</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400" /> scheduled</span>
+            </div>
+          </div>
+        );
+      })()}
+
       {!collapsed && items.length > 0 && (
         <div className="space-y-1.5">
           {items.map(kd => {
