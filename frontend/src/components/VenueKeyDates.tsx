@@ -215,8 +215,6 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
 
   // --- COMPACT MODE (for paper detail page) ---
   if (compact) {
-    if (items.length === 0) return null;
-
     // Show at most 4 most-relevant: overdue > urgent > upcoming > done
     const prio: Record<Urgency, number> = { overdue: 0, urgent: 1, upcoming: 2, neutral: 3, done: 4 };
     const sorted = [...items].sort((a, b) => {
@@ -232,13 +230,23 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-bold flex items-center gap-1.5">
             <span className="text-amber-400">📅</span> Venue Key Dates
+            {items.length > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)] font-normal">
+                {items.length}
+              </span>
+            )}
           </h3>
           {manageUrl && (
-            <Link href={manageUrl} className="text-[10px] text-[var(--primary)] hover:underline">
-              Manage →
+            <Link href={manageUrl} className="text-[10px] text-[var(--primary)] hover:underline font-bold">
+              {items.length === 0 ? "+ Add key dates →" : "Manage →"}
             </Link>
           )}
         </div>
+        {items.length === 0 ? (
+          <p className="text-[10px] text-[var(--muted-foreground)] text-center py-2">
+            No key dates yet. Track venue deadlines, notifications, and conference dates from the manuscript page.
+          </p>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {shown.map(kd => {
             const u = urgency(kd.date, kd.is_done);
@@ -266,6 +274,7 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
             );
           })}
         </div>
+        )}
         {items.length > shown.length && (
           <div className="text-[10px] text-[var(--muted-foreground)] mt-1.5 text-center">
             +{items.length - shown.length} more
