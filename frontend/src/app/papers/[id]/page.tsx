@@ -214,10 +214,8 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         &larr; Back to papers
       </Link>
 
-      {/* Venue Key Dates (top, compact — only for my_manuscript) */}
-      {paper.paper_role === "my_manuscript" && (
-        <VenueKeyDates paperId={paperId} compact manageUrl={`/my-manuscripts/${paperId}`} />
-      )}
+      {/* Venue Key Dates (top, full — all papers) */}
+      <VenueKeyDates paperId={paperId} />
 
       {/* Header */}
       {isAdmin ? <EditableHeader paper={paper} paperId={paperId} /> : (
