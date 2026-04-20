@@ -1,8 +1,29 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.35.0 — Full tutor collaboration + manuscript lifecycle + scheduled jobs + bibliography analysis
-**Current Version:** v2.35.0
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Complete tutor notification workflow, manuscript dev center with supplementary files, scheduled job admin panel, bibliography analysis, guided tours, login audit
+**Current Phase:** v2.38.0 — Venue Key Dates tracking per manuscript
+**Current Version:** v2.38.0
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Venue key dates with urgency indicators, visible on manuscript detail + compact view on top of paper detail, optional linking to submission rounds and review journal entries
+
+---
+
+### 2026-04-20 — Session: v2.38.0 Venue Key Dates
+
+**Why:** Each manuscript targets a venue (IFKAD, FLICS, ICSIS, ...) with its own calendar — submission deadlines, notifications, registration cut-offs, conference dates. Previously only per-round deadlines tracked in SubmissionTimeline. User needed a dedicated venue-level calendar, visible prominently at the top of the paper detail page because highly time-critical.
+
+**What:**
+- New table `venue_key_dates` (isolated — zero conflict with existing schema)
+- CRUD API at `/api/v1/venue-key-dates/{paper_id}` + `/entry/{id}`
+- Component `<VenueKeyDates>` with two modes:
+  - **Full** (my-manuscripts detail, right column above SubmissionTimeline): dropdown preset of 19 labels covering all three target conferences, inline add/edit form, urgency badges, is_done checkbox, optional link to a SubmissionRound or ReviewerEntry
+  - **Compact** (paper detail, at top, only for my_manuscript): top-4 priority cards (overdue > urgent > upcoming > done), "Manage →" link to full view
+- Urgency color coding: done=emerald, overdue=red, urgent=amber (≤7d), upcoming=blue (≤30d), neutral=gray
+- Preset labels cover IFKAD (track proposals, extended abstract, early-bird registration), FLICS/ICSIS (workshop paper, camera-ready), plus custom
+
+**Paper 1041 (FedHR5.0 → IFKAD 2026) verification:**
+- Extended Abstract already accepted_with_revisions (2026-02-24) — will mark as Done
+- Full Paper Deadline 2026-05-01 (~11d) — will show as Urgent
+- Early-Bird Registration 2026-04-20 (today) — will show as Urgent
+- Conference Sessions 2026-07-01/03 — Upcoming event
 
 ---
 

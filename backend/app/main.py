@@ -17,6 +17,7 @@ from app.models.topic import Topic
 from app.models.review_journal import ReviewerEntry  # noqa: F401 — register with metadata
 from app.models.submission_round import SubmissionRound  # noqa: F401 — register with metadata
 from app.models.paper_reference import PaperReference  # noqa: F401 — register with metadata
+from app.models.venue_key_date import VenueKeyDate  # noqa: F401 — register with metadata
 from app.api.router import api_router
 
 logging.basicConfig(level=getattr(logging, settings.log_level))
@@ -171,7 +172,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FL-RESEARCH-MONITOR",
     description="Automated scientific paper discovery system for Federated Learning research",
-    version="2.35.0",
+    version="2.38.0",
     lifespan=lifespan,
 )
 

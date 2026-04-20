@@ -14,6 +14,7 @@ import SubmissionTimeline from "@/components/SubmissionTimeline";
 import PaperInfoBox from "@/components/PaperInfoBox";
 import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 import CitedByManuscripts from "@/components/CitedByManuscripts";
+import VenueKeyDates from "@/components/VenueKeyDates";
 
 // --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
 function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
@@ -212,6 +213,11 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
       <Link href="/papers" className="text-sm text-[var(--primary)] hover:underline">
         &larr; Back to papers
       </Link>
+
+      {/* Venue Key Dates (top, compact — only for my_manuscript) */}
+      {paper.paper_role === "my_manuscript" && (
+        <VenueKeyDates paperId={paperId} compact manageUrl={`/my-manuscripts/${paperId}`} />
+      )}
 
       {/* Header */}
       {isAdmin ? <EditableHeader paper={paper} paperId={paperId} /> : (

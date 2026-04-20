@@ -10,6 +10,7 @@ import SubmissionTimeline from "@/components/SubmissionTimeline";
 import ReviewJournal from "@/components/ReviewJournal";
 import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 import UserNotes from "@/components/UserNotes";
+import VenueKeyDates from "@/components/VenueKeyDates";
 
 export default function MyManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -370,8 +371,9 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        {/* RIGHT: Submission Timeline + Review Journal + Bibliography */}
+        {/* RIGHT: Venue Key Dates + Submission Timeline + Review Journal + Bibliography */}
         <div className="lg:w-1/2 overflow-y-auto space-y-4">
+          <div data-tour="ms-key-dates"><VenueKeyDates paperId={paperId} /></div>
           <div data-tour="ms-timeline"><SubmissionTimeline paperId={paperId} /></div>
           <div data-tour="ms-journal"><ReviewJournal paperId={paperId} /></div>
           <UserNotes paperId={paperId} noteType="dev_notes" title="Development Notes"

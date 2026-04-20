@@ -1,6 +1,20 @@
 # FL-RESEARCH-MONITOR — Development Plan
 
-**Last Updated:** 2026-04-11
+**Last Updated:** 2026-04-20
+
+---
+
+## v2.38.0 — Venue Key Dates (2026-04-20) — COMPLETATA
+
+- [x] New table `venue_key_dates` (paper_id FK, label, date, is_done, notes, source_url, linked_round_id?, linked_journal_entry_id?)
+- [x] API CRUD `/api/v1/venue-key-dates/{paper_id}` + `/entry/{id}`
+- [x] `<VenueKeyDates>` React component (full + compact modes)
+- [x] Full mode integrated above SubmissionTimeline in my-manuscripts detail
+- [x] Compact mode at top of paper detail (only for paper_role=my_manuscript)
+- [x] 19 preset labels covering IFKAD, FLICS, ICSIS + Custom
+- [x] Urgency badges: done/overdue/urgent/upcoming/neutral
+- [x] Optional bidirectional link to SubmissionRound and ReviewerEntry
+- [x] Deploy VPS + verify paper 1041 (IFKAD 2026)
 
 ---
 
