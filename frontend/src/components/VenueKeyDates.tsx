@@ -98,12 +98,14 @@ interface Props {
   paperId: number;
   compact?: boolean;
   manageUrl?: string;
+  defaultCollapsed?: boolean;
 }
 
-export default function VenueKeyDates({ paperId, compact = false, manageUrl }: Props) {
+export default function VenueKeyDates({ paperId, compact = false, manageUrl, defaultCollapsed = false }: Props) {
   const { isAdmin } = useAuth();
   const apiUrl = `/api/v1/venue-key-dates/${paperId}`;
   const { data, isLoading } = useSWR<ListResponse>(apiUrl, authFetcher);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const { data: roundsData } = useSWR<{ rounds: Round[] }>(
     !compact ? `/api/v1/submission-rounds/${paperId}` : null,
@@ -288,13 +290,43 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
   const rounds = roundsData?.rounds || [];
   const entries = journalData?.entries || [];
 
+  // Summary for collapsed header
+  const counts = items.reduce(
+    (acc, kd) => {
+      const u = urgency(kd.date, kd.is_done);
+      acc[u] = (acc[u] || 0) + 1;
+      return acc;
+    },
+    {} as Record<Urgency, number>
+  );
+
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold flex items-center gap-1.5">
-          <span className="text-amber-400">📅</span> Venue Key Dates
-        </h3>
-        {isAdmin && !showForm && (
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="flex items-center gap-1.5 text-left hover:opacity-80 transition-opacity"
+          aria-expanded={!collapsed}
+        >
+          <span className="text-[10px] text-[var(--muted-foreground)] w-3">{collapsed ? "▶" : "▼"}</span>
+          <h3 className="text-sm font-bold flex items-center gap-1.5">
+            <span className="text-amber-400">📅</span> Venue Key Dates
+            {items.length > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)] font-normal">
+                {items.length}
+              </span>
+            )}
+          </h3>
+          {collapsed && items.length > 0 && (
+            <span className="flex items-center gap-1 ml-2">
+              {counts.overdue > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-700 text-white font-bold">{counts.overdue} overdue</span>}
+              {counts.urgent > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-700 text-white font-bold">{counts.urgent} urgent</span>}
+              {counts.upcoming > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-700 text-white font-bold">{counts.upcoming} upcoming</span>}
+              {counts.done > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700 text-white font-bold">{counts.done} done</span>}
+            </span>
+          )}
+        </button>
+        {isAdmin && !showForm && !collapsed && (
           <button
             onClick={() => { resetForm(); setShowForm(true); }}
             className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-600 transition-colors"
@@ -304,7 +336,7 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
         )}
       </div>
 
-      {isAdmin && showForm && (
+      {!collapsed && isAdmin && showForm && (
         <div className="p-3 rounded-lg bg-[var(--secondary)] border border-[var(--border)] space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
@@ -405,7 +437,7 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
         </div>
       )}
 
-      {items.length === 0 && !showForm && (
+      {!collapsed && items.length === 0 && !showForm && (
         <p className="text-xs text-[var(--muted-foreground)] text-center py-4">
           {isAdmin
             ? 'No key dates yet. Click "+ Add Date" to track venue deadlines, notifications, and conference dates.'
@@ -413,7 +445,7 @@ export default function VenueKeyDates({ paperId, compact = false, manageUrl }: P
         </p>
       )}
 
-      {items.length > 0 && (
+      {!collapsed && items.length > 0 && (
         <div className="space-y-1.5">
           {items.map(kd => {
             const u = urgency(kd.date, kd.is_done);

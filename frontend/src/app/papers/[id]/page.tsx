@@ -214,9 +214,6 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         &larr; Back to papers
       </Link>
 
-      {/* Venue Key Dates (top, full — all papers) */}
-      <VenueKeyDates paperId={paperId} />
-
       {/* Header */}
       {isAdmin ? <EditableHeader paper={paper} paperId={paperId} /> : (
         <h1 className="text-2xl font-bold leading-snug">{paper.title}</h1>
@@ -745,6 +742,9 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
         {/* Generate Analysis — admin only */}
         {isAdmin && <AnalysisButton paperId={paperId} />}
       </div>
+
+      {/* Venue Key Dates — collapsed by default, below actions row, above Summary Card */}
+      <VenueKeyDates paperId={paperId} defaultCollapsed />
 
       {/* Summary Card — admin only (internal working data) */}
       {isAdmin && <SummaryCard paperId={paperId} />}
