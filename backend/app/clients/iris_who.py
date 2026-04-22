@@ -210,27 +210,42 @@ class IrisWhoClient(BaseAPIClient):
         max_results: int = 20,
         **kwargs,
     ) -> list[RawPaperResult]:
-        """Keyword search over IRIS. Because OAI-PMH does not support full-text search,
-        this harvests records from DEFAULT_SETS within the date window, then filters
-        locally by token match in title / abstract / subjects.
+        """Keyword search over IRIS. OAI-PMH has no full-text search, so this:
+          1. Harvests records from DEFAULT_SETS with OAI `from` (IRIS datestamp) = year_from-01-01
+          2. Filters by language (default EN)
+          3. Post-filters by dc.date.issued >= year_from  — OAI `from` is the IRIS
+             record-modification datestamp, not the publication date, so records
+             published years ago but recently re-indexed would otherwise slip in
+          4. Ranks by token match (title 3x, subjects 2x, abstract 1x)
 
         kwargs accepted:
-            year_from (int): minimum year — translated to OAI `from` parameter
+            year_from (int): minimum publication year (defaults to current_year - 2)
             sets (list[str]): override DEFAULT_SETS
-            language (str): filter to this dc.language (default "en")
+            language (str): dc.language filter (default "en")
         """
+        import datetime as _dt
+
         sets = kwargs.get("sets") or DEFAULT_SETS
-        year_from = kwargs.get("year_from")
+        year_from = kwargs.get("year_from") or (_dt.date.today().year - 2)
         language = (kwargs.get("language") or "en").lower()
-        from_date = f"{year_from}-01-01" if year_from else None
+        from_date = f"{year_from}-01-01"
 
         records = await self.list_records(sets=sets, from_date=from_date, max_records=2000)
 
         if language:
             records = [r for r in records if _record_language_matches(r, language)]
 
+        # Post-filter by actual publication date (dc.date.issued)
+        year_from_str = f"{year_from}-01-01"
+        records = [
+            r for r in records
+            if r.publication_date and r.publication_date >= year_from_str
+        ]
+
         tokens = _tokenize(query)
         if not tokens:
+            # No keywords: return the most recent ones first
+            records.sort(key=lambda r: r.publication_date or "", reverse=True)
             return records[:max_results]
 
         scored: list[tuple[float, RawPaperResult]] = []

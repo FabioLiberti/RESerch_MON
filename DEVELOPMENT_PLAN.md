@@ -4,6 +4,24 @@
 
 ---
 
+## v2.40.1 — Smart Search fix: pub-date filter + preview buttons (2026-04-22) — COMPLETATA
+
+- [x] `iris_who.py::search` — default `year_from = current_year - 2` quando l'utente non specifica un filtro
+- [x] `iris_who.py::search` — post-filtro by `dc.date.issued >= year_from` (OAI `from` usa IRIS datestamp, non publication date; senza questo filtro risalivano documenti pubblicati anni fa ma reindicizzati di recente)
+- [x] `iris_who.py::search` — senza query tokens, ordinamento per `publication_date` desc
+- [x] Frontend Smart Search — helper `getSmartSourceUrl(r)` calcola URL sorgente per tutte le 7 sorgenti (DOI → doi.org, arXiv → abs, S2 → paper, PubMed → pmid, IRIS → handle)
+- [x] Frontend Smart Search — supporto titolo cliccabile per `iris_who` nei risultati (usa `external_ids.iris_url`)
+- [x] Frontend Smart Search — badge **Source** (emerald, apre pagina sorgente) e **PDF** (blue, solo se `pdf_url` ≠ source URL) su ogni risultato, `e.stopPropagation()` per non triggerare la checkbox
+
+**Motivazione:** user ha testato v2.40.0 con "European Health Data Space" notando che IRIS restituiva documenti fino al 2023 mentre ne esistono di 2024-2026. Causa: `from` OAI-PMH è datestamp IRIS (upload/modifica del record), non data pubblicazione. Dopo fix: "EHDS" → 10 risultati con date reali 2024-2025-2026. Inoltre user voleva verificare i documenti prima di importarli (come già fatto in Add External Document); risolto con badge Source/PDF cliccabili.
+
+**Smoke test locale post-fix:**
+- "European Health Data Space" year_from=2024: 10 risultati (date range 2024-2026)
+- "digital health" year_from=2024: 10 risultati, top-1 = "Demystifying artificial intelligence in health: what health policy-makers need to know" (2026-02)
+- "artificial intelligence" year_from=2024: 1 risultato (stesso doc 2026-02 AI in health)
+
+---
+
 ## v2.40.0 — Smart Search over IRIS (OAI-PMH harvest + local ranking) (2026-04-22) — COMPLETATA
 
 - [x] `iris_who.py` — aggiunto `list_records(sets, from_date, max_records)` con paginazione via resumptionToken, cap 20 pagine per set (~2000 record), gestione `noRecordsMatch` e deleted records

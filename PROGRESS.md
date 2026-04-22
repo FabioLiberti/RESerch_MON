@@ -1,8 +1,35 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.0 — Smart Search over WHO IRIS (OAI-PMH harvest + local ranking)
-**Current Version:** v2.40.0
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — WHO IRIS added as a Smart Search source. OAI-PMH harvest across HQ + EU Europe sets (last 24 months configurable), local tokenized ranking on title/abstract/subjects. First live probe shows IRIS has very limited content on ML/FL topics — the feature is more useful for health-policy / digital-health / data-governance keywords.
+**Current Phase:** v2.40.1 — Smart Search fix: publication-date filter + preview buttons
+**Current Version:** v2.40.1
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — IRIS Smart Search now filters by actual publication date (not IRIS upload datestamp), and every result row has Source/PDF preview buttons to verify a document before importing. "European Health Data Space" correctly returns documents 2024-2026.
+
+---
+
+### 2026-04-22 — Session: v2.40.1 Smart Search IRIS — date filter + preview buttons
+
+**Why:** user testing of v2.40.0 showed "European Health Data Space" returning only pre-2023 results, which felt wrong given IRIS has recent EHDS-adjacent documents. Also requested preview buttons on Smart Search rows (same UX pattern as Add External Document Open source/PDF).
+
+**Root cause (issue #1):** OAI-PMH `from` parameter filters by record **datestamp** (when IRIS ingested/modified the metadata), not by `dc.date.issued`. Records published in 2020 but re-indexed in 2024 would slip through my `from=2024-01-01` filter. Plus: when user didn't set `year_from` in Smart Search UI, the backend passed None and the IRIS client harvested the entire set (capped at 2000 records), including ancient re-indexed entries.
+
+**Fix:**
+- `search()` now defaults `year_from` to `current_year - 2` when not specified (matches user's expectation of "recent")
+- After harvest, post-filters records by `r.publication_date >= f"{year_from}-01-01"` (exact publication date)
+- If no query tokens provided, sorts by publication_date desc (most recent first)
+
+**Issue #2 (preview):** Smart Search results had title cliccabile per alcune sorgenti (DOI, arXiv, S2, PubMed) tramite chained ternary, ma nessun supporto per iris_who e nessun bottone esplicito "PDF" separato. User wanted uniform preview UX like AddExternalDocument.
+
+**Fix:**
+- New helper `getSmartSourceUrl(r)` centralizes source-URL computation per ogni sorgente. Per iris_who usa `external_ids.iris_url` (o `pdf_url` come fallback).
+- Title cliccabile ora supporta anche iris_who (nuovo case nel chained ternary).
+- Ogni risultato ora mostra due badge accanto ai metadati: **Source** (emerald, sempre presente quando URL deducibile) apre la pagina del documento, **PDF** (blue, solo quando `pdf_url` differisce dalla source URL) apre il PDF diretto. `onClick.stopPropagation()` per non interferire con la checkbox di selezione.
+
+**Local validation post-fix** (cache invalidated between tests):
+- "European Health Data Space" year_from=2024 → 10 results, date range 2024-03 to 2026-02
+- "digital health" → 10 results, top match "Demystifying artificial intelligence in health: what health policy-makers need to know" (2026-02-06) ✓
+- "artificial intelligence" → 1 result (stesso doc 2026-02 su AI in health policy)
+
+**Known limit:** il ranking OR-based penalizza query composite con termini generici ("data", "health" da soli matchano troppo). Per query "European Health Data Space" alcuni top-result sono falsi positivi su "data" o "health". Miglioramento futuro possibile: richiedere AND su tutti i token invece di OR. Non prioritizzato per questa release perché il fix principale (publication date window) sblocca già il caso d'uso.
 
 ---
 

@@ -863,6 +863,17 @@ interface SmartResult {
   db_paper_id: number | null;
 }
 
+/** Compute the canonical "source" URL (page where the document lives) for a result. */
+function getSmartSourceUrl(r: SmartResult): string | null {
+  if (r.doi) return `https://doi.org/${r.doi}`;
+  if (r.external_ids?.arxiv_id) return `https://arxiv.org/abs/${r.external_ids.arxiv_id}`;
+  if (r.external_ids?.s2_id) return `https://www.semanticscholar.org/paper/${r.external_ids.s2_id}`;
+  if (r.external_ids?.pmid) return `https://pubmed.ncbi.nlm.nih.gov/${r.external_ids.pmid}`;
+  if (r.external_ids?.iris_url) return r.external_ids.iris_url;
+  if (r.source === "iris_who" && r.pdf_url) return r.pdf_url;
+  return null;
+}
+
 function SmartSearchSection() {
   const { isAdmin } = useAuth();
 
@@ -1479,6 +1490,10 @@ function SmartSearchSection() {
                     <a href={`https://pubmed.ncbi.nlm.nih.gov/${r.external_ids.pmid}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
                       {r.title}
                     </a>
+                  ) : r.external_ids?.iris_url || (r.source === "iris_who" && r.pdf_url) ? (
+                    <a href={r.external_ids?.iris_url || r.pdf_url || "#"} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                      {r.title}
+                    </a>
                   ) : (
                     <p className="text-sm line-clamp-2">{r.title}</p>
                   )}
@@ -1515,6 +1530,44 @@ function SmartSearchSection() {
                     {r.open_access && !r.already_in_db && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">OA</span>
                     )}
+                    {(() => {
+                      const src = getSmartSourceUrl(r);
+                      const pdf = r.pdf_url && r.pdf_url !== src ? r.pdf_url : null;
+                      return (
+                        <>
+                          {src && (
+                            <a
+                              href={src}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-700 text-white hover:bg-emerald-600 font-semibold flex items-center gap-0.5"
+                              title="Open source page in new tab"
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              Source
+                            </a>
+                          )}
+                          {pdf && (
+                            <a
+                              href={pdf}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-blue-700 text-white hover:bg-blue-600 font-semibold flex items-center gap-0.5"
+                              title="Open PDF in new tab"
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              PDF
+                            </a>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
