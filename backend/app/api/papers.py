@@ -1325,6 +1325,24 @@ async def refresh_citations_single(
     return result
 
 
+@router.post("/{paper_id}/manual-citations")
+async def set_manual_citations(
+    paper_id: int,
+    count: int = Query(..., ge=0, description="Citation count to set manually (admin only)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually override the citation_count for papers where automatic retrieval
+    (Semantic Scholar) doesn't return a value — e.g. seminal papers with unusual
+    citation tracking, grey literature, or papers without DOI. Admin-only."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    paper.citation_count = count
+    await db.flush()
+    await db.commit()
+    return {"paper_id": paper.id, "citation_count": paper.citation_count}
+
+
 @router.post("/{paper_id}/rate")
 async def rate_paper(paper_id: int, rating: int = Query(..., ge=0, le=5), db: AsyncSession = Depends(get_db)):
     """Set paper rating (1-5 stars, 0 to clear)."""

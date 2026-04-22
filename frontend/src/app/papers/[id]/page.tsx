@@ -569,7 +569,7 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex justify-between">
               <dt className="text-[var(--muted-foreground)]">Citations</dt>
               <dd className="flex items-center gap-2">
-                {paper.citation_count}
+                <CitationCount paperId={paperId} initialCount={paper.citation_count} isAdmin={isAdmin} />
                 <RefreshCitationButton paperId={paperId} />
               </dd>
             </div>
@@ -2810,6 +2810,78 @@ function RefreshCitationButton({ paperId }: { paperId: number }) {
       </button>
       {result && <span className="text-[10px] text-emerald-400">{result}</span>}
     </span>
+  );
+}
+
+
+function CitationCount({
+  paperId,
+  initialCount,
+  isAdmin,
+}: { paperId: number; initialCount: number; isAdmin: boolean }) {
+  const [count, setCount] = useState(initialCount);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(initialCount));
+  const [saving, setSaving] = useState(false);
+
+  if (!isAdmin) return <span>{count.toLocaleString()}</span>;
+
+  const save = async () => {
+    const parsed = parseInt(draft, 10);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      setDraft(String(count));
+      setEditing(false);
+      return;
+    }
+    if (parsed === count) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/v1/papers/${paperId}/manual-citations?count=${parsed}`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setCount(data.citation_count);
+      setEditing(false);
+    } catch (e) {
+      console.error("Manual citation update failed:", e);
+      setDraft(String(count));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        type="number"
+        min={0}
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          else if (e.key === "Escape") { setDraft(String(count)); setEditing(false); }
+        }}
+        disabled={saving}
+        className="w-20 px-1.5 py-0.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] disabled:opacity-50"
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={() => { setDraft(String(count)); setEditing(true); }}
+      className="text-sm hover:underline decoration-dotted underline-offset-2 cursor-pointer"
+      title="Click to set manually (admin override)"
+    >
+      {count.toLocaleString()}
+    </button>
   );
 }
 
