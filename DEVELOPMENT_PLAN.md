@@ -1,6 +1,18 @@
 # FL-RESEARCH-MONITOR — Development Plan
 
-**Last Updated:** 2026-04-20
+**Last Updated:** 2026-04-22
+
+---
+
+## v2.39.0 — Add External Document (grey literature) (2026-04-22) — COMPLETATA
+
+- [x] Backend endpoint `POST /papers/external-document` — crea `Paper` con `paper_role="bibliography"`, `created_via="external_document"`, `paper_type` ∈ {report, guideline, white_paper, standard}, issuing organization salvata in `journal`, `pdf_url` con link originale
+- [x] `paperTypes.ts` — 4 nuovi tipi con badge dedicati (report=slate, guideline=cyan, white_paper=stone, standard=zinc); nuova costante `EXTERNAL_DOCUMENT_TYPES` per dropdown form
+- [x] `PaperInfoBox` — mapping `external_document: "External Document (grey literature)"`
+- [x] `/discovery` — componente collassabile `<AddExternalDocument>` sotto `<ImportBibliography>`: title, issuing org, document type, publication date, original URL, authors (comma-separated), abstract; solo admin; Clear/Save + link "Open detail" al paper creato
+- [x] Detail page funziona nativamente (rotta `/papers/[id]` non discrimina per paper_type)
+
+**Motivazione:** letteratura grigia autorevole (WHO/Europe, OECD, EU Commission, ISO, FDA) senza DOI non entrava nel framework. Ora inserita come paper di bibliografia con `paper_type` dedicato per distinguerla dal peer-reviewed.
 
 ---
 

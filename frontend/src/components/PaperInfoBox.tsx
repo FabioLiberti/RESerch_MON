@@ -13,6 +13,7 @@ const VIA_LABELS: Record<string, string> = {
   bibliography_import: "Bibliography import",
   my_manuscript: "My Manuscript (manual)",
   peer_review: "Peer Review (auto-created)",
+  external_document: "External Document (grey literature)",
   manual: "Manual",
 };
 

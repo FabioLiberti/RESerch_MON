@@ -4,10 +4,12 @@ import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { api, authFetcher } from "@/lib/api";
+import { authHeaders } from "@/lib/authHeaders";
 import { useAuth } from "@/lib/auth";
 import { SOURCE_LABELS, SOURCE_COLORS, formatDate, cn } from "@/lib/utils";
 import type { SourceInfo, FetchLogEntry, Paper } from "@/lib/types";
 import { usePapers } from "@/hooks/usePapers";
+import { EXTERNAL_DOCUMENT_TYPES } from "@/lib/paperTypes";
 
 export default function DiscoveryPage() {
   const { data: sources, isLoading } = useSWR<SourceInfo[]>("/api/v1/sources", authFetcher);
@@ -89,6 +91,9 @@ export default function DiscoveryPage() {
 
       {/* Import Bibliography */}
       <ImportBibliography />
+
+      {/* Add External Document (grey literature) */}
+      <AddExternalDocument />
 
       {/* Recent Searches */}
       <RecentSearches />
@@ -1819,6 +1824,217 @@ function KeywordSuggestionsPanel({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// --- Add External Document (grey literature) ---
+
+function AddExternalDocument() {
+  const { isAdmin } = useAuth();
+  const [expanded, setExpanded] = useState(false);
+  const [title, setTitle] = useState("");
+  const [issuingOrg, setIssuingOrg] = useState("");
+  const [paperType, setPaperType] = useState<string>("report");
+  const [publicationDate, setPublicationDate] = useState("");
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [abstract, setAbstract] = useState("");
+  const [authors, setAuthors] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string; paperId?: number } | null>(null);
+
+  if (!isAdmin) return null;
+
+  const reset = () => {
+    setTitle(""); setIssuingOrg(""); setPaperType("report");
+    setPublicationDate(""); setPdfUrl(""); setAbstract(""); setAuthors("");
+  };
+
+  const save = async () => {
+    if (!title.trim()) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const r = await fetch("/api/v1/papers/external-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          title: title.trim(),
+          issuing_organization: issuingOrg.trim() || null,
+          paper_type: paperType,
+          publication_date: publicationDate || null,
+          pdf_url: pdfUrl.trim() || null,
+          abstract: abstract.trim() || null,
+          authors: authors.trim() || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || "Creation failed");
+      }
+      const res = await r.json();
+      setMessage({
+        type: "success",
+        text: `Document #${res.paper_id} created: "${res.title}"`,
+        paperId: res.paper_id,
+      });
+      reset();
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Failed" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-6 py-4 text-left"
+      >
+        <h3 className="font-medium flex items-center gap-2 text-sm">
+          <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Add External Document
+          <span className="text-xs text-[var(--muted-foreground)] font-normal">
+            (grey literature — WHO, OECD, EU, ISO, ...)
+          </span>
+        </h3>
+        <svg
+          className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform", expanded && "rotate-180")}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="px-6 pb-6 space-y-4">
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Insert institutional documents without a DOI (technical reports, clinical guidelines,
+            white papers, standards). The record is saved as a Paper with <code className="text-[var(--primary)]">paper_role=&quot;bibliography&quot;</code>{" "}
+            and appears in the Papers menu alongside peer-reviewed literature.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Title *</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Digital health in the WHO European Region — The ongoing journey to commitment and transformation"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Issuing Organization</label>
+              <input
+                value={issuingOrg}
+                onChange={(e) => setIssuingOrg(e.target.value)}
+                placeholder="e.g. WHO Regional Office for Europe"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Document Type</label>
+              <select
+                value={paperType}
+                onChange={(e) => setPaperType(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              >
+                {EXTERNAL_DOCUMENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Publication Date</label>
+              <input
+                type="date"
+                value={publicationDate}
+                onChange={(e) => setPublicationDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Original URL (PDF or landing page)</label>
+              <input
+                value={pdfUrl}
+                onChange={(e) => setPdfUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Authors (comma-separated, optional)</label>
+              <input
+                value={authors}
+                onChange={(e) => setAuthors(e.target.value)}
+                placeholder="e.g. WHO Regional Office for Europe, Author Name"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-xs text-[var(--muted-foreground)] mb-1 block">Abstract / Summary (optional)</label>
+              <textarea
+                value={abstract}
+                onChange={(e) => setAbstract(e.target.value)}
+                placeholder="Executive summary or abstract..."
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] resize-y"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              disabled={!title.trim() || saving}
+              className="px-5 py-2 rounded-lg bg-blue-700 text-white text-sm font-bold hover:bg-blue-600 disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Saving..." : "Save Document"}
+            </button>
+            <button
+              onClick={reset}
+              disabled={saving}
+              className="px-3 py-2 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-50"
+            >
+              Clear form
+            </button>
+          </div>
+
+          {message && (
+            <div className={cn(
+              "px-4 py-2.5 rounded-lg text-sm flex items-center justify-between gap-3",
+              message.type === "success"
+                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border border-red-500/20 text-red-400"
+            )}>
+              <span>{message.text}</span>
+              {message.type === "success" && message.paperId && (
+                <Link
+                  href={`/papers/${message.paperId}`}
+                  className="text-xs px-3 py-1 rounded bg-emerald-700 text-white font-bold hover:bg-emerald-600 shrink-0"
+                >
+                  Open detail →
+                </Link>
+              )}
+            </div>
+          )}
+
+          <p className="text-[10px] text-[var(--muted-foreground)]">
+            After creation, open the detail page to upload the PDF, tag topics, trigger LLM analysis, or sync to Zotero.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

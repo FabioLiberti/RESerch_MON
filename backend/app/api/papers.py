@@ -797,6 +797,64 @@ async def create_my_manuscript(
     return {"status": "created", "paper_id": paper.id, "title": paper.title}
 
 
+class CreateExternalDocumentRequest(BaseModel):
+    title: str
+    issuing_organization: str | None = None   # saved in Paper.journal
+    paper_type: str = "report"                # report | guideline | white_paper | standard
+    publication_date: str | None = None        # YYYY-MM-DD
+    pdf_url: str | None = None                 # original URL
+    abstract: str | None = None
+    authors: str | None = None                 # comma-separated names
+
+
+@router.post("/external-document")
+async def create_external_document(
+    body: CreateExternalDocumentRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a Paper record for grey literature / institutional documents
+    (WHO, EU, OECD, ISO, FDA, ...) that do not have a DOI.
+
+    Stored as paper_role='bibliography' so it appears in the main Papers list
+    alongside peer-reviewed literature. The issuing organization is written
+    into the `journal` field.
+    """
+    allowed_types = {"report", "guideline", "white_paper", "standard"}
+    if body.paper_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"paper_type must be one of {sorted(allowed_types)}")
+
+    paper = Paper(
+        title=body.title,
+        abstract=body.abstract,
+        journal=body.issuing_organization,
+        publication_date=body.publication_date,
+        pdf_url=body.pdf_url,
+        paper_type=body.paper_type,
+        paper_role="bibliography",
+        created_via="external_document",
+        validated=True,
+    )
+    db.add(paper)
+    await db.flush()
+
+    if body.authors:
+        for i, name in enumerate(body.authors.split(",")):
+            name = name.strip()
+            if not name:
+                continue
+            result = await db.execute(select(Author).where(Author.name == name))
+            author = result.scalar_one_or_none()
+            if not author:
+                author = Author(name=name)
+                db.add(author)
+                await db.flush()
+            pa = PaperAuthor(paper_id=paper.id, author_id=author.id, position=i)
+            db.add(pa)
+
+    await db.commit()
+    return {"status": "created", "paper_id": paper.id, "title": paper.title}
+
+
 class UpdatePaperMetadataRequest(BaseModel):
     title: str | None = None
     abstract: str | None = None

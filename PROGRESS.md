@@ -1,8 +1,25 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.38.0 — Venue Key Dates tracking per manuscript
-**Current Version:** v2.38.0
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Venue key dates with urgency indicators, visible on manuscript detail + compact view on top of paper detail, optional linking to submission rounds and review journal entries
+**Current Phase:** v2.39.0 — Add External Document (grey literature)
+**Current Version:** v2.39.0
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — External documents (WHO, OECD, EU, ISO, FDA without DOI) can now be inserted via `/discovery` → "Add External Document"; stored as `paper_role="bibliography"` with new paper_types (report, guideline, white_paper, standard); detail page works natively.
+
+---
+
+### 2026-04-22 — Session: v2.39.0 Add External Document
+
+**Why:** Il framework accettava solo paper con DOI (via Discovery automation, Smart Search, Import Bibliography, Import-by-DOI). La letteratura grigia istituzionale autorevole — report WHO/Europe, documenti OECD, white paper EU Commission, linee guida EMA/FDA, standard ISO/IEEE — non ha DOI ma è spesso la fonte primaria per contesto regolatorio e policy su FL in healthcare ed EHDS. Escluderla significava perdere una parte rilevante della letteratura di riferimento.
+
+**What:**
+- Backend: nuovo endpoint `POST /papers/external-document` in `backend/app/api/papers.py` — accetta title (obbligatorio), issuing_organization (→ `journal`), paper_type (report/guideline/white_paper/standard, validato server-side), publication_date, pdf_url (link originale), abstract, authors (comma-separated). Crea un `Paper` con `paper_role="bibliography"`, `created_via="external_document"`, `validated=True`.
+- Frontend `paperTypes.ts`: 4 nuovi tipi nella lista `PAPER_TYPE_OPTIONS` con badge colorati (report/guideline/white_paper/standard); nuova costante `EXTERNAL_DOCUMENT_TYPES` per il dropdown della form.
+- Frontend `PaperInfoBox.tsx`: aggiunto `external_document: "External Document (grey literature)"` nel mapping `VIA_LABELS`.
+- Frontend `/discovery`: nuovo componente collassabile `<AddExternalDocument>` posizionato subito sotto `<ImportBibliography>`. Gated admin. Campi come da backend, submit verso `/api/v1/papers/external-document`, toast di successo con link "Open detail →" al paper creato.
+- Detail page: nessuna modifica necessaria — `/papers/[id]` legge qualsiasi record via `_paper_to_detail()` senza discriminare per `paper_type`. Tutte le feature (abstract, PDF upload, topics, rating, tutor check, LLM analysis, Zotero sync) funzionano nativamente.
+
+**Decisione di architettura:** collocazione in `/discovery` (non in `/papers`) perché `/discovery` è la pagina di "alimentazione" del framework (Run Discovery, Smart Search, Import Bibliography). Aggiungere qui il flusso per documenti senza DOI mantiene la coerenza semantica e rende il feature discoverable accanto al suo caso d'uso complementare.
+
+**Impatto sui filtri esistenti:** zero. I dropdown paper_type in `/papers` leggono `/type-stats` dinamicamente dal DB, quindi i nuovi tipi appaiono automaticamente appena viene creato il primo record.
 
 ---
 
