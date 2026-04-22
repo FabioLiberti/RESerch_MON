@@ -36,6 +36,7 @@ def _get_clients():
         from app.clients.semantic_scholar import SemanticScholarClient
         from app.clients.ieee import IEEEXploreClient
         from app.clients.elsevier import ElsevierClient
+        from app.clients.iris_who import IrisWhoClient
         _clients = {
             "pubmed": PubMedClient(),
             "arxiv": ArXivClient(),
@@ -43,6 +44,7 @@ def _get_clients():
             "semantic_scholar": SemanticScholarClient(),
             "ieee": IEEEXploreClient(),
             "elsevier": ElsevierClient(),
+            "iris_who": IrisWhoClient(),
         }
     return _clients
 
@@ -96,11 +98,13 @@ async def _run_smart_search(job_id: int):
 
             all_results: list[RawPaperResult] = []
 
-            # Sources that don't support title/author/doi search
+            # Sources that don't support title/author/doi search.
+            # iris_who uses OAI-PMH harvest + local keyword ranking, so it only
+            # supports the "keywords" mode.
             unsupported_modes = {
-                "title": {"biorxiv"},
-                "author": {"biorxiv"},
-                "doi": {"biorxiv", "arxiv", "ieee"},  # S2 + PubMed support DOI lookup
+                "title": {"biorxiv", "iris_who"},
+                "author": {"biorxiv", "iris_who"},
+                "doi": {"biorxiv", "arxiv", "ieee", "iris_who"},
             }
             skip_sources = unsupported_modes.get(search_mode, set())
 

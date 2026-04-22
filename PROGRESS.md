@@ -1,8 +1,42 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.39.3 — WHO auto-fill: source preview + robust date parsing
-**Current Version:** v2.39.3
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Auto-fill form shows "Open source" / "Open PDF" buttons after fetch to verify the document before saving. WHO `www.who.int` pages now correctly extract `publication_date` from JSON-LD (handles "20 April 2026" text format) and get the real PDF bitstream URL from IRIS instead of the landing page.
+**Current Phase:** v2.40.0 — Smart Search over WHO IRIS (OAI-PMH harvest + local ranking)
+**Current Version:** v2.40.0
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — WHO IRIS added as a Smart Search source. OAI-PMH harvest across HQ + EU Europe sets (last 24 months configurable), local tokenized ranking on title/abstract/subjects. First live probe shows IRIS has very limited content on ML/FL topics — the feature is more useful for health-policy / digital-health / data-governance keywords.
+
+---
+
+### 2026-04-22 — Session: v2.40.0 Smart Search over WHO IRIS
+
+**Why:** dopo aver completato l'auto-fill per documenti WHO/IRIS (v2.39.0–v2.39.3), user ha chiesto di esplorare IRIS come fonte di ricerca automatica. Non prima di un test empirico di rilevanza: prima si verifica che IRIS contenga materiale relevante con query specifiche, poi si decide se vale un full cron di discovery automatico (Phase 3, rimandata).
+
+**Design:** Smart Search (non Discovery cron) come container — è user-triggered, transparent, non inquina il DB finché l'utente non importa esplicitamente. Riusa il job worker esistente di `smart_search.py`.
+
+**Challenge tecnica:** OAI-PMH è un protocollo di harvesting, non di ricerca — non supporta query full-text. Workaround implementato in `iris_who.py`:
+1. `list_records(sets, from_date, max_records)` — pagina via resumptionToken su `ListRecords`, cap hardware 20 pagine per set (~2000 record totali)
+2. In-memory cache class-level (`_harvest_cache`, TTL 1h) keyed by `(frozenset(sets), from_date)` — una volta harvestato, le query successive nella stessa sessione filtrano sui record in memoria senza rifetchare
+3. `search(query, max_results, year_from, language)` orchestrating: harvest → filter lingua (default EN, esclude i 50%+ di record in FR/RU/DE/ES/AR/ZH) → tokenize query → score record per token match (title 3x, subjects 2x, abstract 1x) → top-N per score
+
+**Architettura:** `_parse_xoai_record_node(record, handle)` estratto come funzione condivisa fra `get_record` e `list_records`. Default sets = HQ + EU Europe (`com_10665_8` + `com_10665_107131`), override possibile via kwargs.
+
+**Integrazione Smart Search:** `IrisWhoClient` registrato in `_get_clients`; `iris_who` marcato unsupported per mode title/author/doi (solo keywords); `query_generator.py` mappa le keyword in una stringa piatta (il ranking avviene lato client).
+
+**Frontend:** `iris_who` aggiunto a `ALL_SOURCES`, con label "WHO IRIS" e colore sky-500 (`#0ea5e9`) in `SOURCE_LABELS`/`SOURCE_COLORS`. Nessun cambio UI strutturale — la checkbox sorgente appare automaticamente.
+
+**Probe locale (2000 record harvested da finestra from=2024-01-01):**
+- Language distribution: EN=249, FR=74, RU=70, DE=40, ES=15, AR=12, ZH=6 (filtro `en` è essenziale)
+- Paper type: report=402, journal_article=78
+- **Match per keyword in title/abstract**:
+  - `federated`: 0
+  - `learning`: 0 (con window 1000 record), 1 con 2000 (false positive su "Evaluation policy")
+  - `artificial intelligence`: 0
+  - `machine learning`: 0
+  - `data space`: 0
+  - `digital health`: 3 ✓ (Regional Committee Tel Aviv 2022 — Regional digital health action plan)
+
+**Finding operativo:** WHO IRIS come fonte per FL/AI/ML è povera. Ha valore per keyword di ordine health-policy / governance / digital strategy. Decisione su promozione a discovery cron rimandata dopo test aggiuntivi utente con keyword diverse.
+
+**Ancillare v2.39.4:** parallelamente fissato bug UX minore — se utente incolla un WHO report number (`WHO-EURO-2026-...`) invece dell'IRIS handle, il backend ora ritorna un errore dedicato ("This looks like a WHO report number, not an IRIS handle"). Placeholder UI aggiornato con i 3 formati validi.
 
 ---
 

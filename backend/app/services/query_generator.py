@@ -38,6 +38,8 @@ def _generate_keyword_queries(keywords: list[str]) -> dict[str, str]:
         "ieee": " AND ".join(ieee_parts),
         "biorxiv": " ".join(keywords),
         "elsevier": " AND ".join(elsevier_parts),
+        # iris_who: plain keyword list (client does local tokenization + title/abstract/subject ranking)
+        "iris_who": " ".join(keywords),
     }
 
 

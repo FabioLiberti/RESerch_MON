@@ -4,6 +4,30 @@
 
 ---
 
+## v2.40.0 — Smart Search over IRIS (OAI-PMH harvest + local ranking) (2026-04-22) — COMPLETATA
+
+- [x] `iris_who.py` — aggiunto `list_records(sets, from_date, max_records)` con paginazione via resumptionToken, cap 20 pagine per set (~2000 record), gestione `noRecordsMatch` e deleted records
+- [x] `iris_who.py` — in-memory cache class-level (`_harvest_cache`, TTL 1h) per evitare refetch tra query della stessa sessione
+- [x] `iris_who.py` — metodo `search(query, max_results, year_from, language)` = harvest + filtro lingua (default EN) + ranking token match (title 3x, subjects 2x, abstract 1x). Default sets: HQ (`com_10665_8`) + EU Europe (`com_10665_107131`)
+- [x] `iris_who.py` — parser estratto in `_parse_xoai_record_node(record, handle)` riutilizzabile sia da GetRecord che da ListRecords
+- [x] `smart_search.py` — registrato `IrisWhoClient` in `_get_clients`, aggiunto `iris_who` a `unsupported_modes` per title/author/doi (supporta solo keywords)
+- [x] `query_generator.py` — mapping `keywords → iris_who` query stringa semplice (client fa local ranking)
+- [x] Frontend — aggiunto `iris_who` a `ALL_SOURCES` in `/discovery`, entry in `SOURCE_LABELS`/`SOURCE_COLORS` ("WHO IRIS", sky-500)
+- [x] Smoke test locale: 2000 record harvested in ~30s; 0 match su "federated learning"/"machine learning"/"artificial intelligence", 3 match su "digital health" → WHO IRIS come fonte per FL specifica produce rumore, utile per topic più policy/governance
+
+**Motivazione:** user feedback dopo v2.39.3 ha chiesto di esplorare IRIS come fonte automatica partendo da un test di rilevanza keyword-driven. Smart Search è il container naturale (user-triggered, non-invasive). Implementato con harvest + local ranking dato che OAI-PMH non supporta full-text search.
+
+**Finding operativo:** IRIS ha catalogo molto limitato su AI/ML/FL. La feature è utile per altri topic (digital health, EHDS, data governance, health systems). Valutazione se promuovere a discovery automatica (Phase 3) rimandata dopo ulteriori test utente con keyword più WHO-aligned.
+
+---
+
+## v2.39.4 — Bare handle UX clarification (2026-04-22) — COMPLETATA
+
+- [x] Backend `resolve-external`: distingue errore "WHO report number vs IRIS handle" (pattern `^WHO[-/:]`) con messaggio dedicato
+- [x] Frontend placeholder aggiornato per mostrare i 3 formati supportati: `iris.who.int/handle/10665/NNN · 10665/NNN · www.who.int/…/publications/…`
+
+---
+
 ## v2.39.3 — WHO auto-fill: source preview + robust date parsing (2026-04-22) — COMPLETATA
 
 - [x] `who_web.py` — `_normalize_date` ora gestisce `"20 April 2026"` / `"April 2026"` / `"April 20, 2026"` oltre ai formati ISO

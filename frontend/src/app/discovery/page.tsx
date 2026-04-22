@@ -843,7 +843,7 @@ function ElapsedTimer({ startTime }: { startTime: number }) {
 
 // --- Smart Search Component ---
 
-const ALL_SOURCES = ["arxiv", "biorxiv", "elsevier", "ieee", "pubmed", "semantic_scholar"];
+const ALL_SOURCES = ["arxiv", "biorxiv", "elsevier", "ieee", "iris_who", "pubmed", "semantic_scholar"];
 
 interface SmartResult {
   title: string;
@@ -1967,7 +1967,7 @@ function AddExternalDocument() {
                 value={resolveUrl}
                 onChange={(e) => setResolveUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); autoFetch(); } }}
-                placeholder="https://iris.who.int/handle/10665/… · 10665/NNN · https://www.who.int/europe/publications/…"
+                placeholder="https://iris.who.int/handle/10665/NNN · 10665/NNN · https://www.who.int/…/publications/…"
                 className="flex-1 px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs focus:outline-none focus:border-[var(--primary)] font-mono"
               />
               <button

@@ -1,12 +1,13 @@
 """WHO IRIS institutional repository client (OAI-PMH 2.0, xoai metadata prefix).
 
 IRIS is WHO's DSpace-based institutional repository: https://iris.who.int
-Phase 1 scope: GetRecord resolution for handle-paste auto-fill.
-Phase 2 (future): ListRecords / ListSets for automated harvesting.
+- Phase 1: GetRecord resolution for handle-paste auto-fill (v2.39.2)
+- Phase 2: ListRecords harvest + keyword ranking for Smart Search (v2.40.0)
 """
 
 import logging
 import re
+import time
 from xml.etree import ElementTree as ET
 
 from app.clients.base import BaseAPIClient, RawPaperResult
@@ -47,6 +48,13 @@ DC_TYPE_MAP = {
 
 HANDLE_RE = re.compile(r"(10665/\d+)")
 
+# Default sets for Smart Search (confirmed by ListSets 2026-04-22):
+#   com_10665_8      → Headquarters (global WHO)
+#   com_10665_107131 → Regional Office for Europe
+DEFAULT_SETS = ["com_10665_8", "com_10665_107131"]
+MAX_LIST_PAGES = 20          # hard cap to bound latency (pages × 100 = records)
+CACHE_TTL_SECONDS = 60 * 60  # in-memory cache TTL: 1 hour
+
 
 def extract_handle(url_or_handle: str) -> str | None:
     """Extract the `10665/NNNN` handle from a full IRIS URL or bare handle.
@@ -68,6 +76,10 @@ class IrisWhoClient(BaseAPIClient):
     base_url = OAI_BASE
     requests_per_second = 2.0
 
+    # Class-level cache, shared across instances:
+    # key = (frozenset(sets), from_date) → (fetched_at_epoch, list[RawPaperResult])
+    _harvest_cache: dict = {}
+
     async def get_record(self, handle: str) -> RawPaperResult | None:
         """Fetch a single IRIS record by handle (e.g. `10665/52481`) using xoai prefix."""
         handle = extract_handle(handle) or handle
@@ -86,24 +98,195 @@ class IrisWhoClient(BaseAPIClient):
             logger.warning(f"[iris_who] GetRecord failed for {handle}: {e}")
             return None
 
-        return _parse_xoai_record(response.text, handle)
+        root = _safe_parse(response.text)
+        if root is None:
+            return None
+        record = root.find(".//oai:record", NS)
+        if record is None:
+            return None
+        return _parse_xoai_record_node(record, handle)
+
+    async def list_records(
+        self,
+        sets: list[str] | None = None,
+        from_date: str | None = None,
+        max_records: int = 500,
+    ) -> list[RawPaperResult]:
+        """Harvest records via OAI-PMH ListRecords across the given DSpace sets.
+
+        Results are cached in-memory for CACHE_TTL_SECONDS keyed by (sets, from_date)
+        to avoid refetching for each keyword query in the same session.
+        """
+        sets = sets or DEFAULT_SETS
+        cache_key = (frozenset(sets), from_date or "")
+        cached = self._harvest_cache.get(cache_key)
+        now = time.time()
+        if cached and (now - cached[0]) < CACHE_TTL_SECONDS:
+            logger.info(f"[iris_who] Cache HIT for {cache_key}: {len(cached[1])} records")
+            return cached[1]
+
+        all_records: list[RawPaperResult] = []
+        for set_spec in sets:
+            records = await self._harvest_set(set_spec, from_date, max_records)
+            all_records.extend(records)
+            if len(all_records) >= max_records:
+                break
+
+        # Dedup by handle (same doc can appear if indexed in multiple sets)
+        seen: set[str] = set()
+        unique: list[RawPaperResult] = []
+        for r in all_records:
+            if r.source_id in seen:
+                continue
+            seen.add(r.source_id)
+            unique.append(r)
+
+        self._harvest_cache[cache_key] = (now, unique)
+        logger.info(f"[iris_who] Harvested {len(unique)} records for {cache_key}")
+        return unique
+
+    async def _harvest_set(
+        self, set_spec: str, from_date: str | None, max_records: int
+    ) -> list[RawPaperResult]:
+        records: list[RawPaperResult] = []
+        params: dict = {
+            "verb": "ListRecords",
+            "metadataPrefix": "xoai",
+            "set": set_spec,
+        }
+        if from_date:
+            params["from"] = from_date
+
+        pages = 0
+        while True:
+            pages += 1
+            if pages > MAX_LIST_PAGES:
+                logger.warning(f"[iris_who] Hit page cap ({MAX_LIST_PAGES}) on set={set_spec}")
+                break
+            try:
+                response = await self._request("GET", "", params=params)
+            except Exception as e:
+                logger.warning(f"[iris_who] ListRecords failed on set={set_spec}: {e}")
+                break
+
+            root = _safe_parse(response.text)
+            if root is None:
+                break
+
+            err = root.find(".//oai:error", NS)
+            if err is not None:
+                code = err.attrib.get("code", "")
+                if code == "noRecordsMatch":
+                    break
+                logger.info(f"[iris_who] OAI error on set={set_spec}: {code}")
+                break
+
+            for record_node in root.findall(".//oai:record", NS):
+                header = record_node.find("oai:header", NS)
+                if header is not None and header.attrib.get("status") == "deleted":
+                    continue
+                id_el = header.find("oai:identifier", NS) if header is not None else None
+                handle = None
+                if id_el is not None and id_el.text:
+                    handle = id_el.text.replace("oai:iris.who.int:", "").strip()
+                if not handle:
+                    continue
+                parsed = _parse_xoai_record_node(record_node, handle)
+                if parsed is not None:
+                    records.append(parsed)
+                    if len(records) >= max_records:
+                        return records
+
+            token_el = root.find(".//oai:resumptionToken", NS)
+            if token_el is None or not (token_el.text and token_el.text.strip()):
+                break
+            params = {"verb": "ListRecords", "resumptionToken": token_el.text.strip()}
+
+        return records
+
+    async def search(
+        self,
+        query: str,
+        max_results: int = 20,
+        **kwargs,
+    ) -> list[RawPaperResult]:
+        """Keyword search over IRIS. Because OAI-PMH does not support full-text search,
+        this harvests records from DEFAULT_SETS within the date window, then filters
+        locally by token match in title / abstract / subjects.
+
+        kwargs accepted:
+            year_from (int): minimum year — translated to OAI `from` parameter
+            sets (list[str]): override DEFAULT_SETS
+            language (str): filter to this dc.language (default "en")
+        """
+        sets = kwargs.get("sets") or DEFAULT_SETS
+        year_from = kwargs.get("year_from")
+        language = (kwargs.get("language") or "en").lower()
+        from_date = f"{year_from}-01-01" if year_from else None
+
+        records = await self.list_records(sets=sets, from_date=from_date, max_records=2000)
+
+        if language:
+            records = [r for r in records if _record_language_matches(r, language)]
+
+        tokens = _tokenize(query)
+        if not tokens:
+            return records[:max_results]
+
+        scored: list[tuple[float, RawPaperResult]] = []
+        for r in records:
+            score = _score_record(r, tokens)
+            if score > 0:
+                scored.append((score, r))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [r for _, r in scored[:max_results]]
 
 
-def _parse_xoai_record(xml_text: str, handle: str) -> RawPaperResult | None:
-    """Parse an OAI-PMH GetRecord response with xoai metadata prefix."""
+def _safe_parse(xml_text: str):
     try:
-        root = ET.fromstring(xml_text)
+        return ET.fromstring(xml_text)
     except ET.ParseError as e:
-        logger.warning(f"[iris_who] XML parse error for {handle}: {e}")
+        logger.warning(f"[iris_who] XML parse error: {e}")
         return None
 
-    # OAI-PMH errors surface as <error code="idDoesNotExist">
-    err = root.find("oai:error", NS)
-    if err is not None:
-        logger.info(f"[iris_who] OAI error for {handle}: {err.attrib.get('code')}")
-        return None
 
-    metadata = root.find(".//oai:metadata/xoai:metadata", NS)
+def _tokenize(query: str) -> list[str]:
+    return [t for t in re.split(r"\W+", query.lower()) if len(t) > 2]
+
+
+def _score_record(r: RawPaperResult, tokens: list[str]) -> float:
+    """Match score: title tokens count 3x, subject tokens 2x, abstract 1x."""
+    title = (r.title or "").lower()
+    abstract = (r.abstract or "").lower()
+    subjects = " ".join(r.keywords or []).lower()
+
+    total = 0.0
+    for tok in tokens:
+        if tok in title:
+            total += 3.0
+        if tok in subjects:
+            total += 2.0
+        if tok in abstract:
+            total += 1.0
+    return total
+
+
+def _record_language_matches(r: RawPaperResult, language_code: str) -> bool:
+    """Check dc.language.iso (from raw_data) or fall back to title heuristics."""
+    lang = (r.raw_data or {}).get("language")
+    if not lang:
+        return True  # records without language info pass through
+    lang = lang.lower()
+    # Accept both ISO codes (en, fr) and full names (English, Français)
+    if language_code == "en":
+        return lang in ("en", "eng", "english")
+    return lang.startswith(language_code)
+
+
+def _parse_xoai_record_node(record_node, handle: str) -> RawPaperResult | None:
+    """Parse a <record> element with xoai metadata into a RawPaperResult."""
+    metadata = record_node.find(".//oai:metadata/xoai:metadata", NS)
     if metadata is None:
         return None
 

@@ -850,6 +850,15 @@ async def resolve_external_document(body: ResolveExternalRequest):
             await client.close()
         source_kind = "who_web"
     else:
+        # Distinguish the common mistake of pasting a WHO report number
+        # (e.g. "WHO-EURO-2026-12707-52481-81471") instead of the IRIS handle.
+        if _re.match(r"^WHO[-/:]", url, _re.IGNORECASE):
+            raise HTTPException(
+                status_code=400,
+                detail="This looks like a WHO report number, not an IRIS handle. "
+                "Paste the full www.who.int page URL instead, or the IRIS handle URL "
+                "(iris.who.int/handle/10665/NNNNNN).",
+            )
         raise HTTPException(
             status_code=400,
             detail="Unsupported URL. Provide an iris.who.int handle URL, a bare 10665/NNN handle, or a www.who.int publication page.",

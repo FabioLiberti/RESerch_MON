@@ -28,6 +28,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   ieee: "#3b82f6",
   elsevier: "#ec4899",
   compendium: "#a855f7",
+  iris_who: "#0ea5e9",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -39,4 +40,5 @@ export const SOURCE_LABELS: Record<string, string> = {
   ieee: "IEEE Xplore",
   elsevier: "Elsevier (Scopus)",
   compendium: "Compendium",
+  iris_who: "WHO IRIS",
 };
