@@ -1558,13 +1558,23 @@ function SmartSearchSection() {
                         DB
                       </span>
                     )}
-                    {r.already_in_db && r.has_pdf && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 inline-flex items-center gap-0.5" title="Local PDF attached to this paper in the DB">
+                    {r.already_in_db && r.has_pdf && r.db_paper_id && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetch(`/api/v1/papers/${r.db_paper_id}/pdf-file`, { headers: authHeaders() })
+                            .then((resp) => { if (!resp.ok) throw new Error(`HTTP ${resp.status}`); return resp.blob(); })
+                            .then((blob) => { const url = URL.createObjectURL(blob); window.open(url, "_blank"); })
+                            .catch((err) => console.error("Open local PDF failed:", err));
+                        }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors inline-flex items-center gap-0.5 font-semibold"
+                        title="Open local PDF (attached in DB)"
+                      >
                         PDF
                         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
-                      </span>
+                      </button>
                     )}
                     {r.open_access && !r.already_in_db && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">OA</span>
