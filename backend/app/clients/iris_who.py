@@ -210,27 +210,46 @@ class IrisWhoClient(BaseAPIClient):
         max_results: int = 20,
         **kwargs,
     ) -> list[RawPaperResult]:
-        """Keyword search over IRIS. OAI-PMH has no full-text search, so this:
-          1. Harvests records from DEFAULT_SETS with OAI `from` (IRIS datestamp) = year_from-01-01
-          2. Filters by language (default EN)
-          3. Post-filters by dc.date.issued >= year_from  — OAI `from` is the IRIS
-             record-modification datestamp, not the publication date, so records
-             published years ago but recently re-indexed would otherwise slip in
-          4. Ranks by token match (title 3x, subjects 2x, abstract 1x)
+        """Keyword search over IRIS.
+
+        OAI-PMH has no full-text search AND DSpace returns records in datestamp
+        ASCENDING order, so a single wide harvest window (e.g. 24 months, 2000-record
+        cap) paradoxically captures only the OLDEST records in that window and
+        misses recent publications.
+
+        Fix: multi-window harvest —
+          Window A (recent, ~4 months): full coverage of new docs, small volume
+          Window B (historical, user year_from): up to 2000 records, covers mid-age
+        Then dedup by handle, filter by language + publication_date, rank.
 
         kwargs accepted:
-            year_from (int): minimum publication year (defaults to current_year - 2)
+            year_from (int): minimum publication year (default: current_year - 2)
             sets (list[str]): override DEFAULT_SETS
             language (str): dc.language filter (default "en")
         """
         import datetime as _dt
 
         sets = kwargs.get("sets") or DEFAULT_SETS
-        year_from = kwargs.get("year_from") or (_dt.date.today().year - 2)
+        today = _dt.date.today()
+        year_from = kwargs.get("year_from") or (today.year - 2)
         language = (kwargs.get("language") or "en").lower()
-        from_date = f"{year_from}-01-01"
 
-        records = await self.list_records(sets=sets, from_date=from_date, max_records=2000)
+        # Window A: recent (ensures newest docs aren't missed due to pagination order)
+        recent_from = (today - _dt.timedelta(days=120)).isoformat()
+        recent = await self.list_records(sets=sets, from_date=recent_from, max_records=1500)
+
+        # Window B: historical
+        historical_from = f"{year_from}-01-01"
+        historical = await self.list_records(sets=sets, from_date=historical_from, max_records=2000)
+
+        # Merge with dedup by handle
+        seen: set[str] = set()
+        records: list[RawPaperResult] = []
+        for r in recent + historical:
+            if r.source_id in seen:
+                continue
+            seen.add(r.source_id)
+            records.append(r)
 
         if language:
             records = [r for r in records if _record_language_matches(r, language)]

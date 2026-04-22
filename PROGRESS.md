@@ -1,8 +1,35 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.1 — Smart Search fix: publication-date filter + preview buttons
-**Current Version:** v2.40.1
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — IRIS Smart Search now filters by actual publication date (not IRIS upload datestamp), and every result row has Source/PDF preview buttons to verify a document before importing. "European Health Data Space" correctly returns documents 2024-2026.
+**Current Phase:** v2.40.2 — Smart Search IRIS: multi-window harvest
+**Current Version:** v2.40.2
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — IRIS Smart Search now uses dual-window harvest (last 120 days + full year-from window) to compensate for DSpace's ASC datestamp order. Recent WHO publications are reliably found. "HEALTH INFORMATION SYSTEMS" test correctly surfaces the user's manually-imported doc (handle 10665/385097, 2026-04-20).
+
+---
+
+### 2026-04-22 — Session: v2.40.2 Smart Search IRIS — multi-window harvest
+
+**Why:** user testing of v2.40.1 con keyword "HEALTH INFORMATION SYSTEMS" non trovava paper #22266 (titolo: "Artificial intelligence is reshaping health systems: state of readiness across the European Union", published 2026-04-20, handle `10665/385097`) che lui stesso aveva importato via www.who.int. Il doc è in IRIS, ma il mio harvest non lo raggiungeva.
+
+**Root cause diagnosticato:** DSpace OAI-PMH restituisce record in ordine **datestamp ASCENDENTE** (più vecchi prima). Con `from=2024-01-01` (2 anni) e cap di 20 pagine (~1200 record), le prime 20 pagine coprono i record più "vecchi" all'interno della finestra — non i più recenti. Docs del 2026 finiscono oltre il cap e vengono mai raggiunti.
+
+**Prova sperimentale del problema**:
+- Harvest con `from=2026-04-01` (22 giorni) → 655 record, doc #22266 FOUND ✓
+- Harvest con `from=2025-04-22` (12 mesi) → 1200 record (cap hit), doc #22266 MISSING ✗
+- Harvest con `from=2024-01-01` (24 mesi) → 1199 record (cap hit), doc #22266 MISSING ✗
+
+**Fix:** multi-window harvest in `search()`:
+- Window A (recente, ultimi 120 giorni, `max_records=1500`) — garantisce che i docs freschi siano sempre pescati
+- Window B (storico, da `year_from` in avanti, `max_records=2000`) — dà coverage storica
+- Merge con dedup per handle (stesso doc può apparire in entrambe le finestre se modificato di recente)
+
+**Validation post-fix** (cache invalidated):
+- "HEALTH INFORMATION SYSTEMS" year_from=2024 → 20 risultati in 35s, paper #22266 al posto #7 ✓
+- "artificial intelligence health systems" → paper #22266 al posto #1 ✓
+- Altri docs WHO EU rilevanti emersi: "Leveraging data, AI and digital health in the WHO European Region" (2026-04-14, 10665/385249), "Geographic Information Systems for health in the WHO European Region: roadmap 2025-2030" (2026-04-17)
+
+**Tradeoff:** search ora richiede 2 chiamate harvest invece di 1, +15% latenza (30s → 35s). Cache in-memory da 1h ammortizza: la prima query nella sessione è lenta, le successive istantanee.
+
+**Ulteriore evidenza scoperta:** il catalogo WHO IRIS è in realtà ricco di materiale digital health / AI health / governance — 4 paper del 2026 su AI in health systems emersi dal test. La povertà rilevata nei probe precedenti era conseguenza del bug di windowing, non della scarsità reale del catalogo. **Questo modifica parzialmente la valutazione sul cron automatico** (vedi richiesta utente): la fonte ha più segnale di quanto pensato inizialmente.
 
 ---
 

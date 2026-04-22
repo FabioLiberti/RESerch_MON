@@ -4,6 +4,17 @@
 
 ---
 
+## v2.40.2 — Smart Search IRIS: multi-window harvest (2026-04-22) — COMPLETATA
+
+- [x] `iris_who.py::search` ora fa 2 harvest: Window A (ultimi 120 giorni, `max_records=1500`) + Window B (da year_from, `max_records=2000`), poi dedup per handle
+- [x] Root cause documentato: DSpace OAI-PMH restituisce record in ordine datestamp ASC; con finestra larga il cap di 20 pagine (~1200 record) copre solo le pagine iniziali (più "vecchie"), mancando i record recenti. Il Window A è la chiave — finestra stretta fa entrare subito i docs freschi
+
+**Verifica:** Paper #22266 (handle `10665/385097`, publicato 2026-04-20) ora TROVATO come top-1 per "artificial intelligence health systems" e top-7 per "HEALTH INFORMATION SYSTEMS". Smart Search latenza 35s (vs 30s precedente, +15% per il doppio harvest; cache 1h mitiga).
+
+**Motivazione:** user ha segnalato che Smart Search non trovava un documento WHO/Europe del 2026 che lui stesso aveva importato manualmente. Diagnostic ha rivelato il bug dell'ordinamento ASC di DSpace OAI-PMH — la finestra larga paradossalmente nascondeva i docs nuovi.
+
+---
+
 ## v2.40.1 — Smart Search fix: pub-date filter + preview buttons (2026-04-22) — COMPLETATA
 
 - [x] `iris_who.py::search` — default `year_from = current_year - 2` quando l'utente non specifica un filtro
