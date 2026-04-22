@@ -4,6 +4,17 @@
 
 ---
 
+## v2.40.5 — Smart Search: always-visible "Clear & new" button (2026-04-22) — COMPLETATA
+
+- [x] Nuovo pulsante "Clear & new" (amber) nell'header della sezione Smart Search, sempre visibile quando `results !== null || jobId !== null || keywords.length > 0`
+- [x] Indipendente da `smartExpanded` — funziona anche se la sezione è collassata
+- [x] Click fa `stopPropagation` così non toggle l'espansione della sezione
+- [x] Header diviso in 3 parti: click-area per expand/collapse (title), Clear button, freccia expand/collapse
+
+**Motivazione:** user ha segnalato che il pulsante "Clear results & new search" era visibile solo dopo aver espanso la sezione E solo dopo aver aperto una ricerca precedente. Workflow scomodo: si blocca se la sezione è collassata. Ora Clear è al top-right dell'header, sempre raggiungibile con 1 click quando serve.
+
+---
+
 ## v2.40.4 — Smart Search: persist expanded state across refresh (2026-04-22) — COMPLETATA
 
 - [x] `smartExpanded` ora idratato da `localStorage.getItem("smart-search-expanded")` al mount

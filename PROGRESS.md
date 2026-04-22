@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.4 — Smart Search: persist expanded state across refresh
-**Current Version:** v2.40.4
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — After refresh, Smart Search section auto-expands when there are results, making the Clear button (and full result list) visible without needing to re-click the section header. Fixes the apparent inconsistency reported by user.
+**Current Phase:** v2.40.5 — Smart Search: always-visible Clear & new button
+**Current Version:** v2.40.5
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — "Clear & new" button now in Smart Search header, always visible when state exists (results or cached job or keywords). Works even when section collapsed. End-to-end backend test confirms 9 results for "european health data space".
 
 ---
 
