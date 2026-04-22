@@ -1117,51 +1117,46 @@ function SmartSearchSection() {
   const newCount = sortedResults?.filter((r) => !r.already_in_db).length || 0;
   const dbCount = sortedResults?.filter((r) => r.already_in_db).length || 0;
 
-  const hasPersistedState = results !== null || jobId !== null || keywords.length > 0;
-
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
-      <div className="w-full flex items-center justify-between px-6 py-4 gap-3">
-        <button
-          onClick={() => setSmartExpanded(!smartExpanded)}
-          className="flex-1 flex items-center gap-2 text-left"
-        >
-          <h3 className="font-medium flex items-center gap-2 text-sm">
-            <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Smart Search
-            {searching && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] animate-pulse">active</span>}
-            {results && <span className="text-xs text-[var(--muted-foreground)]">({results.length} results)</span>}
-          </h3>
-        </button>
-        {hasPersistedState && (
-          <button
-            onClick={(e) => { e.stopPropagation(); newSearch(); }}
-            className="text-[10px] px-2.5 py-1 rounded bg-amber-700 text-white hover:bg-amber-600 font-semibold shrink-0"
-            title="Clear current search state and start a new search"
-          >
-            Clear &amp; new
-          </button>
-        )}
-        <button
-          onClick={() => setSmartExpanded(!smartExpanded)}
-          className="shrink-0 p-1"
-          aria-label={smartExpanded ? "Collapse" : "Expand"}
-        >
-          <svg
-            className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform", smartExpanded && "rotate-180")}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      <button
+        onClick={() => setSmartExpanded(!smartExpanded)}
+        className="w-full flex items-center justify-between px-6 py-4 text-left"
+      >
+        <h3 className="font-medium flex items-center gap-2 text-sm">
+          <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-        </button>
-      </div>
+          Smart Search
+          {searching && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] animate-pulse">active</span>}
+          {results && <span className="text-xs text-[var(--muted-foreground)]">({results.length} results)</span>}
+        </h3>
+        <svg
+          className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform", smartExpanded && "rotate-180")}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
       {smartExpanded && <div className="px-6 pb-6">
 
       {/* Search form */}
       <div className="space-y-3">
+        {/* Clear previous state (visible only inside the expanded section
+             whenever something is persisted — results, an active job, or typed keywords) */}
+        {(results !== null || jobId !== null || keywords.length > 0) && (
+          <div className="flex justify-end">
+            <button
+              onClick={newSearch}
+              className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              title="Clear current search state and start a new search"
+            >
+              Clear &amp; new search
+            </button>
+          </div>
+        )}
+
         {/* Mode selector */}
         <div className="flex items-center gap-2">
           <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--secondary)] w-fit">
@@ -1679,15 +1674,6 @@ function SmartSearchSection() {
             </details>
           )}
 
-          {/* New Search button */}
-          <div className="pt-2">
-            <button
-              onClick={newSearch}
-              className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-            >
-              Clear results &amp; new search
-            </button>
-          </div>
         </div>
       )}
 

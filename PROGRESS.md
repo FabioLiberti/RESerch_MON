@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.6 — Smart Search: no-store cache headers end-to-end
-**Current Version:** v2.40.6
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Backend now sets Cache-Control: no-store on smart-search responses; frontend adds cache:'no-store' to all smart-search fetch calls. Defensive fix against stale browser/intermediate caching of job status responses.
+**Current Phase:** v2.40.7 — Smart Search UX + dedup whitespace fix
+**Current Version:** v2.40.7
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Clear button moved inside expanded Smart Search section with subtle muted styling. Deduplication now correctly matches titles with irregular whitespace (LIKE pattern uses wildcards between words). Paper #22266 now correctly flagged as "already_in_db" when re-found via IRIS Smart Search.
 
 ---
 

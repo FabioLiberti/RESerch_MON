@@ -4,6 +4,16 @@
 
 ---
 
+## v2.40.7 — Smart Search UX + dedup whitespace fix (2026-04-22) — COMPLETATA
+
+- [x] `discovery/page.tsx` — rimosso pulsante "Clear & new" dall'header Smart Search (era troppo prominente, colorato ambra). Aggiunto invece un link "Clear & new search" discreto (stile muted-foreground) in cima alla sezione ESPANSA, visibile solo quando c'è stato persistito (`results || jobId || keywords`). Non compare quando la sezione è collassata
+- [x] Rimosso il duplicato in fondo alla sezione (era gated su `results`, ora ridondante col nuovo in cima)
+- [x] `deduplication.py::find_existing_paper` — LIKE pattern cambiato da `%word1 word2 word3%` a `%word1%word2%word3%`. Diagnosi: il paper #22266 ha titolo con **doppi spazi** salvato nel DB; il normalize_title li rimuove, ma il LIKE SQL è literal e lo skippava dal set di candidati prima del fuzzy compare. Wildcard tra parole rende pre-filter tollerante a whitespace irregolari
+
+**Motivazione:** user ha richiesto UX più coerente del pulsante Clear (non visibile da collapsed, meno invasivo). Ha anche segnalato che un paper già in DB (#22266) non veniva flaggato "already_in_db" quando lo stesso doc veniva riscoperto via IRIS Smart Search. Root cause isolata con test locale: `fuzz.ratio=100` perfetta corrispondenza post-normalize, ma SQL LIKE con spazio singolo non matchava un titolo DB con doppi spazi.
+
+---
+
 ## v2.40.6 — Smart Search: no-store cache headers end-to-end (2026-04-22) — COMPLETATA
 
 - [x] Backend `smart_search.py`: endpoint `POST /search` e `GET /status/{id}` ora settano `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` + `Pragma: no-cache` via `Response` header injection

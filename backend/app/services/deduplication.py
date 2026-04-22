@@ -63,12 +63,16 @@ async def find_existing_paper(
         if existing:
             return existing
 
-    # Check by title similarity
-    # For efficiency, search by first significant words
+    # Check by title similarity.
+    # Use `%word1%word2%word3%` (wildcard between each word) so DB titles with
+    # extra whitespace or punctuation between words still pre-match, before the
+    # precise fuzzy comparison below. A strict `%word1 word2 word3%` LIKE would
+    # miss candidates whose stored title has irregular spacing (e.g. scraped
+    # HTML with NBSPs or double-spaces).
     title_norm = normalize_title(paper.title)
     words = title_norm.split()[:5]  # First 5 words
     if len(words) >= 3:
-        like_pattern = f"%{' '.join(words[:3])}%"
+        like_pattern = "%" + "%".join(words[:3]) + "%"
         result = await db.execute(
             select(Paper).where(Paper.title.ilike(like_pattern))
         )
