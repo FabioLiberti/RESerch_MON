@@ -257,7 +257,23 @@ async def get_job_status(
 
     # Include results only when done
     if job.status == "done":
-        result["results"] = job.results
+        # Refresh `has_pdf` at poll-time for results whose paper is in DB.
+        # This makes the UI reflect later PDF uploads / refreshes without
+        # requiring the user to re-run the whole search.
+        items = list(job.results or [])
+        db_ids = [it.get("db_paper_id") for it in items if it.get("db_paper_id")]
+        pdf_map: dict[int, bool] = {}
+        if db_ids:
+            rows = await db.execute(
+                select(Paper.id, Paper.pdf_local_path).where(Paper.id.in_(db_ids))
+            )
+            for pid, pdf_path in rows.all():
+                pdf_map[pid] = bool(pdf_path)
+        for it in items:
+            pid = it.get("db_paper_id")
+            if pid in pdf_map:
+                it["has_pdf"] = pdf_map[pid]
+        result["results"] = items
         result["queries_used"] = job.queries_used
 
     return result
