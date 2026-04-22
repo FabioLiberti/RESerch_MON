@@ -53,7 +53,8 @@ HANDLE_RE = re.compile(r"(10665/\d+)")
 #   com_10665_107131 → Regional Office for Europe
 DEFAULT_SETS = ["com_10665_8", "com_10665_107131"]
 MAX_LIST_PAGES = 20          # hard cap to bound latency (pages × 100 = records)
-CACHE_TTL_SECONDS = 60 * 60  # in-memory cache TTL: 1 hour
+CACHE_TTL_SECONDS = 30 * 60  # in-memory cache TTL: 30 minutes (IRIS uses transient deletions)
+MIN_TOKEN_COVERAGE = 0.6     # a record must match at least 60% of query tokens to rank
 
 
 def extract_handle(url_or_handle: str) -> str | None:
@@ -290,10 +291,22 @@ def _tokenize(query: str) -> list[str]:
 
 
 def _score_record(r: RawPaperResult, tokens: list[str]) -> float:
-    """Match score: title tokens count 3x, subject tokens 2x, abstract 1x."""
+    """Match score: title tokens count 3x, subject tokens 2x, abstract 1x.
+
+    Returns 0 if the record matches fewer than MIN_TOKEN_COVERAGE of the query
+    tokens anywhere — this prevents a document matching on just 1-2 generic
+    tokens (e.g. "health", "data") from ranking high against a specific 4-token
+    query like "European Health Data Space".
+    """
     title = (r.title or "").lower()
     abstract = (r.abstract or "").lower()
     subjects = " ".join(r.keywords or []).lower()
+    haystack = f"{title} {subjects} {abstract}"
+
+    matched_tokens = sum(1 for tok in tokens if tok in haystack)
+    coverage = matched_tokens / len(tokens) if tokens else 0.0
+    if coverage < MIN_TOKEN_COVERAGE:
+        return 0.0
 
     total = 0.0
     for tok in tokens:

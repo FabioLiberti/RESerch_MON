@@ -4,6 +4,19 @@
 
 ---
 
+## v2.40.3 — Smart Search IRIS: precision threshold + shorter cache (2026-04-22) — COMPLETATA
+
+- [x] `_score_record` ora richiede token-coverage >= 60% prima di scorare (via `MIN_TOKEN_COVERAGE`). Impedisce che record con match solo su token generici ("data" + "health" da soli) siano ranked top per query specifiche multi-token ("European Health Data Space" = 4 token)
+- [x] `CACHE_TTL_SECONDS` ridotto da 3600 a 1800 (30 min) per ridurre finestra in cui record "transient-deleted" da IRIS restino nella cache server-side. DSpace `Identify` dichiara `Deletion Mode: transient` — i record possono essere ritirati e reapparire
+
+**Motivazione:** user ha segnalato due problemi correlati su Smart Search "European Health Data Space":
+1. Il top result era "Bridging methods in health workforce planning: complementary approaches and the data they require" — clearly off-topic. Cliccando "Source" otteneva 404 dalla pagina IRIS. OAI-PMH `GetRecord` confermava `idDoesNotExist`: il record era stato eliminato da IRIS dopo il nostro harvest.
+2. Il fatto stesso che il record scorasse top era un difetto di ranking: matchava solo su "data" e "health" (token generici comunissimi nel corpus WHO), mentre "european" e "space" non matchavano. Coverage 2/4 = 50%.
+
+Con il fix coverage >= 60%, quel record viene automaticamente escluso dal ranking. Top 3 per "European Health Data Space" dopo fix: "Leveraging data, AI and digital health in WHO Europe" (2026-04-14), "Mental health WHO Europe review" (2026-03-19), "Artificial intelligence is reshaping health systems" (2026-04-20, = paper #22266).
+
+---
+
 ## v2.40.2 — Smart Search IRIS: multi-window harvest (2026-04-22) — COMPLETATA
 
 - [x] `iris_who.py::search` ora fa 2 harvest: Window A (ultimi 120 giorni, `max_records=1500`) + Window B (da year_from, `max_records=2000`), poi dedup per handle

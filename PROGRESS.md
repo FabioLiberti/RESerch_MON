@@ -1,8 +1,42 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.2 — Smart Search IRIS: multi-window harvest
-**Current Version:** v2.40.2
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — IRIS Smart Search now uses dual-window harvest (last 120 days + full year-from window) to compensate for DSpace's ASC datestamp order. Recent WHO publications are reliably found. "HEALTH INFORMATION SYSTEMS" test correctly surfaces the user's manually-imported doc (handle 10665/385097, 2026-04-20).
+**Current Phase:** v2.40.3 — Smart Search IRIS: precision threshold + shorter cache
+**Current Version:** v2.40.3
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Smart Search IRIS now requires a record to match >= 60% of query tokens before ranking (excludes false positives on generic terms like "health" / "data"). Cache TTL reduced to 30min to minimize stale records from IRIS transient deletions. "European Health Data Space" returns top results that are actually EHDS/AI-in-health aligned.
+
+---
+
+### 2026-04-22 — Session: v2.40.3 Smart Search IRIS — precision threshold + shorter cache
+
+**Why:** user testing of v2.40.2 con "European Health Data Space" ha sollevato due problemi correlati:
+1. Top result era "Bridging methods in health workforce planning" — titolo completamente off-topic
+2. Cliccando "Source" di quel record → 404 dalla pagina iris.who.int (handle 10665/385320)
+
+**Root causes diagnosticati:**
+
+**A) Record fantasma (cache vs live IRIS):**
+- Testato con `curl`: HTTP 404 su `iris.who.int/handle/10665/385320`, e OAI-PMH `GetRecord` restituisce `<error code="idDoesNotExist">`
+- DSpace `Identify` dichiarava `Deletion Mode: transient` — i record possono essere eliminati (o ritornare) in qualsiasi momento
+- Il mio cache in-memory (TTL 1h) aveva il record da un harvest precedente, prima che IRIS lo ritirasse
+- Fix: `CACHE_TTL_SECONDS` 3600 → 1800 (30 min). Riduce la finestra di incoerenza senza invalidare troppo spesso la cache per query ripetute.
+
+**B) Ranking troppo permissivo:**
+- Query "European Health Data Space" tokenizza in `['european', 'health', 'data', 'space']`
+- Record fantasma "Bridging methods in health workforce planning: complementary approaches and the data they require" matchava:
+  - `health` ✓ (in "health workforce")
+  - `data` ✓ (in "data they require")
+  - `european`, `space`: NO
+  - Coverage = 2/4 = 50%
+- Ma il mio scoring OR-based additivo dava 3+3=6 punti (tanti quanti docs più specifici con title match su "european" + "space") — quindi il record off-topic finiva nei top
+- Fix: in `_score_record`, calcolo `coverage = matched_tokens / total_tokens`. Se < `MIN_TOKEN_COVERAGE` (60%), ritorno 0 prima di scorare. Docs che matchano solo su termini generici vengono scartati.
+
+**Validation post-fix:**
+- "European Health Data Space" → top-3: "Leveraging data, AI and digital health in WHO Europe" (2026-04-14, 10665/385249), "Strengthening mental health WHO Europe 2025" (2026-03-19), paper #22266 (2026-04-20) ✓
+- "HEALTH INFORMATION SYSTEMS" → paper #22266 ancora presente; top-1 "Geographic Information Systems for health roadmap 2025-2030" ✓
+- "artificial intelligence health systems" → top-1 paper #22266, top-2/3 "country profiles AI reshaping health systems WHO European" ✓
+- Il record fantasma "Bridging methods..." non appare più in nessuna delle 3 query
+
+**Tradeoff noto:** soglia 60% è conservativa. Query con molti token stop-word (es. "A review of health in Europe" = 4 token di cui 2 stop-word) potrebbero perdere risultati rilevanti. Al momento non uso stop-word filtering — se emerge il problema in pratica, aggiungeremo. Threshold è `MIN_TOKEN_COVERAGE = 0.6` costante centralizzata.
 
 ---
 
