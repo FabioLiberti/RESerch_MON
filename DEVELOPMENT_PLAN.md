@@ -4,6 +4,18 @@
 
 ---
 
+## v2.39.1 — External Document: editable + visible in Papers (2026-04-22) — COMPLETATA
+
+- [x] Backend: `UpdatePaperMetadataRequest` accetta `pdf_url`; `PUT /papers/{id}/metadata` lo salva
+- [x] Frontend detail page: pulsante "Edit" ora visibile anche per `created_via === "external_document"` (oltre a my_manuscript/reviewing)
+- [x] Frontend detail page: nuovo campo "Original URL / PDF link" nel form di editing
+- [x] Frontend `/papers` lista: colonna paper_type renderizzata con badge colorato (usa `getPaperTypeBadge` da `paperTypes.ts`) — i documenti grey literature (REPORT/GUIDELINE/WHITE PAPER/STANDARD) sono visualmente distinti
+- [x] Frontend `/papers` filtri: pillole filtro paper_type ora usano colore + label dedicato (es. "REPORT" invece di "report") con conteggio
+
+**Motivazione:** dopo il deploy v2.39.0, un documento grigio esistente (#22266 WHO/Europe) non era modificabile dall'UI (Edit button gated a manuscript/reviewing, e comunque `pdf_url` non era tra i campi dell'endpoint metadata). Inoltre nel menu Papers i nuovi tipi apparivano come testo grigio qualsiasi, indistinguibili dai journal articles.
+
+---
+
 ## v2.39.0 — Add External Document (grey literature) (2026-04-22) — COMPLETATA
 
 - [x] Backend endpoint `POST /papers/external-document` — crea `Paper` con `paper_role="bibliography"`, `created_via="external_document"`, `paper_type` ∈ {report, guideline, white_paper, standard}, issuing organization salvata in `journal`, `pdf_url` con link originale

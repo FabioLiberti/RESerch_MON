@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth";
 import { api, authFetcher } from "@/lib/api";
 import type { KeywordCount } from "@/lib/types";
 import PaperInfoBox from "@/components/PaperInfoBox";
+import { getPaperTypeBadge } from "@/lib/paperTypes";
 
 type SourceTab = "all" | "api" | "compendium";
 
@@ -182,16 +183,23 @@ export default function PapersPage() {
           </p>
           {typeStats && typeStats.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {typeStats.filter(t => t.count > 0).map(t => (
-                <button key={t.type}
-                  onClick={() => { setTypeFilter(typeFilter === t.type ? "" : t.type); setPage(1); }}
-                  className={cn(
-                    "text-[9px] px-2 py-0.5 rounded-full font-medium transition-colors",
-                    typeFilter === t.type ? "bg-[var(--primary)] text-white" : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
-                  )}>
-                  {t.type.replace(/_/g, " ")} ({t.count.toLocaleString()})
-                </button>
-              ))}
+              {typeStats.filter(t => t.count > 0).map(t => {
+                const b = getPaperTypeBadge(t.type);
+                const active = typeFilter === t.type;
+                return (
+                  <button key={t.type}
+                    onClick={() => { setTypeFilter(active ? "" : t.type); setPage(1); }}
+                    className={cn(
+                      "text-[9px] px-2 py-0.5 rounded-full font-bold tracking-wide transition-colors flex items-center gap-1",
+                      active ? `${b.color} text-white ring-2 ring-white/40` : `${b.color} text-white hover:brightness-110 opacity-80 hover:opacity-100`
+                    )}
+                    title={b.label}
+                  >
+                    <span>{b.badge}</span>
+                    <span className="opacity-80 font-normal">({t.count.toLocaleString()})</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -971,8 +979,15 @@ export default function PapersPage() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-[var(--muted-foreground)] capitalize hidden lg:table-cell">
-                      {paper.paper_type.replace("_", " ")}
+                    <td className="px-4 py-3 text-xs hidden lg:table-cell">
+                      {(() => {
+                        const b = getPaperTypeBadge(paper.paper_type);
+                        return (
+                          <span className={cn("inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-white tracking-wide", b.color)}>
+                            {b.badge}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-center text-xs hidden sm:table-cell">{paper.citation_count}</td>
                     <td className="px-4 py-3 text-center hidden md:table-cell">

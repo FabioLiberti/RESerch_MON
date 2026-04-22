@@ -1,8 +1,22 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.39.0 — Add External Document (grey literature)
-**Current Version:** v2.39.0
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — External documents (WHO, OECD, EU, ISO, FDA without DOI) can now be inserted via `/discovery` → "Add External Document"; stored as `paper_role="bibliography"` with new paper_types (report, guideline, white_paper, standard); detail page works natively.
+**Current Phase:** v2.39.1 — External Document editable + visible in Papers list
+**Current Version:** v2.39.1
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Grey literature records are now editable from detail page (Edit button + pdf_url field) and visually distinct in `/papers` (colored badges + colored filter pills for REPORT/GUIDELINE/WHITE PAPER/STANDARD).
+
+---
+
+### 2026-04-22 — Session: v2.39.1 External Document editable + visible
+
+**Why:** Dopo deploy v2.39.0, primo documento inserito (#22266 WHO/Europe "Digital health in the WHO European Region") non era modificabile da UI: il pulsante Edit sulla detail page era gated a `paper_role in (my_manuscript, reviewing)` e l'endpoint `PUT /metadata` non accettava `pdf_url`. Inoltre nel menu Papers i nuovi tipi apparivano come plain text lowercase, indistinguibili dagli altri — il valore dello sforzo di classificazione era visivamente perso.
+
+**What:**
+- Backend `UpdatePaperMetadataRequest`: aggiunto campo `pdf_url`; `PUT /papers/{id}/metadata` lo salva con la stessa logica degli altri campi (aggiornato solo se non-None).
+- Frontend `/papers/[id]` EditableHeader: la condizione di visibilità del pulsante Edit include ora `created_via === "external_document"`. Aggiunto campo "Original URL / PDF link" nel form.
+- Frontend `/papers` lista tabellare: colonna paper_type usa `getPaperTypeBadge()` per renderizzare un badge colorato (stesso stile badge già definito in `paperTypes.ts`). I tipi grey literature hanno palette distinta (slate/cyan/stone/zinc) dalle tipologie peer-reviewed.
+- Frontend `/papers` filtri laterali: le pillole filtro paper_type usano ora i colori del badge + label ufficiale ("REPORT" invece di "report"), stato attivo con ring bianco.
+
+**Impatto:** zero breaking changes. Endpoint retro-compatibile (pdf_url opzionale). Badge rendering funziona per tutti i paper_type esistenti (journal_article, preprint, conference, review, ...) — quelli non mappati in `PAPER_TYPE_OPTIONS` usano il fallback grigio di default.
 
 ---
 

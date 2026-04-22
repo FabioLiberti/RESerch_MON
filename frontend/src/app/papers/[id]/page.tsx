@@ -16,7 +16,7 @@ import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 import CitedByManuscripts from "@/components/CitedByManuscripts";
 import VenueKeyDates from "@/components/VenueKeyDates";
 
-// --- Editable Header (title + metadata editing for my_manuscript/reviewing papers) ---
+// --- Editable Header (title + metadata editing for my_manuscript/reviewing/external_document papers) ---
 function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(paper.title);
@@ -28,6 +28,7 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
   const [confNotes, setConfNotes] = useState(paper.conference_notes || "");
   const [githubUrl, setGithubUrl] = useState(paper.github_url || "");
   const [overleafUrl, setOverleafUrl] = useState(paper.overleaf_url || "");
+  const [pdfUrl, setPdfUrl] = useState(paper.pdf_url || "");
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -46,6 +47,7 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
           conference_notes: confNotes.trim() || null,
           github_url: githubUrl.trim() || null,
           overleaf_url: overleafUrl.trim() || null,
+          pdf_url: pdfUrl.trim() || null,
         }),
       });
       if (r.ok) {
@@ -113,6 +115,12 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
           </div>
         </div>
         <div>
+          <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Original URL / PDF link</label>
+          <input value={pdfUrl} onChange={e => setPdfUrl(e.target.value)}
+            placeholder="https://www.who.int/europe/publications/i/item/..."
+            className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+        </div>
+        <div>
           <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Abstract</label>
           <textarea value={abstract} onChange={e => setAbstract(e.target.value)} rows={3}
             className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none resize-y" />
@@ -135,7 +143,9 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
     <div>
       <div className="flex items-start gap-2">
         <h1 className="text-2xl font-bold leading-snug flex-1">{paper.title}</h1>
-        {(paper.paper_role === "my_manuscript" || paper.paper_role === "reviewing") && (
+        {(paper.paper_role === "my_manuscript"
+          || paper.paper_role === "reviewing"
+          || paper.created_via === "external_document") && (
           <button
             onClick={() => setEditing(true)}
             className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0 mt-1"

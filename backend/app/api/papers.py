@@ -865,6 +865,7 @@ class UpdatePaperMetadataRequest(BaseModel):
     conference_notes: str | None = None
     github_url: str | None = None
     overleaf_url: str | None = None
+    pdf_url: str | None = None
 
 
 @router.put("/{paper_id}/metadata")
@@ -896,6 +897,8 @@ async def update_paper_metadata(
         paper.github_url = body.github_url
     if body.overleaf_url is not None:
         paper.overleaf_url = body.overleaf_url
+    if body.pdf_url is not None:
+        paper.pdf_url = body.pdf_url
 
     await db.commit()
     return {"status": "updated", "paper_id": paper.id}
