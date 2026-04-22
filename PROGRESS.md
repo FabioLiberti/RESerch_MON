@@ -1,8 +1,28 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.39.2 — WHO/IRIS auto-fill (OAI-PMH + page scraper)
-**Current Version:** v2.39.2
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Inserting WHO grey literature now supports auto-fill: paste an iris.who.int handle or a www.who.int publication URL, click "Auto-fill" → form populates (title, authors, date, organization, abstract, pdf_url, paper_type). Review + save in ~10 seconds.
+**Current Phase:** v2.39.3 — WHO auto-fill: source preview + robust date parsing
+**Current Version:** v2.39.3
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Auto-fill form shows "Open source" / "Open PDF" buttons after fetch to verify the document before saving. WHO `www.who.int` pages now correctly extract `publication_date` from JSON-LD (handles "20 April 2026" text format) and get the real PDF bitstream URL from IRIS instead of the landing page.
+
+---
+
+### 2026-04-22 — Session: v2.39.3 WHO auto-fill: source preview + robust date
+
+**Why:** Test utente su v2.39.2 ha rivelato due gap:
+1. Nei tre flussi (IRIS handle, WHO site, bare handle) l'auto-fill non dava modo di **verificare** il documento prima del save — costringeva l'utente a copiare l'URL, aprirlo in nuova tab a mano, e poi tornare al form. Frizione inutile.
+2. Per URL `www.who.int` la `publication_date` restava vuota: WHO non espone `citation_*` meta tag come Google Scholar, ma usa JSON-LD schema.org con `"datePublished": "20 April 2026"` (formato testuale). Il parser esistente accettava solo formati ISO/numerici.
+
+**What:**
+- `who_web.py` — `_MetaTagParser` esteso per catturare blocchi `<script type="application/ld+json">...</script>`: handle_starttag rileva lo script type, handle_data buffera il contenuto, handle_endtag parsea JSON (anche array di oggetti e `@graph` annidato). Due helper `_jsonld_date` e `_jsonld_pdf` navigano ricorsivamente cercando `datePublished`/`dateCreated` e `sameAs` (che WHO usa per puntare al bitstream IRIS reale).
+- `who_web.py` — `_normalize_date` riscritto per gestire 4 famiglie: ISO numerico, "DD Month YYYY", "Month DD, YYYY", "Month YYYY". Tabella `_MONTHS` con nomi Jan/January (EN) per risoluzione. Caso "April 2026" → default al primo del mese (YYYY-04-01).
+- Endpoint `resolve-external` — catena fallback date estesa a 13 chiavi meta (citation_*, publication_date, article:published_time, og:article:published_time, dc.date, dc.date.issued, dcterms.issued, dcterms.created, dc.date.created, date) + fallback JSON-LD.
+- Frontend — nuovo stato `resolvedSourceUrl` impostato dopo successo fetch. Nel blocco auto-fill appaiono due pulsanti conditionali: "Open source" (sempre presente, emerald bg, apre l'URL che utente ha incollato in nuova tab), "Open PDF" (blue bg, solo se pdf_url estratto ≠ URL originale — cioè quando il backend ha trovato un bitstream IRIS più specifico). Reset pulisce entrambi gli stati.
+
+**Smoke test:** `https://www.who.int/europe/publications/i/item/WHO-EURO-2026-12707-52481-81471`
+- Prima (v2.39.2): DATE=None, PDF_URL=source landing page
+- Dopo (v2.39.3): DATE=2026-04-20 ✓, PDF_URL=`iris.who.int/server/api/core/bitstreams/ae3fcbfc-b6a0-4aad-a0b3-35027b451648/content` ✓ (il vero PDF)
+
+**Gap che NON si risolve lato server per www.who.int:** autori e abstract non vengono esposti come meta tag o JSON-LD da www.who.int (il CMS Sitefinity rende il contenuto via JavaScript client-side). Tramite scraping server-side non si può ottenere oltre quanto già fatto. Workaround: usare l'URL IRIS corrispondente quando disponibile (xoai ha sempre metadati più ricchi). Altrimenti completare manualmente — il nuovo bottone "Open source" rende questo passaggio rapido.
 
 ---
 

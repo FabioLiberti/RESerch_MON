@@ -1834,6 +1834,7 @@ function AddExternalDocument() {
   const { isAdmin } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [resolveUrl, setResolveUrl] = useState("");
+  const [resolvedSourceUrl, setResolvedSourceUrl] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [title, setTitle] = useState("");
   const [issuingOrg, setIssuingOrg] = useState("");
@@ -1849,6 +1850,7 @@ function AddExternalDocument() {
 
   const reset = () => {
     setResolveUrl("");
+    setResolvedSourceUrl(null);
     setTitle(""); setIssuingOrg(""); setPaperType("report");
     setPublicationDate(""); setPdfUrl(""); setAbstract(""); setAuthors("");
   };
@@ -1875,7 +1877,8 @@ function AddExternalDocument() {
       if (d.pdf_url) setPdfUrl(d.pdf_url);
       if (d.abstract) setAbstract(d.abstract);
       if (d.authors) setAuthors(d.authors);
-      setMessage({ type: "success", text: `Metadata fetched from ${d.source === "iris" ? "WHO IRIS" : "WHO website"}. Review and save.` });
+      setResolvedSourceUrl(resolveUrl.trim());
+      setMessage({ type: "success", text: `Metadata fetched from ${d.source === "iris" ? "WHO IRIS" : "WHO website"}. Review the source, then save.` });
     } catch (e: any) {
       setMessage({ type: "error", text: e.message || "Resolve failed" });
     } finally {
@@ -1979,6 +1982,37 @@ function AddExternalDocument() {
               Supports IRIS handles (via OAI-PMH, rich metadata) and WHO public pages (via citation meta tags).
               Fields below will be pre-populated — review before saving.
             </p>
+            {resolvedSourceUrl && (
+              <div className="flex items-center gap-2 pt-1 border-t border-[var(--border)]">
+                <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">Verify the document:</span>
+                <a
+                  href={resolvedSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-bold px-2.5 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-600 flex items-center gap-1 shrink-0"
+                  title="Open the source page in a new tab"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open source
+                </a>
+                {pdfUrl && pdfUrl !== resolvedSourceUrl && (
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-bold px-2.5 py-1 rounded bg-blue-700 text-white hover:bg-blue-600 flex items-center gap-1 shrink-0"
+                    title="Open the PDF in a new tab"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Open PDF
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -4,6 +4,19 @@
 
 ---
 
+## v2.39.3 — WHO auto-fill: source preview + robust date parsing (2026-04-22) — COMPLETATA
+
+- [x] `who_web.py` — `_normalize_date` ora gestisce `"20 April 2026"` / `"April 2026"` / `"April 20, 2026"` oltre ai formati ISO
+- [x] `who_web.py` — estrazione JSON-LD schema.org (`<script type="application/ld+json">`) tramite HTMLParser esteso; popola `datePublished` (via `_jsonld_date`) e preferisce `sameAs` IRIS bitstream come `pdf_url` (via `_jsonld_pdf`)
+- [x] Frontend `AddExternalDocument` — nuovo stato `resolvedSourceUrl`; dopo auto-fill il blocco Auto-fill mostra pulsanti "Open source" (emerald, URL originale in nuova tab) e "Open PDF" (blue, solo se diverso da source URL). Permette verifica visiva del documento prima di salvare
+- [x] Smoke test: URL WHO/Europe AI reshaping health → DATE=2026-04-20 ✓, PDF_URL=iris.who.int/server/api/core/bitstreams/... ✓
+
+**Motivazione:** Dopo v2.39.2 l'utente aveva segnalato due issue sul caso `www.who.int`: (a) nessun modo di verificare il documento prima di salvare, dovendo incollare l'URL in una nuova tab manualmente; (b) `publication_date` non popolato perché WHO non usa `citation_*` meta tag ma espone la data solo via JSON-LD (formato testuale "20 April 2026" che il parser esistente non gestiva). Entrambi risolti.
+
+**Limite residuo noto:** autori e abstract non popolati per `www.who.int` perché la pagina non li espone come meta tag né JSON-LD (è un CMS Sitefinity che rende il contenuto via JavaScript lato client). Questi campi restano editabili manualmente. Workaround migliore: usare l'URL IRIS corrispondente quando disponibile (metadati xoai sono sempre più ricchi).
+
+---
+
 ## v2.39.2 — WHO/IRIS auto-fill (OAI-PMH + page scraper) (2026-04-22) — COMPLETATA
 
 - [x] Client `backend/app/clients/iris_who.py` — OAI-PMH 2.0 GetRecord verso `https://iris.who.int/server/oai/request` con `metadataPrefix=xoai` (Lyncode XOAI, formato più ricco disponibile). Parser xoai che estrae title, authors, date.issued, description.abstract, type, publisher, subjects. Mapping `dc.type → paper_type` (Journal articles / Reports / Guidelines / Technical Documents / …). Filtra descrizioni tipo page-count (v, 17 p.) dall'abstract
