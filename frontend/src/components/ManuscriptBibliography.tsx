@@ -577,7 +577,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
       {refs.length > 0 && (
         <div className="space-y-2">
           {refs.map(ref => (
-            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border border-[var(--border)] transition-opacity ${ref.disabled ? "opacity-40" : ""} ${(filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k))) || (filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name))) ? "opacity-20" : ""}`}>
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border transition-opacity ${ref.disabled ? "opacity-75 border-red-800/40" : "border-[var(--border)]"} ${(filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k))) || (filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name))) ? "opacity-30" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}
@@ -670,7 +670,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   </button>
                   <button
                     onClick={() => deleteRef(ref.id)}
-                    className="text-[9px] text-red-400 hover:underline"
+                    className="text-[10px] px-2 py-0.5 rounded bg-red-700 text-white hover:bg-red-600 font-bold cursor-pointer transition-colors"
+                    title="Remove this reference from the manuscript (paper itself stays in DB)"
                   >
                     Remove
                   </button>
