@@ -664,13 +664,18 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                       });
                       mutate(apiUrl);
                     }}
-                    className={`text-[9px] hover:underline ${ref.disabled ? "text-emerald-400" : "text-amber-400"}`}
+                    className={`text-[10px] px-2 py-0.5 rounded font-semibold cursor-pointer transition-colors ${
+                      ref.disabled
+                        ? "bg-emerald-900/80 text-emerald-100 hover:bg-emerald-800"
+                        : "bg-amber-900/80 text-amber-100 hover:bg-amber-800"
+                    }`}
+                    title={ref.disabled ? "Re-enable this paper (removes the disabled flag)" : "Mark this paper as disabled"}
                   >
                     {ref.disabled ? "Enable" : "Disable"}
                   </button>
                   <button
                     onClick={() => deleteRef(ref.id)}
-                    className="text-[10px] px-2 py-0.5 rounded bg-red-700 text-white hover:bg-red-600 font-bold cursor-pointer transition-colors"
+                    className="text-[10px] px-2 py-0.5 rounded bg-red-900/80 text-red-100 hover:bg-red-800 font-semibold cursor-pointer transition-colors"
                     title="Remove this reference from the manuscript (paper itself stays in DB)"
                   >
                     Remove
