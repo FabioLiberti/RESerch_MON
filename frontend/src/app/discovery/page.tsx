@@ -1833,6 +1833,8 @@ function KeywordSuggestionsPanel({
 function AddExternalDocument() {
   const { isAdmin } = useAuth();
   const [expanded, setExpanded] = useState(false);
+  const [resolveUrl, setResolveUrl] = useState("");
+  const [resolving, setResolving] = useState(false);
   const [title, setTitle] = useState("");
   const [issuingOrg, setIssuingOrg] = useState("");
   const [paperType, setPaperType] = useState<string>("report");
@@ -1846,8 +1848,39 @@ function AddExternalDocument() {
   if (!isAdmin) return null;
 
   const reset = () => {
+    setResolveUrl("");
     setTitle(""); setIssuingOrg(""); setPaperType("report");
     setPublicationDate(""); setPdfUrl(""); setAbstract(""); setAuthors("");
+  };
+
+  const autoFetch = async () => {
+    if (!resolveUrl.trim()) return;
+    setResolving(true);
+    setMessage(null);
+    try {
+      const r = await fetch("/api/v1/papers/resolve-external", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ url: resolveUrl.trim() }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || "Resolve failed");
+      }
+      const d = await r.json();
+      if (d.title) setTitle(d.title);
+      if (d.issuing_organization) setIssuingOrg(d.issuing_organization);
+      if (d.paper_type) setPaperType(d.paper_type);
+      if (d.publication_date) setPublicationDate(d.publication_date);
+      if (d.pdf_url) setPdfUrl(d.pdf_url);
+      if (d.abstract) setAbstract(d.abstract);
+      if (d.authors) setAuthors(d.authors);
+      setMessage({ type: "success", text: `Metadata fetched from ${d.source === "iris" ? "WHO IRIS" : "WHO website"}. Review and save.` });
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Resolve failed" });
+    } finally {
+      setResolving(false);
+    }
   };
 
   const save = async () => {
@@ -1917,6 +1950,36 @@ function AddExternalDocument() {
             white papers, standards). The record is saved as a Paper with <code className="text-[var(--primary)]">paper_role=&quot;bibliography&quot;</code>{" "}
             and appears in the Papers menu alongside peer-reviewed literature.
           </p>
+
+          {/* Auto-fetch from URL */}
+          <div className="rounded-lg bg-[var(--secondary)]/50 border border-[var(--border)] p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.102m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <span className="text-xs font-bold">Auto-fill from WHO / IRIS URL</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={resolveUrl}
+                onChange={(e) => setResolveUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); autoFetch(); } }}
+                placeholder="https://iris.who.int/handle/10665/… · 10665/NNN · https://www.who.int/europe/publications/…"
+                className="flex-1 px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs focus:outline-none focus:border-[var(--primary)] font-mono"
+              />
+              <button
+                onClick={autoFetch}
+                disabled={!resolveUrl.trim() || resolving}
+                className="px-4 py-2 rounded-lg bg-blue-700 text-white text-xs font-bold hover:bg-blue-600 disabled:opacity-50 transition-colors shrink-0"
+              >
+                {resolving ? "Fetching…" : "Auto-fill"}
+              </button>
+            </div>
+            <p className="text-[10px] text-[var(--muted-foreground)]">
+              Supports IRIS handles (via OAI-PMH, rich metadata) and WHO public pages (via citation meta tags).
+              Fields below will be pre-populated — review before saving.
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">

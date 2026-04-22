@@ -1,8 +1,27 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.39.1 — External Document editable + visible in Papers list
-**Current Version:** v2.39.1
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Grey literature records are now editable from detail page (Edit button + pdf_url field) and visually distinct in `/papers` (colored badges + colored filter pills for REPORT/GUIDELINE/WHITE PAPER/STANDARD).
+**Current Phase:** v2.39.2 — WHO/IRIS auto-fill (OAI-PMH + page scraper)
+**Current Version:** v2.39.2
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Inserting WHO grey literature now supports auto-fill: paste an iris.who.int handle or a www.who.int publication URL, click "Auto-fill" → form populates (title, authors, date, organization, abstract, pdf_url, paper_type). Review + save in ~10 seconds.
+
+---
+
+### 2026-04-22 — Session: v2.39.2 WHO/IRIS auto-fill (OAI-PMH + HTML scraper)
+
+**Why:** Dopo v2.39.0/v2.39.1 il form "Add External Document" richiedeva 7 campi compilati a mano (title, issuing org, type, date, URL, authors, abstract). Per letteratura grigia WHO — che è la fonte più rilevante per il corpus EHDS/digital health del progetto — volevamo un "paste URL → done" del tutto analogo a Import-by-DOI per il peer-reviewed. Ma WHO non ha DOI e l'API REST di IRIS è chiusa (401/403). Le due strade aperte erano OAI-PMH (protocol di harvesting DSpace, confermato aperto su iris.who.int con 782 set disponibili, formato xoai ricco) e HTML meta-scraping delle pagine www.who.int (citation meta tag Google-Scholar-style). Abbiamo implementato entrambe.
+
+**What:**
+- `backend/app/clients/iris_who.py` — client OAI-PMH con `get_record(handle)`. Usa `metadataPrefix=xoai` (formato Lyncode più ricco di `oai_dc`). Parser XML (stdlib ET) che itera la struttura annidata xoai `<element name="dc"><element name="title"><element name="none"><field name="value">...`. Dedup automatica dei valori ripetuti. Mapping `dc.type → paper_type` (Journal articles/Technical Documents/Guidelines/Governing Bodies documents/Reports/Publications → journal_article/report/guideline/white_paper/standard). Heuristic abstract: preferisce `description.abstract` qualificato, fallback a `dc.description` escludendo stringhe tipo "v, 17 p." / "292" (page counts).
+- `backend/app/clients/who_web.py` — HTML scraper con `resolve(url)`. `HTMLParser` stdlib raccoglie tutti i `<meta name|property=... content=...>`. Legge `citation_title`, `citation_author` (multiplo), `citation_publication_date`, `citation_pdf_url`, `citation_publisher`, `og:description`. Euristica issuing org da path URL (/europe/ → WHO Regional Office for Europe, etc.). Heuristic paper_type=guideline quando "Guideline" nel titolo.
+- Endpoint `POST /papers/resolve-external` in `api/papers.py` — pydantic `ResolveExternalRequest {url}`. Dispatcher: URL iris.who.int o bare 10665/NNN → IrisWhoClient; URL www.who.int → WhoWebClient; altrimenti 400. Ritorna dict normalizzato (`{source, title, issuing_organization, paper_type, publication_date, pdf_url, abstract, authors, keywords, external_ids}`).
+- Frontend `/discovery` — blocco "Auto-fill from WHO / IRIS URL" in cima al form AddExternalDocument. Input full-width + pulsante "Auto-fill". Enter key attiva fetch. Tooltip esplicativo. Dopo fetch i 7 campi si pre-popolano, l'utente può correggere e salvare normalmente con il bottone "Save Document" già esistente.
+
+**Smoke test effettuati localmente contro IRIS produzione:**
+- `10665/52481` (Diagana 1989, Journal articles) → type=journal_article ✓, date=1989-12-31 ✓, 1 autore ✓, keywords=[Marriage, Women, Education for Health] ✓
+- `10665/378307` (EMT Türkiye earthquake 2024, Technical Documents) → type=report ✓, date=2024-08-02 ✓, full abstract 1400+ caratteri ✓, keywords=[Disaster Medicine, Disaster Planning, …] ✓, journal="World Health Organization. Regional Office for Europe" ✓
+- `10665/325375` (Calleja Malta 2016, Journal articles) — scoperta: dc.description conteneva "292" e "301" (page numbers). Fix euristico aggiunto: lunghezza >80 chars + no pagination pattern. Re-test OK.
+
+**Non in scope (rimandato):** harvest automatico (`ListRecords` + cron) non implementato. Aggiunto in roadmap come Phase 2 — valuterò dopo qualche settimana di uso se il volume giustifica l'investimento. Codice del client OAI è già strutturato in modo estensibile (basta aggiungere il metodo `list_records`).
 
 ---
 

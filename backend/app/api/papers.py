@@ -807,6 +807,71 @@ class CreateExternalDocumentRequest(BaseModel):
     authors: str | None = None                 # comma-separated names
 
 
+class ResolveExternalRequest(BaseModel):
+    url: str
+
+
+@router.post("/resolve-external")
+async def resolve_external_document(body: ResolveExternalRequest):
+    """Resolve a WHO/IRIS document URL (or bare handle) into pre-filled metadata.
+
+    Dispatches to:
+      - IrisWhoClient (OAI-PMH) for iris.who.int URLs and bare `10665/NNN` handles
+      - WhoWebClient (HTML meta tags) for www.who.int publication pages
+
+    Returns a payload matching the shape of CreateExternalDocumentRequest so the
+    frontend "Add External Document" form can auto-populate.
+    """
+    import re as _re
+    from app.clients.iris_who import IrisWhoClient, extract_handle
+    from app.clients.who_web import WhoWebClient, WHO_HOST_RE
+
+    url = (body.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    result = None
+    source_kind = None
+
+    iris_handle = extract_handle(url) if ("iris.who.int" in url.lower() or _re.match(r"^10665/\d+$", url)) else None
+
+    if iris_handle:
+        client = IrisWhoClient()
+        try:
+            result = await client.get_record(iris_handle)
+        finally:
+            await client.close()
+        source_kind = "iris"
+    elif WHO_HOST_RE.search(url):
+        client = WhoWebClient()
+        try:
+            result = await client.resolve(url)
+        finally:
+            await client.close()
+        source_kind = "who_web"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported URL. Provide an iris.who.int handle URL, a bare 10665/NNN handle, or a www.who.int publication page.",
+        )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Could not resolve metadata from {source_kind}")
+
+    return {
+        "source": source_kind,
+        "title": result.title,
+        "abstract": result.abstract,
+        "issuing_organization": result.journal,
+        "paper_type": result.paper_type,
+        "publication_date": result.publication_date,
+        "pdf_url": result.pdf_url,
+        "authors": ", ".join(a["name"] for a in result.authors if a.get("name")),
+        "keywords": result.keywords,
+        "external_ids": result.external_ids,
+    }
+
+
 @router.post("/external-document")
 async def create_external_document(
     body: CreateExternalDocumentRequest,

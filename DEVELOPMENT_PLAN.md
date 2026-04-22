@@ -4,6 +4,20 @@
 
 ---
 
+## v2.39.2 — WHO/IRIS auto-fill (OAI-PMH + page scraper) (2026-04-22) — COMPLETATA
+
+- [x] Client `backend/app/clients/iris_who.py` — OAI-PMH 2.0 GetRecord verso `https://iris.who.int/server/oai/request` con `metadataPrefix=xoai` (Lyncode XOAI, formato più ricco disponibile). Parser xoai che estrae title, authors, date.issued, description.abstract, type, publisher, subjects. Mapping `dc.type → paper_type` (Journal articles / Reports / Guidelines / Technical Documents / …). Filtra descrizioni tipo page-count (v, 17 p.) dall'abstract
+- [x] Client `backend/app/clients/who_web.py` — scraper HTML per `www.who.int/**/publications/**`. Estrae Google Scholar citation meta tags (`citation_title`, `citation_author`, `citation_pdf_url`, `citation_publication_date`) + Open Graph fallback. Euristica regione-da-URL per issuing organization. Heuristic paper_type=guideline se "Guideline" nel titolo
+- [x] Endpoint `POST /papers/resolve-external` — dispatch basato su URL (iris.who.int → OAI, www.who.int → HTML scraper, bare handle 10665/NNN → OAI). Ritorna JSON compatibile con `CreateExternalDocumentRequest`
+- [x] Frontend `/discovery` — componente `AddExternalDocument` esteso con blocco "Auto-fill from WHO / IRIS URL" sopra ai campi manuali. Enter key attiva fetch. Review manuale prima di save
+- [x] Smoke test: 3 record IRIS reali (10665/52481, 10665/378307 EMT Türkiye, 10665/325375 Malta) — abstract, authors, date, paper_type corretti
+
+**Motivazione:** workflow di inserimento manuale "Add External Document" (v2.39.0) richiedeva 7 campi a mano. Con auto-fill: incolla URL → 1 click → form popolato → review + save. Riduce tempo di inserimento da ~2min a ~10sec. Copre sia i documenti in IRIS (repository istituzionale) sia quelli sul sito pubblico WHO (www.who.int/publications/).
+
+**Not in scope di questa release:** Phase 2 (harvest automatico via ListRecords + cron giornaliero) rimandata — si valuta dopo qualche settimana di uso di v2.39.2 per capire volumi e rilevanza.
+
+---
+
 ## v2.39.1 — External Document: editable + visible in Papers (2026-04-22) — COMPLETATA
 
 - [x] Backend: `UpdatePaperMetadataRequest` accetta `pdf_url`; `PUT /papers/{id}/metadata` lo salva
