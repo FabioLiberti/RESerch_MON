@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.3 — Smart Search IRIS: precision threshold + shorter cache
-**Current Version:** v2.40.3
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Smart Search IRIS now requires a record to match >= 60% of query tokens before ranking (excludes false positives on generic terms like "health" / "data"). Cache TTL reduced to 30min to minimize stale records from IRIS transient deletions. "European Health Data Space" returns top results that are actually EHDS/AI-in-health aligned.
+**Current Phase:** v2.40.4 — Smart Search: persist expanded state across refresh
+**Current Version:** v2.40.4
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — After refresh, Smart Search section auto-expands when there are results, making the Clear button (and full result list) visible without needing to re-click the section header. Fixes the apparent inconsistency reported by user.
 
 ---
 

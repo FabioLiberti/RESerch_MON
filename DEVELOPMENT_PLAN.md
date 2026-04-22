@@ -4,6 +4,17 @@
 
 ---
 
+## v2.40.4 — Smart Search: persist expanded state across refresh (2026-04-22) — COMPLETATA
+
+- [x] `smartExpanded` ora idratato da `localStorage.getItem("smart-search-expanded")` al mount
+- [x] `useEffect` persiste `smartExpanded` in localStorage ad ogni cambio
+- [x] `useEffect` auto-espande la sezione quando `results` è non-vuoto (anche dopo refresh quando SWR ri-idrata dal job id)
+- [x] `newSearch()` rimuove anche `smart-search-expanded` dal localStorage per coerenza
+
+**Motivazione:** user ha segnalato che dopo refresh il pulsante "Clear results & new search" scompariva pur rimanendo visibile il conteggio "(1 results)" nell'header. Diagnosi: tutta la UI Smart Search è wrappata da `{smartExpanded && ...}` e lo state `smartExpanded` era non-persistito (default false ad ogni mount). Al refresh la sezione si collassava; `results` veniva rihidratato da SWR via il jobId salvato, mostrando il conteggio nell'header ma nascondendo tutto il contenuto interno (inclusi i risultati e il pulsante Clear). Fix: persistenza + auto-expand se ci sono risultati.
+
+---
+
 ## v2.40.3 — Smart Search IRIS: precision threshold + shorter cache (2026-04-22) — COMPLETATA
 
 - [x] `_score_record` ora richiede token-coverage >= 60% prima di scorare (via `MIN_TOKEN_COVERAGE`). Impedisce che record con match solo su token generici ("data" + "health" da soli) siano ranked top per query specifiche multi-token ("European Health Data Space" = 4 token)

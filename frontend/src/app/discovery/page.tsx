@@ -1073,11 +1073,27 @@ function SmartSearchSection() {
     localStorage.removeItem("smart-search-keywords");
     localStorage.removeItem("smart-search-mode");
     localStorage.removeItem("smart-search-start");
+    localStorage.removeItem("smart-search-expanded");
     setSearchMode("keywords");
   };
 
   const [showInfo, setShowInfo] = useState(false);
-  const [smartExpanded, setSmartExpanded] = useState(false);
+  const [smartExpanded, setSmartExpanded] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    // Persist expansion state so a page refresh with existing results keeps them visible
+    // (incl. the "Clear results & new search" button, which lives inside the expanded block)
+    return localStorage.getItem("smart-search-expanded") === "true";
+  });
+
+  // Persist expansion state + auto-expand whenever results exist (after search completes OR
+  // after SWR re-hydrates an existing job on refresh)
+  useEffect(() => {
+    if (results && results.length > 0) setSmartExpanded(true);
+  }, [results]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("smart-search-expanded", smartExpanded ? "true" : "false");
+  }, [smartExpanded]);
   // Apply filters and sorting to results
   const filteredResults = results?.filter(r => {
     if (filterYearFrom || filterYearTo) {
