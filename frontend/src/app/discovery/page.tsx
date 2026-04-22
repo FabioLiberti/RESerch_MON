@@ -1567,7 +1567,7 @@ function SmartSearchSection() {
                             .then((blob) => { const url = URL.createObjectURL(blob); window.open(url, "_blank"); })
                             .catch((err) => console.error("Open local PDF failed:", err));
                         }}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors inline-flex items-center gap-0.5 font-semibold"
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors inline-flex items-center gap-0.5 font-semibold cursor-pointer"
                         title="Open local PDF (attached in DB)"
                       >
                         PDF
