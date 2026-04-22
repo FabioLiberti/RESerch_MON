@@ -666,8 +666,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                     }}
                     className={`text-[10px] px-2 py-0.5 rounded font-semibold cursor-pointer transition-colors ${
                       ref.disabled
-                        ? "bg-emerald-900/80 text-emerald-100 hover:bg-emerald-800"
-                        : "bg-amber-900/80 text-amber-100 hover:bg-amber-800"
+                        ? "bg-green-700/90 text-white hover:bg-green-600"
+                        : "bg-yellow-700/90 text-white hover:bg-yellow-600"
                     }`}
                     title={ref.disabled ? "Re-enable this paper (removes the disabled flag)" : "Mark this paper as disabled"}
                   >
