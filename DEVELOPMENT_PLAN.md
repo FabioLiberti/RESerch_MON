@@ -4,6 +4,22 @@
 
 ---
 
+## v2.40.9 — Smart Search: PDF badge on already_in_db results (2026-04-22) — COMPLETATA
+
+- [x] `smart_search.py::_run_smart_search` — quando `existing` (paper DB match), il risultato include `has_pdf: bool(existing.pdf_local_path)`
+- [x] `SmartResult` TS interface — nuovo campo opzionale `has_pdf?: boolean`
+- [x] Frontend — nuovo badge rosso "PDF" accanto al badge DB, visibile quando `r.already_in_db && r.has_pdf` (stessa palette del badge PDF già usato nella lista Papers-per-source)
+
+**Motivazione:** user ha osservato incoerenza di informazione: un paper trovato da Smart Search e già in DB con PDF locale caricato non mostrava questa informazione (solo "DB" badge), mentre altri paper in altre liste del framework mostrano il badge "PDF" rosso. Ora coerente.
+
+---
+
+## v2.40.8 — Smart Search: Clear button restyled like "Select all new" (2026-04-22) — COMPLETATA
+
+- [x] Clear & new search button: stessa grafica di "Select all new" (`text-xs px-2.5 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)]`) per coerenza visiva
+
+---
+
 ## v2.40.7 — Smart Search UX + dedup whitespace fix (2026-04-22) — COMPLETATA
 
 - [x] `discovery/page.tsx` — rimosso pulsante "Clear & new" dall'header Smart Search (era troppo prominente, colorato ambra). Aggiunto invece un link "Clear & new search" discreto (stile muted-foreground) in cima alla sezione ESPANSA, visibile solo quando c'è stato persistito (`results || jobId || keywords`). Non compare quando la sezione è collassata

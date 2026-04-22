@@ -861,6 +861,7 @@ interface SmartResult {
   external_ids: Record<string, string>;
   already_in_db: boolean;
   db_paper_id: number | null;
+  has_pdf?: boolean;
 }
 
 /** Compute the canonical "source" URL (page where the document lives) for a result. */
@@ -1555,6 +1556,11 @@ function SmartSearchSection() {
                     {r.already_in_db && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900 text-sky-100 font-semibold">
                         DB
+                      </span>
+                    )}
+                    {r.already_in_db && r.has_pdf && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400" title="A local PDF is attached to this paper in the DB">
+                        PDF
                       </span>
                     )}
                     {r.open_access && !r.already_in_db && (

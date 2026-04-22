@@ -172,6 +172,8 @@ async def _run_smart_search(job_id: int):
                     "external_ids": raw.external_ids or {},
                     "already_in_db": already,
                     "db_paper_id": existing.id if existing else None,
+                    # True when the DB paper has a local PDF file attached
+                    "has_pdf": bool(existing.pdf_local_path) if existing else False,
                 })
 
             job.results = items

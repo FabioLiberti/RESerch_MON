@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.7 — Smart Search UX + dedup whitespace fix
-**Current Version:** v2.40.7
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Clear button moved inside expanded Smart Search section with subtle muted styling. Deduplication now correctly matches titles with irregular whitespace (LIKE pattern uses wildcards between words). Paper #22266 now correctly flagged as "already_in_db" when re-found via IRIS Smart Search.
+**Current Phase:** v2.40.9 — Smart Search: PDF badge on already_in_db results
+**Current Version:** v2.40.9
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Smart Search results now show a "PDF" badge (red) on papers already in DB that have a local PDF file attached, consistent with other paper lists in the framework.
 
 ---
 
