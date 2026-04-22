@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.5 — Smart Search: always-visible Clear & new button
-**Current Version:** v2.40.5
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — "Clear & new" button now in Smart Search header, always visible when state exists (results or cached job or keywords). Works even when section collapsed. End-to-end backend test confirms 9 results for "european health data space".
+**Current Phase:** v2.40.6 — Smart Search: no-store cache headers end-to-end
+**Current Version:** v2.40.6
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Backend now sets Cache-Control: no-store on smart-search responses; frontend adds cache:'no-store' to all smart-search fetch calls. Defensive fix against stale browser/intermediate caching of job status responses.
 
 ---
 

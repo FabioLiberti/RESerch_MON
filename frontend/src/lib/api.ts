@@ -60,12 +60,15 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/** SWR-compatible fetcher that includes auth headers with auto-refresh. */
+/** SWR-compatible fetcher that includes auth headers with auto-refresh.
+ * cache:'no-store' prevents the browser/intermediaries from serving stale API
+ * responses — critical for endpoints that return mutable job state.
+ */
 export async function authFetcher(url: string) {
   const token = typeof window !== "undefined" ? localStorage.getItem("fl-token") : null;
   if (!token) return Promise.reject(new Error("No token"));
 
-  let res = await fetch(url, { headers: getAuthHeaders() });
+  let res = await fetch(url, { headers: getAuthHeaders(), cache: "no-store" });
 
   // Auto-refresh on 401
   if (res.status === 401 && typeof window !== "undefined") {
@@ -75,6 +78,7 @@ export async function authFetcher(url: string) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: "no-store",
       });
 
       if (refreshRes.ok) {
@@ -83,6 +87,7 @@ export async function authFetcher(url: string) {
         // Retry with new token
         res = await fetch(url, {
           headers: { ...getAuthHeaders(), Authorization: `Bearer ${data.access_token}` },
+          cache: "no-store",
         });
       } else {
         localStorage.removeItem("fl-token");
@@ -186,6 +191,7 @@ export const api = {
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
       signal: AbortSignal.timeout(120000), // 2 min timeout for inline execution
+      cache: "no-store",
     }).then((r) => {
       if (!r.ok) throw new Error(`API Error: ${r.status}`);
       return r.json();

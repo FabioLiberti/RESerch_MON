@@ -4,10 +4,14 @@ import json
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Smart Search responses must never be cached by browsers / intermediaries:
+# a stale cached response would hide fresh results from a new search.
+_NO_STORE = {"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"}
 
 from app.database import get_db, async_session
 from app.models.analysis import SmartSearchJob
@@ -192,10 +196,13 @@ async def _run_smart_search(job_id: int):
 @router.post("/search")
 async def start_search(
     body: SearchRequest,
+    response: Response,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Start a Smart Search job. Runs inline and returns when done."""
+    for k, v in _NO_STORE.items():
+        response.headers[k] = v
     if not body.keywords:
         raise HTTPException(status_code=400, detail="No keywords provided")
 
@@ -222,15 +229,18 @@ async def start_search(
 @router.get("/status/{job_id}")
 async def get_job_status(
     job_id: int,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Poll the status of a Smart Search job."""
+    for k, v in _NO_STORE.items():
+        response.headers[k] = v
     job = await db.get(SmartSearchJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    response = {
+    result = {
         "job_id": job.id,
         "status": job.status,
         "keywords": job.keywords,
@@ -245,10 +255,10 @@ async def get_job_status(
 
     # Include results only when done
     if job.status == "done":
-        response["results"] = job.results
-        response["queries_used"] = job.queries_used
+        result["results"] = job.results
+        result["queries_used"] = job.queries_used
 
-    return response
+    return result
 
 
 @router.get("/recent")

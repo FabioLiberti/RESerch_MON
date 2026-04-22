@@ -4,6 +4,18 @@
 
 ---
 
+## v2.40.6 — Smart Search: no-store cache headers end-to-end (2026-04-22) — COMPLETATA
+
+- [x] Backend `smart_search.py`: endpoint `POST /search` e `GET /status/{id}` ora settano `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` + `Pragma: no-cache` via `Response` header injection
+- [x] Frontend `api.ts::smartSearch` (POST): aggiunto `cache: "no-store"` al fetch
+- [x] Frontend `api.ts::authFetcher` (usato da SWR per GET status/recent): aggiunto `cache: "no-store"` a tutte le chiamate (include token refresh)
+
+**Motivazione:** user ha segnalato che dopo deploy v2.40.3 (multi-window fix verificato funzionante via test end-to-end nel container prod: 9 risultati per "european health data space"), il client Chrome continuava a restituire 1 risultato stale — stesso identico a prima dei fix. Evidenza di caching intermedio (browser HTTP cache o service worker). Difensivo: forzare `no-store` su entrambe le sponde impedisce qualsiasi caching layer di interporsi tra richiesta e risposta. Primo fetch sarà sempre fresco.
+
+**Note di sviluppo:** rinominato variabile locale `response` (dict dei dati) in `result` dentro `get_job_status` per non collidere con il parametro FastAPI `response: Response` usato per settare gli header.
+
+---
+
 ## v2.40.5 — Smart Search: always-visible "Clear & new" button (2026-04-22) — COMPLETATA
 
 - [x] Nuovo pulsante "Clear & new" (amber) nell'header della sezione Smart Search, sempre visibile quando `results !== null || jobId !== null || keywords.length > 0`
