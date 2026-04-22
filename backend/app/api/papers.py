@@ -911,6 +911,20 @@ async def create_external_document(
     db.add(paper)
     await db.flush()
 
+    # Attach a PaperSource so the document shows a source badge in lists (Dashboard
+    # Recent Papers, /papers list, ...). Infer source from the pdf_url/origin URL:
+    #   iris.who.int  → iris_who       (OAI-PMH auto-fill was used)
+    #   who.int       → who_web        (public WHO website scrape)
+    #   anything else → external_document  (pure manual entry)
+    origin_url = (body.pdf_url or "").lower()
+    if "iris.who.int" in origin_url:
+        source_name = "iris_who"
+    elif "who.int" in origin_url:
+        source_name = "who_web"
+    else:
+        source_name = "external_document"
+    db.add(PaperSource(paper_id=paper.id, source_name=source_name, source_id=body.pdf_url))
+
     if body.authors:
         for i, name in enumerate(body.authors.split(",")):
             name = name.strip()

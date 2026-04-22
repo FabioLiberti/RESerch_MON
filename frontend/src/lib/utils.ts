@@ -29,6 +29,8 @@ export const SOURCE_COLORS: Record<string, string> = {
   elsevier: "#ec4899",
   compendium: "#a855f7",
   iris_who: "#0ea5e9",
+  who_web: "#0ea5e9",
+  external_document: "#64748b",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -41,4 +43,6 @@ export const SOURCE_LABELS: Record<string, string> = {
   elsevier: "Elsevier (Scopus)",
   compendium: "Compendium",
   iris_who: "WHO IRIS",
+  who_web: "WHO",
+  external_document: "External",
 };
