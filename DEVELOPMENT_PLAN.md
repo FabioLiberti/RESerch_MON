@@ -4,6 +4,25 @@
 
 ---
 
+## v2.40.14 — IRIS as opt-in Discovery cron source (2026-04-22) — COMPLETATA
+
+- [x] `DiscoveryService.clients` registra anche `IrisWhoClient` (come gli altri 6 source)
+- [x] Nuovo concetto `_opt_in_sources = {"iris_who"}` — source che devono avere una `source_queries` dedicata nel topic, altrimenti vengono SKIPPATI (no fallback generico a keywords, eviterebbe il rumore)
+- [x] Topic #3 "European Health Data Space" aggiornato via DB: `source_queries["iris_who"] = "European Health Data Space"` (stessa query testata via Smart Search → 9 match utili)
+- [x] Discovery cron giornaliero alle 06:00 UTC ora include IRIS **solo per il topic EHDS**
+- [x] Topic #1/#2 (Federated Learning, FL Healthcare) continuano senza IRIS — probe locale ha mostrato 0 match rilevanti per questi topic (IRIS non pubblica FL/ML paper)
+- [x] Paper nuovi importati via cron avranno automaticamente badge "WHO IRIS" (PaperSource attaccato dalla pipeline esistente)
+
+**Motivazione:** dopo la validazione utente di Smart Search IRIS sul topic EHDS (9 risultati rilevanti, incluso match corretto con #22266), l'infrastruttura è pronta per l'automazione. Approccio opt-in per topic (non globale): IRIS fa senso solo dove il catalogo WHO ha materiale rilevante — al momento solo il topic EHDS. Altri topic possono essere attivati in futuro aggiungendo `source_queries["iris_who"]`.
+
+**Safety:**
+- IRIS non si attiva su topic che non ne hanno esplicita richiesta (skip logic)
+- TopicClassifier filtra comunque off-topic prima dell'insert
+- Dedup per handle + find_existing_paper impediscono duplicati
+- CACHE_TTL 30min + MIN_TOKEN_COVERAGE 0.6 garantiscono precision + efficienza
+
+---
+
 ## v2.40.9 — Smart Search: PDF badge on already_in_db results (2026-04-22) — COMPLETATA
 
 - [x] `smart_search.py::_run_smart_search` — quando `existing` (paper DB match), il risultato include `has_pdf: bool(existing.pdf_local_path)`

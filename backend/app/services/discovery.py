@@ -10,6 +10,7 @@ from app.clients.arxiv import ArXivClient
 from app.clients.biorxiv import BioRxivClient
 from app.clients.elsevier import ElsevierClient
 from app.clients.ieee import IEEEXploreClient
+from app.clients.iris_who import IrisWhoClient
 from app.clients.pubmed import PubMedClient
 from app.clients.semantic_scholar import SemanticScholarClient
 from app.clients.base import RawPaperResult
@@ -40,7 +41,14 @@ class DiscoveryService:
             "biorxiv": BioRxivClient(),
             "ieee": IEEEXploreClient(),
             "elsevier": ElsevierClient(),
+            "iris_who": IrisWhoClient(),
         }
+        # Sources that must be explicitly opted-in per topic via
+        # `topic.source_queries[source_name]`. For these we SKIP when the
+        # topic has no entry, rather than falling back to generic keywords
+        # (which would flood with irrelevant content, e.g. IRIS has no FL/ML
+        # papers but the keyword fallback would still run a harvest).
+        self._opt_in_sources = {"iris_who"}
 
     async def close(self):
         for client in self.clients.values():
@@ -73,6 +81,13 @@ class DiscoveryService:
             client = self.clients[source_name]
             query = topic.source_queries.get(source_name, "")
             if not query:
+                # Opt-in sources (e.g. iris_who): skip entirely when the topic
+                # has no dedicated query — avoids noise from generic fallback.
+                if source_name in self._opt_in_sources:
+                    logger.debug(
+                        f"Skipping {source_name} for topic '{topic.name}' (no source_queries entry)"
+                    )
+                    continue
                 # Fallback to keywords
                 query = " ".join(topic.keywords[:3]) if topic.keywords else topic.name
 

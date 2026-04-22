@@ -1,8 +1,8 @@
 # FL-RESEARCH-MONITOR — Progress Tracker
 
-**Current Phase:** v2.40.9 — Smart Search: PDF badge on already_in_db results
-**Current Version:** v2.40.9
-**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — Smart Search results now show a "PDF" badge (red) on papers already in DB that have a local PDF file attached, consistent with other paper lists in the framework.
+**Current Phase:** v2.40.14 — IRIS as opt-in Discovery cron source
+**Current Version:** v2.40.14
+**Status:** Framework LIVE at **https://resmon.fabioliberti.com** — WHO IRIS now integrated in the daily discovery cron (06:00 UTC) as an opt-in source, activated for Topic #3 "European Health Data Space". Other topics unaffected (opt-in by `source_queries["iris_who"]` entry). Infrastructure from previous versions provides safety nets (dedup, topic classification, coverage threshold).
 
 ---
 
