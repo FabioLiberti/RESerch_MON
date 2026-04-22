@@ -1149,7 +1149,7 @@ function SmartSearchSection() {
           <div className="flex justify-end">
             <button
               onClick={newSearch}
-              className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              className="text-xs px-2.5 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] transition-colors"
               title="Clear current search state and start a new search"
             >
               Clear &amp; new search
