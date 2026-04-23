@@ -26,11 +26,13 @@ class AddReferenceRequest(BaseModel):
     cited_paper_id: int
     context: str | None = None
     note: str | None = None
+    citations_map: str | None = None
 
 
 class UpdateReferenceRequest(BaseModel):
     context: str | None = None
     note: str | None = None
+    citations_map: str | None = None
 
 
 CONTEXT_LABELS = {
@@ -346,6 +348,7 @@ async def list_references(
                 "context": ref.PaperReference.context,
                 "context_label": CONTEXT_LABELS.get(ref.PaperReference.context, ref.PaperReference.context),
                 "note": ref.PaperReference.note,
+                "citations_map": ref.PaperReference.citations_map,
             }
             for ref in refs
         ],
@@ -639,6 +642,7 @@ async def list_cited_by(
                 "manuscript_role": ref.paper_role,
                 "context": ref.PaperReference.context,
                 "note": ref.PaperReference.note,
+                "citations_map": ref.PaperReference.citations_map,
             }
             for ref in refs
         ],
@@ -712,6 +716,7 @@ async def add_reference(
         cited_paper_id=body.cited_paper_id,
         context=body.context,
         note=body.note,
+        citations_map=body.citations_map,
     )
     db.add(ref)
     await db.flush()
@@ -727,7 +732,7 @@ async def update_reference(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update context or note of a reference."""
+    """Update context, note or citations_map of a reference."""
     ref = await db.get(PaperReference, ref_id)
     if not ref:
         raise HTTPException(status_code=404, detail="Reference not found")
@@ -735,8 +740,15 @@ async def update_reference(
         ref.context = body.context
     if body.note is not None:
         ref.note = body.note
+    if body.citations_map is not None:
+        ref.citations_map = body.citations_map
     await db.commit()
-    return {"id": ref.id, "context": ref.context, "note": ref.note}
+    return {
+        "id": ref.id,
+        "context": ref.context,
+        "note": ref.note,
+        "citations_map": ref.citations_map,
+    }
 
 
 @router.delete("/ref/{ref_id}")

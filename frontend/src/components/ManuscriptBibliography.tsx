@@ -21,6 +21,7 @@ interface Reference {
   context: string | null;
   context_label: string | null;
   note: string | null;
+  citations_map: string | null;
 }
 
 interface RefsResponse {
@@ -63,6 +64,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
   const [addNote, setAddNote] = useState("");
 
   const [editingNote, setEditingNote] = useState<Record<number, string>>({});
+  const [editingCitationsMap, setEditingCitationsMap] = useState<Record<number, string>>({});
 
   // Import from label
   const [showLabelImport, setShowLabelImport] = useState(false);
@@ -622,18 +624,32 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   {ref.doi && <span className="text-[10px] text-[var(--muted-foreground)]">DOI: {ref.doi}</span>}
                   {ref.journal && <span className="text-[10px] text-[var(--muted-foreground)] italic">{ref.journal}</span>}
                 </div>
-                {/* Editable note — admin only */}
+                {/* Editable note — admin only (private working note) */}
                 {isAdmin ? (
                   <input
                     type="text"
                     value={editingNote[ref.id] ?? ref.note ?? ""}
                     onChange={e => setEditingNote(prev => ({ ...prev, [ref.id]: e.target.value }))}
                     onBlur={e => updateRef(ref.id, { note: e.target.value || null })}
-                    placeholder="Add note..."
+                    placeholder="Add private note..."
                     className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none mt-1"
                   />
                 ) : ref.note ? (
                   <p className="text-[10px] text-[var(--muted-foreground)] mt-1 italic">{ref.note}</p>
+                ) : null}
+                {/* Editable citations map — admin only. Surfaced on the cited paper's "Cited by" card. */}
+                {isAdmin ? (
+                  <input
+                    type="text"
+                    value={editingCitationsMap[ref.id] ?? ref.citations_map ?? ""}
+                    onChange={e => setEditingCitationsMap(prev => ({ ...prev, [ref.id]: e.target.value }))}
+                    onBlur={e => updateRef(ref.id, { citations_map: e.target.value || null })}
+                    placeholder="Citations map (e.g. §2.1 P1 — theme)…"
+                    className="w-full px-2 py-1 rounded bg-[var(--card)] border border-indigo-500/30 text-[10px] text-indigo-300 focus:outline-none mt-1"
+                    title="Where in the manuscript this paper is cited (visible on the cited paper's page)"
+                  />
+                ) : ref.citations_map ? (
+                  <p className="text-[10px] text-indigo-400 mt-1">{ref.citations_map}</p>
                 ) : null}
                 {/* Collapsible keywords + labels */}
                 {(ref.keywords.length > 0 || ref.labels.length > 0) && (
