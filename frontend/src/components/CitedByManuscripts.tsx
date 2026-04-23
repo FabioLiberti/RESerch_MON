@@ -10,6 +10,7 @@ interface CitedByItem {
   manuscript_role: string;
   context: string | null;
   note: string | null;
+  citations_map: string | null;
 }
 
 interface CitedByResponse {
@@ -40,19 +41,24 @@ export default function CitedByManuscripts({ paperId }: { paperId: number }) {
       <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
         Cited by my manuscripts ({data.cited_by.length})
       </h3>
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {data.cited_by.map(item => (
-          <div key={item.manuscript_id} className="flex items-start gap-2">
-            <Link
-              href={`/papers/${item.manuscript_id}`}
-              className="text-sm hover:text-[var(--primary)] line-clamp-1 flex-1"
-            >
-              {item.manuscript_title}
-            </Link>
-            {item.context && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold shrink-0 ${CONTEXT_COLORS[item.context] || "bg-gray-600"}`}>
-                {item.context}
-              </span>
+          <div key={item.manuscript_id} className="space-y-0.5">
+            <div className="flex items-start gap-2">
+              <Link
+                href={`/papers/${item.manuscript_id}`}
+                className="text-sm hover:text-[var(--primary)] line-clamp-1 flex-1"
+              >
+                {item.manuscript_title}
+              </Link>
+              {item.context && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold shrink-0 ${CONTEXT_COLORS[item.context] || "bg-gray-600"}`}>
+                  {item.context}
+                </span>
+              )}
+            </div>
+            {item.citations_map && (
+              <p className="text-[11px] text-indigo-400 whitespace-pre-wrap">{item.citations_map}</p>
             )}
           </div>
         ))}

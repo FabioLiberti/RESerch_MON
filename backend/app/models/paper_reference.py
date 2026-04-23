@@ -25,7 +25,13 @@ class PaperReference(Base):
     # Where in the manuscript this paper is cited
     context = Column(String(50), nullable=True)  # related_work | methodology | comparison | results | discussion | introduction | other
 
-    # Free-text note about why this paper is cited
+    # Free-text note about why this paper is cited (private working notes)
     note = Column(Text, nullable=True)  # e.g. "Used as baseline in Table 3"
+
+    # Public citations map: where in the manuscript (which section / paragraph)
+    # the cited paper is referenced. Surfaced in the paper detail "Cited by" card
+    # so it's visible both on the manuscript bibliography and on the cited paper page.
+    # Format suggestion: "§X.Y P<n> — <short theme>" or multi-line free text.
+    citations_map = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
