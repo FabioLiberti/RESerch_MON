@@ -209,6 +209,22 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     }
   };
 
+  const exportHarvard = async () => {
+    // Server-side Harvard plain-text: ready to paste into Word/Google Docs
+    // templates (IFKAD-compatible). Alphabetically sorted by author surname.
+    try {
+      const r = await fetch(`/api/v1/paper-references/${paperId}/harvard`, {
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const content = await r.text();
+      downloadFile(content, `bibliography_${paperId}_harvard.txt`, "text/plain");
+    } catch (e) {
+      console.error("Harvard export failed:", e);
+      alert("Harvard export failed — check console.");
+    }
+  };
+
   const exportCsv = () => {
     const header = "No,Title,Journal,Year,DOI,Context,Note,Disabled,Rating";
     const rows = (data?.references || []).map((ref, i) =>
@@ -291,6 +307,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
             <>
               <ExportMenu
                 onExportBibtex={exportBibtex}
+                onExportHarvard={exportHarvard}
                 onExportTxt={exportTxt}
                 onExportCsv={exportCsv}
               />
@@ -709,10 +726,12 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
 // ------------------------------------------------------------------
 function ExportMenu({
   onExportBibtex,
+  onExportHarvard,
   onExportTxt,
   onExportCsv,
 }: {
   onExportBibtex: () => void | Promise<void>;
+  onExportHarvard: () => void | Promise<void>;
   onExportTxt: () => void;
   onExportCsv: () => void;
 }) {
@@ -736,6 +755,7 @@ function ExportMenu({
 
   const options: { key: string; label: string; desc: string; onClick: () => void | Promise<void> }[] = [
     { key: "bib", label: "BibTeX (.bib)", desc: "LaTeX / Overleaf — Harvard-ready", onClick: onExportBibtex },
+    { key: "harvard", label: "Harvard (.txt)", desc: "Ready to paste in Word — IFKAD style", onClick: onExportHarvard },
     { key: "txt", label: "Plain text (.txt)", desc: "Numbered list", onClick: onExportTxt },
     { key: "csv", label: "Spreadsheet (.csv)", desc: "Tabular view", onClick: onExportCsv },
   ];

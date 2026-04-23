@@ -170,6 +170,135 @@ def _build_bibtex_entry(
     return "\n".join(lines)
 
 
+# ---------- Harvard plain-text helpers ----------
+
+
+def _name_to_harvard(raw: str | None) -> str:
+    """Convert an author name to Harvard style: 'Surname, I.N.'
+
+    Examples:
+      'Nguyen, Dinh C.'     -> 'Nguyen, D.C.'
+      'Dinh C. Nguyen'      -> 'Nguyen, D.C.'
+      'World Health Org...' -> 'World Health Organization...'  (institutional, verbatim)
+    """
+    if not raw:
+        return ""
+    name = raw.strip()
+    if not name:
+        return ""
+    low = name.lower()
+    # Institutional authors: keep verbatim (no surname/initials split)
+    if any(kw in low for kw in _INSTITUTIONAL_KEYWORDS):
+        return name
+
+    if "," in name:
+        last, rest = name.split(",", 1)
+        first_parts = rest.strip().split()
+    else:
+        parts = name.split()
+        if not parts:
+            return name
+        last = parts[-1]
+        first_parts = parts[:-1]
+
+    initials_parts: list[str] = []
+    for p in first_parts:
+        p = p.strip(".")
+        if p:
+            initials_parts.append(f"{p[0].upper()}.")
+    initials = "".join(initials_parts)
+    last = last.strip()
+    return f"{last}, {initials}" if initials else last
+
+
+def _format_harvard_authors(names: list[str]) -> str:
+    """Format a list of author names in Harvard style.
+
+    - 1 author:  'Nguyen, D.C.'
+    - 2 authors: 'Nguyen, D.C. and Pham, Q.V.'
+    - 3+:        'Nguyen, D.C., Pham, Q.V. and Smith, J.'
+    """
+    harvard_names = [_name_to_harvard(n) for n in names if n and n.strip()]
+    if not harvard_names:
+        return ""
+    if len(harvard_names) == 1:
+        return harvard_names[0]
+    if len(harvard_names) == 2:
+        return " and ".join(harvard_names)
+    return ", ".join(harvard_names[:-1]) + " and " + harvard_names[-1]
+
+
+def _format_harvard_reference(
+    *,
+    entry_type: str,
+    authors: list[str],
+    year: str | None,
+    title: str | None,
+    container: str | None,      # journal / booktitle / institution
+    volume: str | None,
+    pages: str | None,
+    doi: str | None,
+    url: str | None,
+) -> str:
+    """Build a single Harvard-style reference line (ready to paste in Word).
+
+    Conventions followed (common Harvard variants, IFKAD-compatible):
+      • Authors + (Year) at start
+      • Article title in single quotes, 'Journal' in plain text (user can italicize in Word)
+      • Volume/issue/pages separated by commas
+      • URL/DOI prefixed with 'Available at:'
+      • 'n.d.' when year unknown
+    """
+    auth = _format_harvard_authors(authors)
+    y = year or "n.d."
+    header = f"{auth} ({y})" if auth else f"({y})"
+    t = (title or "").strip().rstrip(".")
+
+    parts: list[str]
+    if entry_type == "article":
+        # Journal article: Author (Year) 'Title', Journal, vol. X, pp. Y-Z.
+        parts = [f"{header} '{t}'"]
+        if container:
+            parts.append(container)
+        if volume:
+            vol_str = f"vol. {volume}"
+            if pages:
+                vol_str += f", pp. {pages}"
+            parts.append(vol_str)
+        elif pages:
+            parts.append(f"pp. {pages}")
+        s = ", ".join(parts) + "."
+    elif entry_type == "inproceedings":
+        # Conference: Author (Year) 'Title', in Proceedings, pp. Y-Z.
+        s = f"{header} '{t}'"
+        if container:
+            s += f", in {container}"
+        if pages:
+            s += f", pp. {pages}"
+        s += "."
+    elif entry_type == "techreport":
+        # Report / guideline: Author (Year) Title. Institution.
+        s = f"{header} {t}."
+        if container and container.strip().lower() != (auth or "").strip().lower():
+            s += f" {container}."
+    elif entry_type == "misc":
+        # Preprint / arXiv: Author (Year) 'Title' [Preprint].
+        s = f"{header} '{t}' [Preprint]."
+    elif entry_type == "unpublished":
+        s = f"{header} '{t}' [Unpublished manuscript]."
+    else:
+        s = f"{header} {t}."
+
+    # Append access link
+    if doi:
+        s += f" Available at: https://doi.org/{doi}"
+    elif url:
+        s += f" Available at: {url}"
+
+    # Collapse any accidental double spaces
+    return re.sub(r"\s+", " ", s).strip()
+
+
 @router.get("/{manuscript_id}")
 async def list_references(
     manuscript_id: int,
@@ -375,6 +504,112 @@ async def export_bibtex(
         media_type="text/plain; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="bibliography_{manuscript_id}.bib"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/{manuscript_id}/harvard")
+async def export_harvard(
+    manuscript_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export the manuscript's bibliography as Harvard-style plain text.
+
+    Ready to paste into Word / Google Docs (IFKAD and most social-sciences
+    conferences require Harvard referencing). Each entry on its own line,
+    entries separated by a blank line, alphabetically sorted by first
+    author's surname (Harvard standard).
+
+    Unlike the BibTeX export, there is no syntax to parse — this is ready-to-read
+    text. User may need to apply italic formatting to journal/book names
+    manually in the target document.
+    """
+    refs_rows = await db.execute(
+        select(
+            PaperReference.id,
+            PaperReference.cited_paper_id,
+            Paper.title,
+            Paper.doi,
+            Paper.journal,
+            Paper.publication_date,
+            Paper.paper_type,
+            Paper.volume,
+            Paper.pages,
+            Paper.pdf_url,
+            Paper.external_ids_json,
+        )
+        .join(Paper, PaperReference.cited_paper_id == Paper.id)
+        .where(PaperReference.manuscript_id == manuscript_id)
+    )
+    refs = list(refs_rows.all())
+    if not refs:
+        return Response(
+            content="No references in this manuscript.\n",
+            media_type="text/plain; charset=utf-8",
+        )
+
+    # Fetch authors for all cited papers in one query, ordered by position
+    cited_ids = [r.cited_paper_id for r in refs]
+    authors_by_paper: dict[int, list[str]] = {}
+    authors_rows = await db.execute(
+        select(PaperAuthor.paper_id, Author.name, PaperAuthor.position)
+        .join(Author, PaperAuthor.author_id == Author.id)
+        .where(PaperAuthor.paper_id.in_(cited_ids))
+        .order_by(PaperAuthor.paper_id, PaperAuthor.position)
+    )
+    for pid, aname, _pos in authors_rows.all():
+        authors_by_paper.setdefault(pid, []).append(aname)
+
+    # Build reference lines
+    entries: list[tuple[str, str]] = []  # (sort_key, formatted_line)
+    for r in refs:
+        names = authors_by_paper.get(r.cited_paper_id, [])
+        year = (r.publication_date or "")[:4] if r.publication_date else None
+        entry_type = _BIB_ENTRY_TYPE.get(r.paper_type or "", "misc")
+
+        ext_ids: dict = {}
+        try:
+            ext_ids = _json.loads(r.external_ids_json) if r.external_ids_json else {}
+        except Exception:
+            ext_ids = {}
+        url = None
+        if not r.doi:
+            if ext_ids.get("arxiv_id"):
+                url = f"https://arxiv.org/abs/{ext_ids['arxiv_id']}"
+            elif ext_ids.get("pmid"):
+                url = f"https://pubmed.ncbi.nlm.nih.gov/{ext_ids['pmid']}"
+            elif ext_ids.get("iris_url"):
+                url = ext_ids["iris_url"]
+            elif r.pdf_url:
+                url = r.pdf_url
+
+        line = _format_harvard_reference(
+            entry_type=entry_type,
+            authors=names,
+            year=year,
+            title=r.title,
+            container=r.journal,
+            volume=r.volume,
+            pages=r.pages,
+            doi=r.doi,
+            url=url,
+        )
+
+        # Sort key: first author's surname (lowercased, folded) + year
+        first_author = names[0] if names else ""
+        surname_key = _author_lastname(first_author) or _ascii_fold(first_author) or "zzz"
+        sort_key = f"{surname_key}_{year or '9999'}"
+        entries.append((sort_key, line))
+
+    entries.sort(key=lambda e: e[0])
+    body = "\n\n".join(line for _, line in entries) + "\n"
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="bibliography_{manuscript_id}_harvard.txt"',
             "Cache-Control": "no-store",
         },
     )
