@@ -806,8 +806,10 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
   const [savingNote, setSavingNote] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
-  const [newLabelName, setNewLabelName] = useState("");
+  const [labelQuery, setLabelQuery] = useState("");
+  const [labelHighlight, setLabelHighlight] = useState(0);
   const [newLabelColor, setNewLabelColor] = useState("#6366f1");
+  const labelInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load note text when data arrives
   useEffect(() => {
@@ -817,10 +819,16 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
     }
   }, [noteData, noteLoaded]);
 
+  const closeLabelPicker = () => {
+    setShowLabelPicker(false);
+    setLabelQuery("");
+    setLabelHighlight(0);
+  };
+
   const assignLabel = async (labelId: number) => {
     await api.assignLabel(paperId, labelId);
     mutateLabels();
-    setShowLabelPicker(false);
+    closeLabelPicker();
   };
 
   const removeLabel = async (labelId: number) => {
@@ -829,14 +837,14 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
   };
 
   const createAndAssign = async () => {
-    if (!newLabelName.trim()) return;
+    const name = labelQuery.trim();
+    if (!name) return;
     try {
-      const label = await api.createLabel({ name: newLabelName, color: newLabelColor });
+      const label = await api.createLabel({ name, color: newLabelColor });
       await api.assignLabel(paperId, label.id);
       mutateLabels();
       mutate("/api/v1/labels");
-      setNewLabelName("");
-      setShowLabelPicker(false);
+      closeLabelPicker();
     } catch {
       // Label might already exist
     }
@@ -854,6 +862,28 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
 
   const assignedIds = new Set((paperLabels || []).map((l) => l.id));
   const availableLabels = (allLabels || []).filter((l) => !assignedIds.has(l.id)).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Filtered labels — match case-insensitive on substring. When a query is
+  // active, labels that start with the query come first (better UX), else
+  // alphabetical order.
+  const qLower = labelQuery.trim().toLowerCase();
+  const filteredLabels = qLower
+    ? availableLabels
+        .filter((l) => l.name.toLowerCase().includes(qLower))
+        .sort((a, b) => {
+          const aStarts = a.name.toLowerCase().startsWith(qLower);
+          const bStarts = b.name.toLowerCase().startsWith(qLower);
+          if (aStarts !== bStarts) return aStarts ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+    : availableLabels;
+
+  // Does an existing label (assigned or not) match the query exactly? If yes,
+  // don't offer "Create new" (avoids duplicates).
+  const hasExactMatch = !!qLower && (allLabels || []).some(
+    (l) => l.name.toLowerCase() === qLower
+  );
+  const canCreate = !!qLower && !hasExactMatch;
 
   const PRESET_COLORS = ["#6366f1", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#3b82f6", "#ec4899", "#14b8a6"];
 
@@ -890,58 +920,101 @@ function LabelsAndNotes({ paperId }: { paperId: number }) {
 
             {showLabelPicker && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowLabelPicker(false)} />
-                <div className="absolute left-0 top-8 z-50 w-64 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl p-3 space-y-2 max-h-80 overflow-y-auto">
-                  {/* Existing labels to assign */}
-                  {availableLabels.length > 0 && (
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-[var(--muted-foreground)] font-medium uppercase">Assign existing</span>
-                      {availableLabels.map((l) => (
-                        <button
-                          key={l.id}
-                          onClick={() => assignLabel(l.id)}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--secondary)] transition-colors text-left"
-                        >
-                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
-                          <span className="text-xs">{l.name}</span>
-                        </button>
-                      ))}
-                      <div className="border-t border-[var(--border)] my-1" />
-                    </div>
-                  )}
-
-                  {/* Create new */}
-                  <div className="space-y-2">
-                    <span className="text-[10px] text-[var(--muted-foreground)] font-medium uppercase">Create new</span>
+                <div className="fixed inset-0 z-40" onClick={closeLabelPicker} />
+                <div className="absolute left-0 top-8 z-50 w-72 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl overflow-hidden">
+                  {/* Search / create input */}
+                  <div className="p-2 border-b border-[var(--border)]">
                     <input
+                      ref={labelInputRef}
                       type="text"
-                      value={newLabelName}
-                      onChange={(e) => setNewLabelName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && createAndAssign()}
-                      placeholder="New label name..."
+                      autoFocus
+                      value={labelQuery}
+                      onChange={(e) => { setLabelQuery(e.target.value); setLabelHighlight(0); }}
+                      onKeyDown={(e) => {
+                        const maxIdx = filteredLabels.length - 1 + (canCreate ? 1 : 0);
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setLabelHighlight((i) => Math.min(i + 1, Math.max(maxIdx, 0)));
+                        } else if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setLabelHighlight((i) => Math.max(i - 1, 0));
+                        } else if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (labelHighlight < filteredLabels.length) {
+                            assignLabel(filteredLabels[labelHighlight].id);
+                          } else if (canCreate) {
+                            createAndAssign();
+                          }
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          closeLabelPicker();
+                        }
+                      }}
+                      placeholder="Search or create label..."
                       className="w-full px-2 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs focus:outline-none focus:border-[var(--primary)]"
                     />
-                    <div className="flex gap-1">
-                      {PRESET_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => setNewLabelColor(c)}
-                          className={cn(
-                            "w-5 h-5 rounded-full transition-all",
-                            newLabelColor === c ? "ring-2 ring-offset-1 ring-[var(--foreground)]" : ""
-                          )}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={createAndAssign}
-                      disabled={!newLabelName.trim()}
-                      className="w-full px-2 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
-                    >
-                      Create & Add
-                    </button>
+                    {labelQuery && (
+                      <div className="mt-1 text-[9px] text-[var(--muted-foreground)]">
+                        {filteredLabels.length} of {availableLabels.length} match
+                        {hasExactMatch && <span className="ml-2 text-amber-400">· exact match exists</span>}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Filtered list */}
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {filteredLabels.length === 0 && !canCreate && (
+                      <div className="px-3 py-3 text-[11px] text-[var(--muted-foreground)] text-center">
+                        No labels{labelQuery ? " match" : " available"}.
+                      </div>
+                    )}
+                    {filteredLabels.map((l, i) => (
+                      <button
+                        key={l.id}
+                        onClick={() => assignLabel(l.id)}
+                        onMouseEnter={() => setLabelHighlight(i)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
+                          labelHighlight === i ? "bg-[var(--secondary)]" : "hover:bg-[var(--secondary)]"
+                        )}
+                      >
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                        <span className="text-xs truncate">{l.name}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Create new — only if query non-empty AND no exact match */}
+                  {canCreate && (
+                    <div className={cn(
+                      "border-t border-[var(--border)] p-2 space-y-2",
+                      labelHighlight === filteredLabels.length ? "bg-[var(--secondary)]/60" : ""
+                    )}>
+                      <div className="text-[10px] text-[var(--muted-foreground)] uppercase font-medium">Create new</div>
+                      <div className="flex gap-1 flex-wrap">
+                        {PRESET_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setNewLabelColor(c)}
+                            className={cn(
+                              "w-5 h-5 rounded-full transition-all",
+                              newLabelColor === c ? "ring-2 ring-offset-1 ring-[var(--foreground)]" : ""
+                            )}
+                            style={{ backgroundColor: c }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        onClick={createAndAssign}
+                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-semibold hover:opacity-90"
+                        onMouseEnter={() => setLabelHighlight(filteredLabels.length)}
+                      >
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: newLabelColor }} />
+                        Create &ldquo;{labelQuery.trim()}&rdquo;
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
