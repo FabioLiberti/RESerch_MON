@@ -185,18 +185,27 @@ export default function NetworkGraph({ nodes, links, type, onNodeClick, onImport
           .map((l) => (l.shared || []).join(", "))
           .filter(Boolean);
 
-        let html = `<strong>${d.title}</strong><br/>`;
         const inDb = (d as any).in_db;
         const isCenter = (d as any).is_center;
+        const paperIdForLink = (d as any).paper_id;
+
+        // Title: hyperlinked to paper detail if we have an internal paper_id,
+        // otherwise plain text (for external nodes not yet imported).
+        let html = "";
+        if (isCitations && inDb && paperIdForLink) {
+          html += `<a href="/papers/${paperIdForLink}" target="_blank" style="color:var(--foreground);text-decoration:underline;text-decoration-color:#6366f1;text-underline-offset:3px"><strong>${d.title}</strong></a><br/>`;
+        } else {
+          html += `<strong>${d.title}</strong><br/>`;
+        }
+
         if (isCitations) {
-          const paperId = (d as any).paper_id;
           html += inDb
             ? `<span style="color:#22c55e">● In database</span>`
             : `<span style="color:#6b7280">○ External</span>`;
           if (isCenter) html += ` <span style="color:#f59e0b">★ Center</span>`;
           html += ` &middot; ${d.citations} citations`;
-          if (inDb && paperId) html += `<br/><a href="/papers/${paperId}" style="color:#22c55e;font-size:10px">Open paper detail</a>`;
-          if (d.doi) html += `${inDb ? ' &middot; ' : '<br/>'}<a href="https://doi.org/${d.doi}" target="_blank" style="color:#6366f1;font-size:10px">${d.doi}</a>`;
+          if (inDb && paperIdForLink) html += ` &middot; <span style="color:var(--muted-foreground)">ID ${paperIdForLink}</span>`;
+          if (d.doi) html += `<br/><a href="https://doi.org/${d.doi}" target="_blank" style="color:#6366f1;font-size:10px">${d.doi}</a>`;
           html += `<br/><span style="color:var(--muted-foreground)">${connected.length} links</span>`;
         } else {
           html += `<span style="color:${SOURCE_COLORS[d.source] || "#6b7280"}">${d.source}</span>`;
