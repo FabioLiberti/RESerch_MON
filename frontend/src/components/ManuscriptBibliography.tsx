@@ -18,6 +18,8 @@ interface Reference {
   rating: number | null;
   keywords: string[];
   labels: { name: string; color: string }[];
+  first_author: string | null;
+  author_count: number;
   context: string | null;
   context_label: string | null;
   note: string | null;
@@ -407,17 +409,17 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <button
           onClick={() => setCollapsed(c => !c)}
-          className="flex items-center gap-1.5 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
+          className="flex items-start gap-1.5 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
           aria-expanded={!collapsed}
         >
-          <span className="text-[10px] text-[var(--muted-foreground)] w-3 shrink-0">{collapsed ? "▶" : "▼"}</span>
-          <h3 className="text-sm font-bold flex items-center gap-2 shrink-0 whitespace-nowrap">
-            Bibliography
+          <span className="text-[10px] text-[var(--muted-foreground)] w-3 shrink-0 pt-0.5">{collapsed ? "▶" : "▼"}</span>
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-sm font-bold">Bibliography</h3>
             {refs.length > 0 && (
-              <span className="text-xs font-normal text-[var(--muted-foreground)]">
+              <span className="text-[10px] font-normal text-[var(--muted-foreground)]">
                 {(filterKeywords.size > 0 || filterLabels.size > 0)
                   ? (() => {
                       const matched = refs.filter(r =>
@@ -433,7 +435,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                 }
               </span>
             )}
-          </h3>
+          </div>
         </button>
         {!collapsed && (
         <div className="flex gap-2 flex-wrap">
@@ -1017,25 +1019,31 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
               >✕</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {refs.filter(r => r.citations_map && r.citations_map.trim()).map((ref, i) => (
-                <div key={ref.id} className="border-b border-[var(--border)] pb-3 last:border-b-0">
-                  <Link
-                    href={`/papers/${ref.cited_paper_id}`}
-                    target="_blank"
-                    className="text-sm font-semibold hover:text-indigo-400 transition-colors"
-                  >
-                    [{i + 1}] {ref.title}
-                  </Link>
-                  <p className="text-[10px] text-[var(--muted-foreground)] mb-2 mt-0.5">
-                    {ref.journal && <>{ref.journal} · </>}
-                    {ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d."}
-                    {ref.doi && <> · DOI: {ref.doi}</>}
-                    {ref.context_label && <> · <span className="text-indigo-500">{ref.context_label}</span></>}
-                    {ref.rating ? <> · Rating {ref.rating}/5</> : null}
-                  </p>
-                  <p className="text-sm whitespace-pre-wrap text-[var(--foreground)]">{ref.citations_map}</p>
-                </div>
-              ))}
+              {refs.filter(r => r.citations_map && r.citations_map.trim()).map((ref, i) => {
+                const year = ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d.";
+                const authorTag = ref.first_author
+                  ? (ref.author_count > 1 ? `${ref.first_author.split(/[ ,]+/).pop()} et al. (${year})` : `${ref.first_author.split(/[ ,]+/).pop()} (${year})`)
+                  : null;
+                return (
+                  <div key={ref.id} className="border-b border-[var(--border)] pb-3 last:border-b-0">
+                    <Link
+                      href={`/papers/${ref.cited_paper_id}`}
+                      target="_blank"
+                      className="text-sm font-semibold hover:text-indigo-400 transition-colors"
+                    >
+                      [{i + 1}] {authorTag && <span className="text-indigo-400">{authorTag} · </span>}{ref.title}
+                    </Link>
+                    <p className="text-xs text-[var(--foreground)] mb-2 mt-1">
+                      {ref.journal && <span>{ref.journal} · </span>}
+                      <span className="font-medium">{year}</span>
+                      {ref.doi && <span> · DOI: {ref.doi}</span>}
+                      {ref.context_label && <> · <span className="text-indigo-400 font-semibold">{ref.context_label}</span></>}
+                      {ref.rating ? <span> · Rating {ref.rating}/5</span> : null}
+                    </p>
+                    <p className="text-sm whitespace-pre-wrap text-[var(--foreground)]">{ref.citations_map}</p>
+                  </div>
+                );
+              })}
               {refs.filter(r => !r.citations_map || !r.citations_map.trim()).length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border)]">
                   <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">

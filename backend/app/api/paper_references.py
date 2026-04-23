@@ -330,6 +330,20 @@ async def list_references(
         for pid, lname, lcolor in labels_result.all():
             paper_labels_map.setdefault(pid, []).append({"name": lname, "color": lcolor})
 
+    # Fetch first author (position=0) + total author count for each cited paper in one query
+    paper_authors_map: dict[int, dict] = {}
+    if cited_ids:
+        authors_result = await db.execute(
+            select(PaperAuthor.paper_id, Author.name, PaperAuthor.position)
+            .join(Author, PaperAuthor.author_id == Author.id)
+            .where(PaperAuthor.paper_id.in_(cited_ids))
+            .order_by(PaperAuthor.paper_id, PaperAuthor.position.asc())
+        )
+        for pid, aname, apos in authors_result.all():
+            if pid not in paper_authors_map:
+                paper_authors_map[pid] = {"first_author": aname, "author_count": 0}
+            paper_authors_map[pid]["author_count"] += 1
+
     return {
         "manuscript_id": manuscript_id,
         "references": [
@@ -345,6 +359,8 @@ async def list_references(
                 "rating": ref.rating,
                 "keywords": [k.lower() for k in _json.loads(ref.keywords_json)] if ref.keywords_json else [],
                 "labels": paper_labels_map.get(ref.PaperReference.cited_paper_id, []),
+                "first_author": (paper_authors_map.get(ref.PaperReference.cited_paper_id) or {}).get("first_author"),
+                "author_count": (paper_authors_map.get(ref.PaperReference.cited_paper_id) or {}).get("author_count", 0),
                 "context": ref.PaperReference.context,
                 "context_label": CONTEXT_LABELS.get(ref.PaperReference.context, ref.PaperReference.context),
                 "note": ref.PaperReference.note,
