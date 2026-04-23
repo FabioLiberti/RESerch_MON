@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
@@ -191,18 +191,22 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     downloadFile(lines.join("\n\n"), `bibliography_${paperId}.txt`, "text/plain");
   };
 
-  const exportBibtex = () => {
-    const entries = (data?.references || []).map((ref, i) => {
-      const key = `ref${paperId}_${i + 1}`;
-      const fields: string[] = [];
-      fields.push(`  title = {${ref.title}}`);
-      if (ref.journal) fields.push(`  journal = {${ref.journal}}`);
-      if (ref.publication_date) fields.push(`  year = {${ref.publication_date.slice(0, 4)}}`);
-      if (ref.doi) fields.push(`  doi = {${ref.doi}}`);
-      if (ref.note) fields.push(`  note = {${ref.note}}`);
-      return `@article{${key},\n${fields.join(",\n")}\n}`;
-    });
-    downloadFile(entries.join("\n\n"), `bibliography_${paperId}.bib`, "text/plain");
+  const exportBibtex = async () => {
+    // Server-side generation: proper entry types (@article / @inproceedings /
+    // @techreport / @misc), author field, Harvard-style keys (lastnameYEARword),
+    // disambiguation, URL/eprint/arXiv handling. Much richer than the previous
+    // client-side version.
+    try {
+      const r = await fetch(`/api/v1/paper-references/${paperId}/bibtex`, {
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const content = await r.text();
+      downloadFile(content, `bibliography_${paperId}.bib`, "text/plain");
+    } catch (e) {
+      console.error("BibTeX export failed:", e);
+      alert("BibTeX export failed — check console.");
+    }
   };
 
   const exportCsv = () => {
@@ -285,9 +289,11 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
         <div className="flex gap-2 flex-wrap">
           {refs.length > 0 && (
             <>
-              <button onClick={exportTxt} className="text-[10px] px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600" title="Export as numbered text list">TXT</button>
-              <button onClick={exportBibtex} className="text-[10px] px-2 py-1 rounded bg-teal-700 text-white hover:bg-teal-600" title="Export as BibTeX">BIB</button>
-              <button onClick={exportCsv} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-white hover:bg-emerald-700" title="Export as CSV">CSV</button>
+              <ExportMenu
+                onExportBibtex={exportBibtex}
+                onExportTxt={exportTxt}
+                onExportCsv={exportCsv}
+              />
               <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
                 className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 inline-flex items-center gap-1" title="Analyze bibliography">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
@@ -691,6 +697,75 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
         </div>
       )}
 
+    </div>
+  );
+}
+
+
+// ------------------------------------------------------------------
+// Export menu — dropdown with BibTeX / TXT / CSV options. Structured so
+// adding new formats (e.g. Harvard plain-text in v2.40.23) is a single
+// entry addition.
+// ------------------------------------------------------------------
+function ExportMenu({
+  onExportBibtex,
+  onExportTxt,
+  onExportCsv,
+}: {
+  onExportBibtex: () => void | Promise<void>;
+  onExportTxt: () => void;
+  onExportCsv: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const pick = (fn: () => void | Promise<void>) => {
+    setOpen(false);
+    Promise.resolve(fn()).catch(() => {});
+  };
+
+  const options: { key: string; label: string; desc: string; onClick: () => void | Promise<void> }[] = [
+    { key: "bib", label: "BibTeX (.bib)", desc: "LaTeX / Overleaf — Harvard-ready", onClick: onExportBibtex },
+    { key: "txt", label: "Plain text (.txt)", desc: "Numbered list", onClick: onExportTxt },
+    { key: "csv", label: "Spreadsheet (.csv)", desc: "Tabular view", onClick: onExportCsv },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-[10px] px-2.5 py-1 rounded bg-teal-700 text-white hover:bg-teal-600 font-semibold inline-flex items-center gap-1 cursor-pointer"
+        title="Export bibliography"
+      >
+        Export
+        <svg className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl overflow-hidden">
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => pick(opt.onClick)}
+              className="w-full flex flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-[var(--secondary)] transition-colors cursor-pointer border-b border-[var(--border)] last:border-b-0"
+            >
+              <span className="text-xs font-semibold">{opt.label}</span>
+              <span className="text-[10px] text-[var(--muted-foreground)]">{opt.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
