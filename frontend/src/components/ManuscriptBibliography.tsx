@@ -51,11 +51,12 @@ const CONTEXT_COLORS: Record<string, string> = {
   other: "bg-gray-600",
 };
 
-export default function ManuscriptBibliography({ paperId }: { paperId: number }) {
+export default function ManuscriptBibliography({ paperId, defaultCollapsed = false }: { paperId: number; defaultCollapsed?: boolean }) {
   const { isAdmin } = useAuth();
   const apiUrl = `/api/v1/paper-references/${paperId}`;
   const { data, isLoading } = useSWR<RefsResponse>(apiUrl, authFetcher);
 
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -302,6 +303,71 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     downloadFile(lines.join("\n"), `citations_map_${paperId}.md`, "text/markdown");
   };
 
+  const exportCitesMapCsv = () => {
+    const refs = data?.references || [];
+    const header = "No,Title,Year,Journal,DOI,Context,Rating,CitationsMap";
+    const rows = refs
+      .filter(r => r.citations_map && r.citations_map.trim())
+      .map((ref, i) => [
+        i + 1,
+        `"${(ref.title || "").replace(/"/g, '""')}"`,
+        ref.publication_date ? ref.publication_date.slice(0, 4) : "",
+        `"${(ref.journal || "").replace(/"/g, '""')}"`,
+        ref.doi || "",
+        ref.context_label || "",
+        ref.rating || "",
+        `"${(ref.citations_map || "").replace(/"/g, '""').replace(/\n/g, " | ")}"`,
+      ].join(","));
+    downloadFile([header, ...rows].join("\n"), `citations_map_${paperId}.csv`, "text/csv");
+  };
+
+  const exportCitesMapTxt = () => {
+    const refs = data?.references || [];
+    const withMap = refs.filter(r => r.citations_map && r.citations_map.trim());
+    const withoutMap = refs.filter(r => !r.citations_map || !r.citations_map.trim());
+    const today = new Date().toISOString().slice(0, 10);
+
+    const lines: string[] = [];
+    lines.push(`Citations map — Manuscript #${paperId}`);
+    lines.push(`Generated: ${today}`);
+    lines.push(``);
+    lines.push(`Total cited papers: ${refs.length}`);
+    lines.push(`With citations map: ${withMap.length}`);
+    lines.push(`Without citations map: ${withoutMap.length}`);
+    lines.push(``);
+    lines.push("=".repeat(72));
+    lines.push(``);
+
+    withMap.forEach((ref, i) => {
+      const year = ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d.";
+      lines.push(`[${i + 1}] ${ref.title || "(no title)"}`);
+      const meta: string[] = [];
+      if (ref.journal) meta.push(ref.journal);
+      meta.push(year);
+      if (ref.doi) meta.push(`DOI: ${ref.doi}`);
+      lines.push(`    ${meta.join(" · ")}`);
+      const tags: string[] = [];
+      if (ref.context_label) tags.push(`Context: ${ref.context_label}`);
+      if (ref.rating) tags.push(`Rating: ${ref.rating}/5`);
+      if (tags.length > 0) lines.push(`    ${tags.join(" · ")}`);
+      lines.push(``);
+      (ref.citations_map || "").split("\n").forEach(l => lines.push(`    ${l}`));
+      lines.push(``);
+      lines.push("-".repeat(72));
+      lines.push(``);
+    });
+
+    if (withoutMap.length > 0) {
+      lines.push(`Papers without a citations map (${withoutMap.length}):`);
+      withoutMap.forEach(ref => {
+        const year = ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d.";
+        lines.push(`- ${ref.title || "(no title)"} (${year})`);
+      });
+    }
+
+    downloadFile(lines.join("\n"), `citations_map_${paperId}.txt`, "text/plain");
+  };
+
   // Keywords aggregation — use data?.references directly (refs not yet defined here)
   const { data: kwData } = useSWR<{ total_papers: number; keywords: { keyword: string; count: number }[] }>(
     (data?.references?.length ?? 0) > 0 ? `/api/v1/paper-references/${paperId}/keywords` : null,
@@ -341,26 +407,34 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-bold flex items-center gap-2 shrink-0 whitespace-nowrap">
-          Bibliography
-          {refs.length > 0 && (
-            <span className="text-xs font-normal text-[var(--muted-foreground)]">
-              {(filterKeywords.size > 0 || filterLabels.size > 0)
-                ? (() => {
-                    const matched = refs.filter(r =>
-                      (filterKeywords.size === 0 || r.keywords.some(k => filterKeywords.has(k))) &&
-                      (filterLabels.size === 0 || r.labels.some(l => filterLabels.has(l.name)))
-                    ).length;
-                    const parts: string[] = [];
-                    if (filterKeywords.size > 0) parts.push(`${filterKeywords.size} keyword${filterKeywords.size > 1 ? "s" : ""}`);
-                    if (filterLabels.size > 0) parts.push(`${filterLabels.size} label${filterLabels.size > 1 ? "s" : ""}`);
-                    return `${matched}/${refs.length} papers matching ${parts.join(" + ")}`;
-                  })()
-                : `${refs.length} paper${refs.length !== 1 ? "s" : ""} cited`
-              }
-            </span>
-          )}
-        </h3>
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="flex items-center gap-1.5 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
+          aria-expanded={!collapsed}
+        >
+          <span className="text-[10px] text-[var(--muted-foreground)] w-3 shrink-0">{collapsed ? "▶" : "▼"}</span>
+          <h3 className="text-sm font-bold flex items-center gap-2 shrink-0 whitespace-nowrap">
+            Bibliography
+            {refs.length > 0 && (
+              <span className="text-xs font-normal text-[var(--muted-foreground)]">
+                {(filterKeywords.size > 0 || filterLabels.size > 0)
+                  ? (() => {
+                      const matched = refs.filter(r =>
+                        (filterKeywords.size === 0 || r.keywords.some(k => filterKeywords.has(k))) &&
+                        (filterLabels.size === 0 || r.labels.some(l => filterLabels.has(l.name)))
+                      ).length;
+                      const parts: string[] = [];
+                      if (filterKeywords.size > 0) parts.push(`${filterKeywords.size} keyword${filterKeywords.size > 1 ? "s" : ""}`);
+                      if (filterLabels.size > 0) parts.push(`${filterLabels.size} label${filterLabels.size > 1 ? "s" : ""}`);
+                      return `${matched}/${refs.length} papers matching ${parts.join(" + ")}`;
+                    })()
+                  : `${refs.length} paper${refs.length !== 1 ? "s" : ""} cited`
+                }
+              </span>
+            )}
+          </h3>
+        </button>
+        {!collapsed && (
         <div className="flex gap-2 flex-wrap">
           {refs.length > 0 && (
             <>
@@ -370,6 +444,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                 onExportTxt={exportTxt}
                 onExportCsv={exportCsv}
                 onExportCitesMap={exportCitesMap}
+                onExportCitesMapCsv={exportCitesMapCsv}
+                onExportCitesMapTxt={exportCitesMapTxt}
               />
               <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
                 className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 inline-flex items-center gap-1" title="Analyze bibliography">
@@ -395,7 +471,10 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
             </>
           )}
         </div>
+        )}
       </div>
+      {!collapsed && (
+      <>
 
       {/* Keywords aggregation — at the top, collapsed by default */}
       {kwData && kwData.keywords.length > 0 && (
@@ -903,6 +982,8 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
         </div>
       )}
 
+      </>
+      )}
     </div>
   );
 }
@@ -919,12 +1000,16 @@ function ExportMenu({
   onExportTxt,
   onExportCsv,
   onExportCitesMap,
+  onExportCitesMapCsv,
+  onExportCitesMapTxt,
 }: {
   onExportBibtex: () => void | Promise<void>;
   onExportHarvard: () => void | Promise<void>;
   onExportTxt: () => void;
   onExportCsv: () => void;
   onExportCitesMap: () => void;
+  onExportCitesMapCsv: () => void;
+  onExportCitesMapTxt: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -949,7 +1034,9 @@ function ExportMenu({
     { key: "harvard", label: "Harvard (.txt)", desc: "Ready to paste in Word — IFKAD style", onClick: onExportHarvard },
     { key: "txt", label: "Plain text (.txt)", desc: "Numbered list", onClick: onExportTxt },
     { key: "csv", label: "Spreadsheet (.csv)", desc: "Tabular view", onClick: onExportCsv },
-    { key: "cites", label: "Citations map (.md)", desc: "Where each source is used in the manuscript", onClick: onExportCitesMap },
+    { key: "cites-md", label: "Citations map (.md)", desc: "Markdown digest of citations map", onClick: onExportCitesMap },
+    { key: "cites-csv", label: "Citations map (.csv)", desc: "Spreadsheet with citations map column", onClick: onExportCitesMapCsv },
+    { key: "cites-txt", label: "Citations map (.txt)", desc: "Plain-text digest of citations map", onClick: onExportCitesMapTxt },
   ];
 
   return (

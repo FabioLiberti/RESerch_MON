@@ -97,7 +97,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-export default function ReviewJournal({ paperId }: { paperId: number }) {
+export default function ReviewJournal({ paperId, defaultCollapsed = false }: { paperId: number; defaultCollapsed?: boolean }) {
   const { isAdmin } = useAuth();
   const { data, isLoading } = useSWR<JournalResponse>(
     `/api/v1/review-journal/${paperId}`,
@@ -109,6 +109,7 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
     "/api/v1/review-journal/users-list", authFetcher
   );
 
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newAddressedTo, setNewAddressedTo] = useState<string[]>([]);
@@ -215,16 +216,23 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
       {/* Header with progress */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold flex items-center gap-2">
-          Review Journal
-          {data && data.total_observations > 0 && (
-            <span className="text-xs font-normal text-[var(--muted-foreground)]">
-              {data.addressed}/{data.total_observations} addressed ({data.progress_pct}%)
-            </span>
-          )}
-        </h3>
-        {isAdmin ? (
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="flex items-center gap-1.5 text-left hover:opacity-80 transition-opacity cursor-pointer"
+          aria-expanded={!collapsed}
+        >
+          <span className="text-[10px] text-[var(--muted-foreground)] w-3">{collapsed ? "▶" : "▼"}</span>
+          <h3 className="text-sm font-bold flex items-center gap-2">
+            Review Journal
+            {data && data.total_observations > 0 && (
+              <span className="text-xs font-normal text-[var(--muted-foreground)]">
+                {data.addressed}/{data.total_observations} addressed ({data.progress_pct}%)
+              </span>
+            )}
+          </h3>
+        </button>
+        {!collapsed && (isAdmin ? (
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600 transition-colors"
@@ -238,8 +246,10 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
           >
             + Add Tutor Note
           </button>
-        )}
+        ))}
       </div>
+      {!collapsed && (
+      <>
 
       {/* Progress bar */}
       {data && data.total_observations > 0 && (
@@ -1070,6 +1080,8 @@ export default function ReviewJournal({ paperId }: { paperId: number }) {
           </div>
         );
       })}
+      </>
+      )}
     </div>
   );
 }

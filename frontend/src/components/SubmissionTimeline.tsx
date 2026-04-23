@@ -62,11 +62,12 @@ const ROUND_LABEL_PRESETS = [
   "Poster / Presentation",
 ];
 
-export default function SubmissionTimeline({ paperId }: { paperId: number }) {
+export default function SubmissionTimeline({ paperId, defaultCollapsed = false }: { paperId: number; defaultCollapsed?: boolean }) {
   const { isAdmin } = useAuth();
   const apiUrl = `/api/v1/submission-rounds/${paperId}`;
   const { data, isLoading } = useSWR<TimelineResponse>(apiUrl, authFetcher);
 
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("");
   const [docType, setDocType] = useState("full_paper");
@@ -161,9 +162,23 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold">Submission Timeline</h3>
-        {isAdmin && (
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="flex items-center gap-1.5 text-left hover:opacity-80 transition-opacity cursor-pointer"
+          aria-expanded={!collapsed}
+        >
+          <span className="text-[10px] text-[var(--muted-foreground)] w-3">{collapsed ? "▶" : "▼"}</span>
+          <h3 className="text-sm font-bold flex items-center gap-1.5">
+            Submission Timeline
+            {rounds.length > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)] font-normal">
+                {rounds.length}
+              </span>
+            )}
+          </h3>
+        </button>
+        {isAdmin && !collapsed && (
           <button
             onClick={() => { setShowForm(!showForm); setLabel(`Round ${nextRoundNumber}`); }}
             className="text-xs px-3 py-1.5 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-600 transition-colors"
@@ -172,6 +187,8 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
           </button>
         )}
       </div>
+      {!collapsed && (
+      <>
 
       {/* Add Round Form */}
       {isAdmin && showForm && (
@@ -444,6 +461,8 @@ export default function SubmissionTimeline({ paperId }: { paperId: number }) {
             );
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   );
