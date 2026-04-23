@@ -57,6 +57,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   const { data, isLoading } = useSWR<RefsResponse>(apiUrl, authFetcher);
 
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [citesMapModal, setCitesMapModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -453,6 +454,16 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                 Analyze
               </a>
             </>
+          )}
+          {refs.length > 0 && (
+            <button
+              onClick={() => setCitesMapModal(true)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40 hover:text-indigo-300 font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
+              title="View all citations maps"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+              Citations map
+            </button>
           )}
           {isAdmin && (
             <>
@@ -983,6 +994,63 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       )}
 
       </>
+      )}
+
+      {/* Global "Citations map" modal — lists all refs with citations_map */}
+      {citesMapModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setCitesMapModal(false)}
+        >
+          <div
+            className="bg-[var(--background)] border border-indigo-500/40 rounded-lg w-full max-w-4xl max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-500">
+                Citations map — all references ({refs.filter(r => r.citations_map && r.citations_map.trim()).length}/{refs.length})
+              </h3>
+              <button
+                onClick={() => setCitesMapModal(false)}
+                className="text-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer leading-none"
+                aria-label="Close"
+              >✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {refs.filter(r => r.citations_map && r.citations_map.trim()).map((ref, i) => (
+                <div key={ref.id} className="border-b border-[var(--border)] pb-3 last:border-b-0">
+                  <Link
+                    href={`/papers/${ref.cited_paper_id}`}
+                    target="_blank"
+                    className="text-sm font-semibold hover:text-indigo-400 transition-colors"
+                  >
+                    [{i + 1}] {ref.title}
+                  </Link>
+                  <p className="text-[10px] text-[var(--muted-foreground)] mb-2 mt-0.5">
+                    {ref.journal && <>{ref.journal} · </>}
+                    {ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d."}
+                    {ref.doi && <> · DOI: {ref.doi}</>}
+                    {ref.context_label && <> · <span className="text-indigo-500">{ref.context_label}</span></>}
+                    {ref.rating ? <> · Rating {ref.rating}/5</> : null}
+                  </p>
+                  <p className="text-sm whitespace-pre-wrap text-[var(--foreground)]">{ref.citations_map}</p>
+                </div>
+              ))}
+              {refs.filter(r => !r.citations_map || !r.citations_map.trim()).length > 0 && (
+                <div className="mt-4 pt-3 border-t border-[var(--border)]">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+                    Without citations map ({refs.filter(r => !r.citations_map || !r.citations_map.trim()).length})
+                  </h4>
+                  <ul className="text-xs space-y-0.5">
+                    {refs.filter(r => !r.citations_map || !r.citations_map.trim()).map(ref => (
+                      <li key={ref.id} className="text-[var(--muted-foreground)]">— {ref.title}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
