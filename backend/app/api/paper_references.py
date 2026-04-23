@@ -112,32 +112,47 @@ def _first_significant_word(title: str | None) -> str | None:
     return tokens[0] if tokens and tokens[0] else None
 
 
+# Institutional-author heuristic keywords. Only wrap a name in the
+# BibTeX "group" braces `{...}` when it explicitly contains one of these
+# (too permissive heuristics misclassify names like "Syed Raza Abbas").
+_INSTITUTIONAL_KEYWORDS = (
+    "organization", "office", "institute", "university", "society",
+    "federation", "commission", "ministry", "council", "committee",
+    "agency", "association", "department", "foundation", "centre",
+    "center", "bureau", "authority", "observatory", "network",
+)
+
+
 def _format_bibtex_author(names: list[str]) -> str:
     """Format a list of author strings as a single BibTeX `author` value.
 
     - Individual authors: "Last, First Middle" preserved (BibTeX standard).
-    - Institutional authors (no comma, >= 2 words uppercase) wrapped in {{...}}
-      so BibTeX styles treat them as one unit instead of "Word, Other".
+    - Institutional authors (contain institutional keywords like "Organization",
+      "Office", etc.) wrapped in `{...}` so BibTeX parsers treat them as one
+      opaque token rather than trying to split into "Last, First".
     """
     out: list[str] = []
     for n in names:
         n = (n or "").strip()
         if not n:
             continue
-        is_institutional = (
-            "," not in n
-            and n.count(" ") >= 2
-            and sum(1 for c in n if c.isupper()) >= 2
-        )
+        low = n.lower()
+        is_institutional = any(kw in low for kw in _INSTITUTIONAL_KEYWORDS)
         out.append(f"{{{n}}}" if is_institutional else n)
     return " and ".join(out)
 
 
 def _escape_bibtex(value: str | None) -> str:
-    """Minimal escaping for values going inside { ... } braces."""
+    """Minimal escaping for values going inside `{ ... }` braces.
+
+    Note: we intentionally do NOT escape `{` / `}` here — those are
+    load-bearing in BibTeX (institutional author grouping, math mode, etc.).
+    Pre-formatted values from `_format_bibtex_author` can therefore pass
+    through verbatim.
+    """
     if not value:
         return ""
-    return value.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+    return value.replace("\\", "\\\\")
 
 
 def _build_bibtex_entry(
