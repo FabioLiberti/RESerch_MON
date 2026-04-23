@@ -64,7 +64,10 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
   const [addNote, setAddNote] = useState("");
 
   const [editingNote, setEditingNote] = useState<Record<number, string>>({});
+  const [noteEditMode, setNoteEditMode] = useState<Record<number, boolean>>({});
   const [editingCitationsMap, setEditingCitationsMap] = useState<Record<number, string>>({});
+  const [citesEditMode, setCitesEditMode] = useState<Record<number, boolean>>({});
+  const [citesPopup, setCitesPopup] = useState<number | null>(null);
 
   // Import from label
   const [showLabelImport, setShowLabelImport] = useState(false);
@@ -624,48 +627,148 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   {ref.doi && <span className="text-[10px] text-[var(--muted-foreground)]">DOI: {ref.doi}</span>}
                   {ref.journal && <span className="text-[10px] text-[var(--muted-foreground)] italic">{ref.journal}</span>}
                 </div>
-                {/* Editable note — admin only (private working note) */}
-                {isAdmin ? (
-                  <input
-                    type="text"
-                    value={editingNote[ref.id] ?? ref.note ?? ""}
-                    onChange={e => setEditingNote(prev => ({ ...prev, [ref.id]: e.target.value }))}
-                    onBlur={e => updateRef(ref.id, { note: e.target.value || null })}
-                    placeholder="Add private note..."
-                    className="w-full px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] text-[10px] focus:outline-none mt-1"
-                  />
-                ) : ref.note ? (
-                  <p className="text-[10px] text-[var(--muted-foreground)] mt-1 italic">{ref.note}</p>
-                ) : null}
-                {/* Editable citations map — admin only. Surfaced on the cited paper's "Cited by" card. */}
-                {isAdmin ? (
+                {/* Private note — view / edit / delete (admin only) */}
+                {noteEditMode[ref.id] ? (
                   <div className="flex items-start gap-1.5 mt-1">
-                    <span
-                      className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 shrink-0 cursor-help pt-1"
-                      title={ref.citations_map || "Where in the manuscript this paper is cited (visible on the cited paper's page)"}
-                    >
-                      Cites
-                    </span>
-                    <textarea
-                      value={editingCitationsMap[ref.id] ?? ref.citations_map ?? ""}
-                      onChange={e => setEditingCitationsMap(prev => ({ ...prev, [ref.id]: e.target.value }))}
-                      onBlur={e => updateRef(ref.id, { citations_map: e.target.value || null })}
-                      placeholder="e.g. §2.1 P1 — theme (multi-line allowed)…"
-                      rows={3}
-                      className="flex-1 px-2 py-1 rounded bg-[var(--card)] border border-indigo-500/40 text-[10px] text-[var(--foreground)] focus:outline-none focus:border-indigo-500 resize-y"
-                    />
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 shrink-0 pt-1">Note</span>
+                    <div className="flex-1 flex flex-col gap-1">
+                      <textarea
+                        value={editingNote[ref.id] ?? ref.note ?? ""}
+                        onChange={e => setEditingNote(prev => ({ ...prev, [ref.id]: e.target.value }))}
+                        placeholder="Private note (visible only to admin)…"
+                        rows={2}
+                        autoFocus
+                        className="w-full px-2 py-1 rounded bg-[var(--card)] border border-amber-500/40 text-[10px] text-[var(--foreground)] focus:outline-none focus:border-amber-500 resize-y"
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => {
+                            const v = editingNote[ref.id] ?? ref.note ?? "";
+                            updateRef(ref.id, { note: v || null });
+                            setNoteEditMode(prev => ({ ...prev, [ref.id]: false }));
+                          }}
+                          className="text-[9px] px-2 py-0.5 rounded bg-amber-600 text-white hover:bg-amber-500 transition-colors"
+                        >Save</button>
+                        <button
+                          onClick={() => {
+                            setEditingNote(prev => { const n = { ...prev }; delete n[ref.id]; return n; });
+                            setNoteEditMode(prev => ({ ...prev, [ref.id]: false }));
+                          }}
+                          className="text-[9px] px-2 py-0.5 rounded bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors"
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                ) : ref.note ? (
+                  <div className="flex items-start gap-1.5 mt-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 shrink-0 pt-0.5">Note</span>
+                    <p className="text-[10px] text-[var(--muted-foreground)] italic flex-1">{ref.note}</p>
+                    {isAdmin && (
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={() => setNoteEditMode(prev => ({ ...prev, [ref.id]: true }))}
+                          title="Edit note"
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-500 hover:bg-amber-600/40 transition-colors"
+                        >Edit</button>
+                        <button
+                          onClick={() => { if (confirm("Delete note?")) updateRef(ref.id, { note: null }); }}
+                          title="Delete note"
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-red-600/20 text-red-500 hover:bg-red-600/40 transition-colors"
+                        >Del</button>
+                      </div>
+                    )}
+                  </div>
+                ) : isAdmin ? (
+                  <button
+                    onClick={() => setNoteEditMode(prev => ({ ...prev, [ref.id]: true }))}
+                    className="text-[9px] text-amber-500 hover:text-amber-400 mt-1 self-start"
+                  >+ Add private note</button>
+                ) : null}
+
+                {/* Citations map — view / edit / delete. Click CITES to open popup. */}
+                {citesEditMode[ref.id] ? (
+                  <div className="flex items-start gap-1.5 mt-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 shrink-0 pt-1">Cites</span>
+                    <div className="flex-1 flex flex-col gap-1">
+                      <textarea
+                        value={editingCitationsMap[ref.id] ?? ref.citations_map ?? ""}
+                        onChange={e => setEditingCitationsMap(prev => ({ ...prev, [ref.id]: e.target.value }))}
+                        placeholder="e.g. §2.1 P1 — theme (multi-line allowed)…"
+                        rows={4}
+                        autoFocus
+                        className="w-full px-2 py-1 rounded bg-[var(--card)] border border-indigo-500/40 text-[10px] text-[var(--foreground)] focus:outline-none focus:border-indigo-500 resize-y"
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => {
+                            const v = editingCitationsMap[ref.id] ?? ref.citations_map ?? "";
+                            updateRef(ref.id, { citations_map: v || null });
+                            setCitesEditMode(prev => ({ ...prev, [ref.id]: false }));
+                          }}
+                          className="text-[9px] px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                        >Save</button>
+                        <button
+                          onClick={() => {
+                            setEditingCitationsMap(prev => { const n = { ...prev }; delete n[ref.id]; return n; });
+                            setCitesEditMode(prev => ({ ...prev, [ref.id]: false }));
+                          }}
+                          className="text-[9px] px-2 py-0.5 rounded bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors"
+                        >Cancel</button>
+                      </div>
+                    </div>
                   </div>
                 ) : ref.citations_map ? (
-                  <p className="text-[10px] mt-1">
-                    <span
-                      className="font-bold uppercase tracking-wider text-indigo-500 mr-1.5 cursor-help"
-                      title={ref.citations_map}
-                    >
-                      Cites
-                    </span>
-                    <span className="text-[var(--foreground)] whitespace-pre-wrap">{ref.citations_map}</span>
-                  </p>
+                  <div className="flex items-start gap-1.5 mt-1">
+                    <button
+                      onClick={() => setCitesPopup(citesPopup === ref.id ? null : ref.id)}
+                      className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 shrink-0 pt-0.5 hover:text-indigo-400 transition-colors"
+                      title="Click to view full citations map"
+                    >Cites ▸</button>
+                    <p className="text-[10px] text-[var(--foreground)] flex-1 line-clamp-1">{ref.citations_map.split("\n")[0]}</p>
+                    {isAdmin && (
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={() => setCitesEditMode(prev => ({ ...prev, [ref.id]: true }))}
+                          title="Edit citations map"
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-600/20 text-indigo-500 hover:bg-indigo-600/40 transition-colors"
+                        >Edit</button>
+                        <button
+                          onClick={() => { if (confirm("Delete citations map?")) updateRef(ref.id, { citations_map: null }); }}
+                          title="Delete citations map"
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-red-600/20 text-red-500 hover:bg-red-600/40 transition-colors"
+                        >Del</button>
+                      </div>
+                    )}
+                  </div>
+                ) : isAdmin ? (
+                  <button
+                    onClick={() => setCitesEditMode(prev => ({ ...prev, [ref.id]: true }))}
+                    className="text-[9px] text-indigo-500 hover:text-indigo-400 mt-1 self-start"
+                  >+ Add citations map</button>
                 ) : null}
+
+                {/* Popup for full citations_map view */}
+                {citesPopup === ref.id && ref.citations_map && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                    onClick={() => setCitesPopup(null)}
+                  >
+                    <div
+                      className="bg-[var(--background)] border border-indigo-500/40 rounded-lg p-4 max-w-2xl max-h-[80vh] overflow-y-auto"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-500">Citations map</span>
+                        <button
+                          onClick={() => setCitesPopup(null)}
+                          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                        >✕</button>
+                      </div>
+                      <p className="text-sm font-medium mb-2 text-[var(--foreground)]">{ref.title}</p>
+                      <p className="text-sm text-[var(--foreground)] whitespace-pre-wrap">{ref.citations_map}</p>
+                    </div>
+                  </div>
+                )}
                 {/* Collapsible keywords + labels */}
                 {(ref.keywords.length > 0 || ref.labels.length > 0) && (
                   <>

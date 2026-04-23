@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import useSWR from "swr";
 import { authFetcher } from "@/lib/api";
 
@@ -33,6 +34,7 @@ export default function CitedByManuscripts({ paperId }: { paperId: number }) {
     `/api/v1/paper-references/${paperId}/reverse`,
     authFetcher
   );
+  const [popupItem, setPopupItem] = useState<CitedByItem | null>(null);
 
   if (!data || data.cited_by.length === 0) return null;
 
@@ -58,19 +60,45 @@ export default function CitedByManuscripts({ paperId }: { paperId: number }) {
               )}
             </div>
             {item.citations_map && (
-              <p className="text-[11px] whitespace-pre-wrap">
-                <span
-                  className="font-bold uppercase tracking-wider text-indigo-500 text-[9px] mr-1.5 cursor-help"
-                  title={item.citations_map}
+              <div className="flex items-start gap-1.5">
+                <button
+                  onClick={() => setPopupItem(item)}
+                  className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-400 shrink-0 pt-0.5 transition-colors"
+                  title="Click to view full citations map"
                 >
-                  Cites
-                </span>
-                <span className="text-[var(--foreground)]">{item.citations_map}</span>
-              </p>
+                  Cites ▸
+                </button>
+                <p className="text-[11px] text-[var(--foreground)] line-clamp-1 flex-1">
+                  {item.citations_map.split("\n")[0]}
+                </p>
+              </div>
             )}
           </div>
         ))}
       </div>
+
+      {/* Popup for full citations_map */}
+      {popupItem && popupItem.citations_map && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setPopupItem(null)}
+        >
+          <div
+            className="bg-[var(--background)] border border-indigo-500/40 rounded-lg p-4 max-w-2xl max-h-[80vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-500">Citations map</span>
+              <button
+                onClick={() => setPopupItem(null)}
+                className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >✕</button>
+            </div>
+            <p className="text-sm font-medium mb-2 text-[var(--foreground)]">{popupItem.manuscript_title}</p>
+            <p className="text-sm text-[var(--foreground)] whitespace-pre-wrap">{popupItem.citations_map}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
