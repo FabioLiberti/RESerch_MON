@@ -438,37 +438,39 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
           </div>
         </button>
         {!collapsed && (
-        <div className="flex gap-2 flex-wrap">
-          {refs.length > 0 && (
-            <>
-              <ExportMenu
-                onExportBibtex={exportBibtex}
-                onExportHarvard={exportHarvard}
-                onExportTxt={exportTxt}
-                onExportCsv={exportCsv}
-                onExportCitesMap={exportCitesMap}
-                onExportCitesMapCsv={exportCitesMapCsv}
-                onExportCitesMapTxt={exportCitesMapTxt}
-              />
-              <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 inline-flex items-center gap-1" title="Analyze bibliography">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                Analyze
-              </a>
-            </>
-          )}
-          {refs.length > 0 && (
-            <button
-              onClick={() => setCitesMapModal(true)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40 hover:text-indigo-300 font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
-              title="View all citations maps"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
-              Citations map
-            </button>
-          )}
+        <div className="flex flex-col items-end gap-1.5">
+          {/* Row 1: view / analyze / export */}
+          <div className="flex gap-2 flex-wrap justify-end">
+            {refs.length > 0 && (
+              <>
+                <ExportMenu
+                  onExportBibtex={exportBibtex}
+                  onExportHarvard={exportHarvard}
+                  onExportTxt={exportTxt}
+                  onExportCsv={exportCsv}
+                  onExportCitesMap={exportCitesMap}
+                  onExportCitesMapCsv={exportCitesMapCsv}
+                  onExportCitesMapTxt={exportCitesMapTxt}
+                />
+                <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 inline-flex items-center gap-1" title="Analyze bibliography">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                  Analyze
+                </a>
+                <button
+                  onClick={() => setCitesMapModal(true)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40 hover:text-indigo-300 font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
+                  title="View all citations maps"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                  Citations map
+                </button>
+              </>
+            )}
+          </div>
+          {/* Row 2: admin actions */}
           {isAdmin && (
-            <>
+            <div className="flex gap-2 flex-wrap justify-end">
               <button
                 onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
                 className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
@@ -481,7 +483,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
               >
                 + Add Reference
               </button>
-            </>
+            </div>
           )}
         </div>
         )}
