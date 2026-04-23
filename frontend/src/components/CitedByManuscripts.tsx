@@ -59,7 +59,12 @@ export default function CitedByManuscripts({ paperId }: { paperId: number }) {
             </div>
             {item.citations_map && (
               <p className="text-[11px] whitespace-pre-wrap">
-                <span className="font-bold uppercase tracking-wider text-indigo-500 text-[9px] mr-1.5">Cites</span>
+                <span
+                  className="font-bold uppercase tracking-wider text-indigo-500 text-[9px] mr-1.5 cursor-help"
+                  title={item.citations_map}
+                >
+                  Cites
+                </span>
                 <span className="text-[var(--foreground)]">{item.citations_map}</span>
               </p>
             )}
