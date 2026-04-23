@@ -639,17 +639,23 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                 ) : null}
                 {/* Editable citations map — admin only. Surfaced on the cited paper's "Cited by" card. */}
                 {isAdmin ? (
-                  <input
-                    type="text"
-                    value={editingCitationsMap[ref.id] ?? ref.citations_map ?? ""}
-                    onChange={e => setEditingCitationsMap(prev => ({ ...prev, [ref.id]: e.target.value }))}
-                    onBlur={e => updateRef(ref.id, { citations_map: e.target.value || null })}
-                    placeholder="Citations map (e.g. §2.1 P1 — theme)…"
-                    className="w-full px-2 py-1 rounded bg-[var(--card)] border border-indigo-500/30 text-[10px] text-indigo-300 focus:outline-none mt-1"
-                    title="Where in the manuscript this paper is cited (visible on the cited paper's page)"
-                  />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 shrink-0">Cites</span>
+                    <input
+                      type="text"
+                      value={editingCitationsMap[ref.id] ?? ref.citations_map ?? ""}
+                      onChange={e => setEditingCitationsMap(prev => ({ ...prev, [ref.id]: e.target.value }))}
+                      onBlur={e => updateRef(ref.id, { citations_map: e.target.value || null })}
+                      placeholder="e.g. §2.1 P1 — theme…"
+                      className="flex-1 px-2 py-1 rounded bg-[var(--card)] border border-indigo-500/40 text-[10px] text-[var(--foreground)] focus:outline-none focus:border-indigo-500"
+                      title="Where in the manuscript this paper is cited (visible on the cited paper's page)"
+                    />
+                  </div>
                 ) : ref.citations_map ? (
-                  <p className="text-[10px] text-indigo-400 mt-1">{ref.citations_map}</p>
+                  <p className="text-[10px] mt-1">
+                    <span className="font-bold uppercase tracking-wider text-indigo-500 mr-1.5">Cites</span>
+                    <span className="text-[var(--foreground)]">{ref.citations_map}</span>
+                  </p>
                 ) : null}
                 {/* Collapsible keywords + labels */}
                 {(ref.keywords.length > 0 || ref.labels.length > 0) && (
