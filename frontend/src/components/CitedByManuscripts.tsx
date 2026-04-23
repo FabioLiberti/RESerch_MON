@@ -63,13 +63,13 @@ export default function CitedByManuscripts({ paperId }: { paperId: number }) {
               <div className="flex items-start gap-1.5">
                 <button
                   onClick={() => setPopupItem(item)}
-                  className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-400 shrink-0 pt-0.5 transition-colors"
-                  title="Click to view full citations map"
+                  className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-400 shrink-0 pt-0.5 transition-colors cursor-pointer"
+                  title="Click to open in popup"
                 >
                   Cites ▸
                 </button>
-                <p className="text-[11px] text-[var(--foreground)] line-clamp-1 flex-1">
-                  {item.citations_map.split("\n")[0]}
+                <p className="text-[11px] text-[var(--foreground)] whitespace-pre-wrap flex-1">
+                  {item.citations_map}
                 </p>
               </div>
             )}

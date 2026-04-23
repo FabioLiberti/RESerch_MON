@@ -248,6 +248,60 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
     downloadFile([header, ...rows].join("\n"), `bibliography_${paperId}.csv`, "text/csv");
   };
 
+  const exportCitesMap = () => {
+    // Structured markdown export of the citations_map for each cited paper.
+    // Useful to share with supervisors a compact digest of "where each source
+    // is used in the manuscript" without opening the bibliography UI.
+    const refs = data?.references || [];
+    const today = new Date().toISOString().slice(0, 10);
+    const withMap = refs.filter(r => r.citations_map && r.citations_map.trim());
+    const withoutMap = refs.filter(r => !r.citations_map || !r.citations_map.trim());
+
+    const lines: string[] = [];
+    lines.push(`# Citations map — Manuscript #${paperId}`);
+    lines.push(`Generated: ${today}`);
+    lines.push(``);
+    lines.push(`Total cited papers: ${refs.length}`);
+    lines.push(`With citations map: ${withMap.length}`);
+    lines.push(`Without citations map: ${withoutMap.length}`);
+    lines.push(``);
+    lines.push(`---`);
+    lines.push(``);
+
+    withMap.forEach((ref, i) => {
+      const year = ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d.";
+      lines.push(`## ${i + 1}. ${ref.title || "(no title)"}`);
+      const meta: string[] = [];
+      if (ref.journal) meta.push(`*${ref.journal}*`);
+      meta.push(`**${year}**`);
+      if (ref.doi) meta.push(`DOI: ${ref.doi}`);
+      lines.push(meta.join(" · "));
+      const tags: string[] = [];
+      if (ref.context_label) tags.push(`Context: ${ref.context_label}`);
+      if (ref.rating) tags.push(`Rating: ${ref.rating}/5`);
+      if (tags.length > 0) lines.push(tags.join(" · "));
+      lines.push(``);
+      lines.push(`**Citations map:**`);
+      lines.push(``);
+      (ref.citations_map || "").split("\n").forEach(l => lines.push(`> ${l}`));
+      lines.push(``);
+      lines.push(`---`);
+      lines.push(``);
+    });
+
+    if (withoutMap.length > 0) {
+      lines.push(`## Papers without a citations map (${withoutMap.length})`);
+      lines.push(``);
+      withoutMap.forEach((ref) => {
+        const year = ref.publication_date ? ref.publication_date.slice(0, 4) : "n.d.";
+        lines.push(`- ${ref.title || "(no title)"} (${year})`);
+      });
+      lines.push(``);
+    }
+
+    downloadFile(lines.join("\n"), `citations_map_${paperId}.md`, "text/markdown");
+  };
+
   // Keywords aggregation — use data?.references directly (refs not yet defined here)
   const { data: kwData } = useSWR<{ total_papers: number; keywords: { keyword: string; count: number }[] }>(
     (data?.references?.length ?? 0) > 0 ? `/api/v1/paper-references/${paperId}/keywords` : null,
@@ -315,6 +369,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                 onExportHarvard={exportHarvard}
                 onExportTxt={exportTxt}
                 onExportCsv={exportCsv}
+                onExportCitesMap={exportCitesMap}
               />
               <a href={`/bibliography-analysis/${paperId}`} target="_blank" rel="noopener noreferrer"
                 className="text-[10px] px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 inline-flex items-center gap-1" title="Analyze bibliography">
@@ -721,7 +776,7 @@ export default function ManuscriptBibliography({ paperId }: { paperId: number })
                   <div className="flex items-start gap-1.5 mt-1">
                     <button
                       onClick={() => setCitesPopup(citesPopup === ref.id ? null : ref.id)}
-                      className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 shrink-0 pt-0.5 hover:text-indigo-400 transition-colors"
+                      className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 shrink-0 pt-0.5 hover:text-indigo-400 transition-colors cursor-pointer"
                       title="Click to view full citations map"
                     >Cites ▸</button>
                     <p className="text-[10px] text-[var(--foreground)] flex-1 line-clamp-1">{ref.citations_map.split("\n")[0]}</p>
@@ -863,11 +918,13 @@ function ExportMenu({
   onExportHarvard,
   onExportTxt,
   onExportCsv,
+  onExportCitesMap,
 }: {
   onExportBibtex: () => void | Promise<void>;
   onExportHarvard: () => void | Promise<void>;
   onExportTxt: () => void;
   onExportCsv: () => void;
+  onExportCitesMap: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -892,6 +949,7 @@ function ExportMenu({
     { key: "harvard", label: "Harvard (.txt)", desc: "Ready to paste in Word — IFKAD style", onClick: onExportHarvard },
     { key: "txt", label: "Plain text (.txt)", desc: "Numbered list", onClick: onExportTxt },
     { key: "csv", label: "Spreadsheet (.csv)", desc: "Tabular view", onClick: onExportCsv },
+    { key: "cites", label: "Citations map (.md)", desc: "Where each source is used in the manuscript", onClick: onExportCitesMap },
   ];
 
   return (
