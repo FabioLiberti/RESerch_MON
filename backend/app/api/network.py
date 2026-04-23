@@ -170,6 +170,57 @@ async def citations_network(
     if not paper:
         return {"nodes": [], "links": [], "stats": {"total_nodes": 0, "total_links": 0, "type": "citations"}}
 
+    # Special case for manuscripts authored by the user: build the ego-centric
+    # graph from the internal bibliography (PaperReference) instead of Semantic
+    # Scholar. A my_manuscript paper has no public DOI/S2 entry, so the usual
+    # external lookup would return empty.
+    if paper.paper_role == "my_manuscript":
+        from app.models.paper_reference import PaperReference
+        refs_result = await db.execute(
+            select(PaperReference, Paper.title, Paper.doi, Paper.citation_count)
+            .join(Paper, PaperReference.cited_paper_id == Paper.id)
+            .where(PaperReference.manuscript_id == paper_id)
+        )
+        refs_rows = refs_result.all()
+
+        nodes_map_ms: dict[str, dict] = {}
+        links_ms: list[dict] = []
+
+        center_nid_ms = f"db_{paper_id}"
+        nodes_map_ms[center_nid_ms] = {
+            "id": center_nid_ms, "paper_id": paper_id, "title": (paper.title or "")[:80],
+            "citations": paper.citation_count or 0, "doi": paper.doi,
+            "source": "manuscript", "in_db": True, "is_center": True,
+        }
+
+        for row in refs_rows:
+            ref = row.PaperReference
+            target_nid_ms = f"db_{ref.cited_paper_id}"
+            if target_nid_ms not in nodes_map_ms:
+                nodes_map_ms[target_nid_ms] = {
+                    "id": target_nid_ms, "paper_id": ref.cited_paper_id,
+                    "title": (row.title or "")[:80],
+                    "citations": row.citation_count or 0, "doi": row.doi,
+                    "source": "database", "in_db": True, "is_center": False,
+                }
+            links_ms.append({"source": center_nid_ms, "target": target_nid_ms, "type": "cites"})
+
+        nodes_ms = list(nodes_map_ms.values())
+        return {
+            "nodes": nodes_ms,
+            "links": links_ms,
+            "stats": {
+                "total_nodes": len(nodes_ms),
+                "total_links": len(links_ms),
+                "references": len(links_ms),
+                "cited_by": 0,
+                "in_db": len(nodes_ms),
+                "external": 0,
+                "type": "citations",
+                "mode": "manuscript_bibliography",
+            },
+        }
+
     if not paper.doi and not (paper.external_ids or {}).get("s2_id"):
         return {
             "nodes": [], "links": [],
