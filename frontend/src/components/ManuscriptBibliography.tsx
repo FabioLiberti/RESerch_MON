@@ -457,6 +457,11 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                   Analyze
                 </a>
+                <a href={`/network?tab=citations&paper_id=${paperId}`} target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] px-2 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-500 inline-flex items-center gap-1" title="Open citations network — this manuscript at the centre with its bibliography around it">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path strokeLinecap="round" strokeLinejoin="round" d="M7 7l10 4M7 17l10-4"/></svg>
+                  Citations network
+                </a>
                 <button
                   onClick={() => setCitesMapModal(true)}
                   className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40 hover:text-indigo-300 font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
