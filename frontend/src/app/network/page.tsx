@@ -7,6 +7,7 @@ import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { SOURCE_COLORS, SOURCE_LABELS, cn } from "@/lib/utils";
 import NetworkGraph from "@/components/charts/NetworkGraph";
+import FilterDropdown, { FilterDropdownTags } from "@/components/FilterDropdown";
 
 type NetworkTab = "co-keywords" | "co-authors" | "citations";
 
@@ -48,22 +49,22 @@ export default function NetworkPage() {
   const [filterCitLabels, setFilterCitLabels] = useState<Set<string>>(new Set());
   const [filterCitKeywords, setFilterCitKeywords] = useState<Set<string>>(new Set());
 
-  // Build union of labels/keywords across all non-center nodes (for filter dropdowns)
+  // Build {name → count} for labels/keywords across non-center nodes (for filter dropdowns)
   const availableCitLabels = useMemo(() => {
-    const set = new Set<string>();
+    const map = new Map<string, number>();
     (citationData?.nodes || []).forEach((n: any) => {
       if (n.is_center) return;
-      (n.labels || []).forEach((l: any) => set.add(l.name));
+      (n.labels || []).forEach((l: any) => map.set(l.name, (map.get(l.name) || 0) + 1));
     });
-    return Array.from(set).sort();
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [citationData]);
   const availableCitKeywords = useMemo(() => {
-    const set = new Set<string>();
+    const map = new Map<string, number>();
     (citationData?.nodes || []).forEach((n: any) => {
       if (n.is_center) return;
-      (n.keywords || []).forEach((k: string) => set.add(k));
+      (n.keywords || []).forEach((k: string) => map.set(k, (map.get(k) || 0) + 1));
     });
-    return Array.from(set).sort();
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [citationData]);
 
   const params = new URLSearchParams({
@@ -387,74 +388,46 @@ export default function NetworkPage() {
             </div>
           )}
 
-          {/* Label + keyword filters (only when citation data is loaded) */}
+          {/* Label + keyword typeahead filters (only when citation data is loaded) */}
           {citationPaperId && citationData && (availableCitLabels.length > 0 || availableCitKeywords.length > 0) && (
             <div className="flex flex-col gap-2 p-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)]">
               {availableCitLabels.length > 0 && (
                 <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] pt-1 shrink-0">Labels</span>
-                  <div className="flex gap-1 flex-wrap">
-                    {availableCitLabels.map(name => {
-                      const active = filterCitLabels.has(name);
-                      return (
-                        <button
-                          key={name}
-                          onClick={() => {
-                            const next = new Set(filterCitLabels);
-                            if (active) next.delete(name); else next.add(name);
-                            setFilterCitLabels(next);
-                          }}
-                          className={cn(
-                            "text-[9px] px-1.5 py-0.5 rounded border transition-colors",
-                            active
-                              ? "bg-indigo-600 text-white border-indigo-500"
-                              : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-indigo-500/50"
-                          )}
-                        >
-                          {name}
-                        </button>
-                      );
-                    })}
-                    {filterCitLabels.size > 0 && (
-                      <button
-                        onClick={() => setFilterCitLabels(new Set())}
-                        className="text-[9px] px-1.5 py-0.5 rounded bg-red-700/40 text-red-300 hover:bg-red-700/60"
-                      >clear</button>
-                    )}
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] pt-2 shrink-0 w-16">Labels</span>
+                  <div className="flex-1 flex flex-col gap-1 min-w-0">
+                    <FilterDropdown
+                      values={Array.from(filterCitLabels)}
+                      onChange={(vals) => setFilterCitLabels(new Set(vals))}
+                      placeholder="Type to search labels…"
+                      tagLabel="label"
+                      options={availableCitLabels.map(([name, count]) => ({ value: name, label: name, count }))}
+                      className="max-w-md"
+                    />
+                    <FilterDropdownTags
+                      values={Array.from(filterCitLabels)}
+                      onRemove={(v) => { const n = new Set(filterCitLabels); n.delete(v); setFilterCitLabels(n); }}
+                      colorClass="bg-indigo-600/20 text-indigo-300"
+                    />
                   </div>
                 </div>
               )}
               {availableCitKeywords.length > 0 && (
                 <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] pt-1 shrink-0">Keywords</span>
-                  <div className="flex gap-1 flex-wrap max-h-32 overflow-y-auto">
-                    {availableCitKeywords.map(k => {
-                      const active = filterCitKeywords.has(k);
-                      return (
-                        <button
-                          key={k}
-                          onClick={() => {
-                            const next = new Set(filterCitKeywords);
-                            if (active) next.delete(k); else next.add(k);
-                            setFilterCitKeywords(next);
-                          }}
-                          className={cn(
-                            "text-[9px] px-1.5 py-0.5 rounded-full border transition-colors",
-                            active
-                              ? "bg-emerald-700 text-white border-emerald-600"
-                              : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-emerald-500/50"
-                          )}
-                        >
-                          {k}
-                        </button>
-                      );
-                    })}
-                    {filterCitKeywords.size > 0 && (
-                      <button
-                        onClick={() => setFilterCitKeywords(new Set())}
-                        className="text-[9px] px-1.5 py-0.5 rounded bg-red-700/40 text-red-300 hover:bg-red-700/60"
-                      >clear</button>
-                    )}
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] pt-2 shrink-0 w-16">Keywords</span>
+                  <div className="flex-1 flex flex-col gap-1 min-w-0">
+                    <FilterDropdown
+                      values={Array.from(filterCitKeywords)}
+                      onChange={(vals) => setFilterCitKeywords(new Set(vals))}
+                      placeholder="Type to search keywords…"
+                      tagLabel="keyword"
+                      options={availableCitKeywords.map(([name, count]) => ({ value: name, label: name, count }))}
+                      className="max-w-md"
+                    />
+                    <FilterDropdownTags
+                      values={Array.from(filterCitKeywords)}
+                      onRemove={(v) => { const n = new Set(filterCitKeywords); n.delete(v); setFilterCitKeywords(n); }}
+                      colorClass="bg-emerald-700/20 text-emerald-300"
+                    />
                   </div>
                 </div>
               )}
