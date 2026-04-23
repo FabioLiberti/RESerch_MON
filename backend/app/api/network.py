@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.paper import Paper, PaperAuthor, PaperSource, Author
+from app.models.label import Label, PaperLabel
 
 logger = logging.getLogger(__name__)
 
@@ -176,12 +177,26 @@ async def citations_network(
     # external lookup would return empty.
     if paper.paper_role == "my_manuscript":
         from app.models.paper_reference import PaperReference
+        import json as _json_ms
         refs_result = await db.execute(
-            select(PaperReference, Paper.title, Paper.doi, Paper.citation_count)
+            select(PaperReference, Paper.title, Paper.doi, Paper.citation_count, Paper.keywords_json)
             .join(Paper, PaperReference.cited_paper_id == Paper.id)
             .where(PaperReference.manuscript_id == paper_id)
         )
         refs_rows = refs_result.all()
+
+        cited_ids_ms = [r.PaperReference.cited_paper_id for r in refs_rows]
+
+        # Batch fetch labels for all cited papers
+        labels_by_paper: dict[int, list[dict]] = {}
+        if cited_ids_ms:
+            labels_q = await db.execute(
+                select(PaperLabel.paper_id, Label.name, Label.color)
+                .join(Label, PaperLabel.label_id == Label.id)
+                .where(PaperLabel.paper_id.in_(cited_ids_ms))
+            )
+            for pid, lname, lcolor in labels_q.all():
+                labels_by_paper.setdefault(pid, []).append({"name": lname, "color": lcolor})
 
         nodes_map_ms: dict[str, dict] = {}
         links_ms: list[dict] = []
@@ -191,17 +206,26 @@ async def citations_network(
             "id": center_nid_ms, "paper_id": paper_id, "title": (paper.title or "")[:80],
             "citations": paper.citation_count or 0, "doi": paper.doi,
             "source": "manuscript", "in_db": True, "is_center": True,
+            "labels": labels_by_paper.get(paper_id, []),
+            "keywords": [k.lower() for k in (_json_ms.loads(paper.keywords_json) if paper.keywords_json else [])],
         }
 
         for row in refs_rows:
             ref = row.PaperReference
-            target_nid_ms = f"db_{ref.cited_paper_id}"
+            cited_pid = ref.cited_paper_id
+            target_nid_ms = f"db_{cited_pid}"
             if target_nid_ms not in nodes_map_ms:
+                try:
+                    kw_list = [k.lower() for k in _json_ms.loads(row.keywords_json)] if row.keywords_json else []
+                except Exception:
+                    kw_list = []
                 nodes_map_ms[target_nid_ms] = {
-                    "id": target_nid_ms, "paper_id": ref.cited_paper_id,
+                    "id": target_nid_ms, "paper_id": cited_pid,
                     "title": (row.title or "")[:80],
                     "citations": row.citation_count or 0, "doi": row.doi,
                     "source": "database", "in_db": True, "is_center": False,
+                    "labels": labels_by_paper.get(cited_pid, []),
+                    "keywords": kw_list,
                 }
             links_ms.append({"source": center_nid_ms, "target": target_nid_ms, "type": "cites"})
 
