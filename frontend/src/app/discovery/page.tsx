@@ -1039,6 +1039,14 @@ function SmartSearchSection() {
             : r
         ) || null
       );
+      // Invalidate SWR caches of pages that show the global paper list, so a
+      // Papers tab opened in another tab/before this save sees the new entries
+      // on next focus instead of stale data.
+      mutate(
+        (key) => typeof key === "string" && key.startsWith("/api/v1/papers"),
+        undefined,
+        { revalidate: true }
+      );
     } catch (e: any) {
       setMessage({ type: "error", text: e.message || "Save failed" });
     }
