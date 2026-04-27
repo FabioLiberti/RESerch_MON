@@ -1487,24 +1487,30 @@ function SmartSearchSection() {
           </div>
           )}
 
-          {/* Results list */}
+          {/* Results list. Note: `selectedPapers` and the backend use indices
+              into the original `results` array, NOT into the (possibly sorted /
+              filtered) `sortedResults`. We translate via .indexOf to keep the
+              two consistent — otherwise an active sort/filter would cause
+              save() to operate on the wrong rows. */}
           <div className="space-y-1 max-h-[500px] overflow-y-auto overflow-x-hidden">
-            {(sortedResults || []).map((r, i) => (
+            {(sortedResults || []).map((r, sortedIdx) => {
+              const origIdx = results ? results.indexOf(r) : sortedIdx;
+              return (
               <div
-                key={i}
+                key={origIdx >= 0 ? origIdx : sortedIdx}
                 className={cn(
                   "flex items-start gap-3 p-3 rounded-lg transition-colors overflow-hidden",
                   r.already_in_db
                     ? "opacity-70"
-                    : selectedPapers.has(i)
+                    : selectedPapers.has(origIdx)
                     ? "bg-[var(--primary)]/5"
                     : "hover:bg-[var(--secondary)]"
                 )}
               >
                 <input
                   type="checkbox"
-                  checked={selectedPapers.has(i)}
-                  onChange={() => togglePaper(i)}
+                  checked={selectedPapers.has(origIdx)}
+                  onChange={() => togglePaper(origIdx)}
                   disabled={r.already_in_db}
                   className="mt-1 rounded accent-[var(--primary)]"
                 />
@@ -1631,7 +1637,8 @@ function SmartSearchSection() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Action bar */}
