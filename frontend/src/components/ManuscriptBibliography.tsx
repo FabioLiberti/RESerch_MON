@@ -381,10 +381,57 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   const [filterLabels, setFilterLabels] = useState<Set<string>>(new Set());
   const [showLabelsFilter, setShowLabelsFilter] = useState(false);
   const [expandedDetails, setExpandedDetails] = useState<Set<number>>(new Set());
+  const [sortBy, setSortBy] = useState<string>("insertion");
 
   if (isLoading) return <div className="h-16 bg-[var(--muted)] rounded-xl animate-pulse" />;
 
   const refs = data?.references || [];
+
+  const getYear = (r: Reference) => (r.publication_date ? parseInt(r.publication_date.slice(0, 4), 10) || 0 : 0);
+  const getSurname = (r: Reference) => (r.first_author ? (r.first_author.split(/[ ,]+/).pop() || "").toLowerCase() : "");
+  const nullLast = (av: any, bv: any) => {
+    const aE = av === null || av === undefined || av === "" || av === 0;
+    const bE = bv === null || bv === undefined || bv === "" || bv === 0;
+    if (aE && bE) return 0;
+    if (aE) return 1;
+    if (bE) return -1;
+    return null;
+  };
+  const sortedRefs = sortBy === "insertion" ? refs : [...refs].sort((a, b) => {
+    switch (sortBy) {
+      case "author_asc": {
+        const sa = getSurname(a), sb = getSurname(b);
+        const n = nullLast(sa, sb); if (n !== null) return n;
+        return sa.localeCompare(sb);
+      }
+      case "year_desc": {
+        const ya = getYear(a), yb = getYear(b);
+        const n = nullLast(ya, yb); if (n !== null) return n;
+        return yb - ya;
+      }
+      case "year_asc": {
+        const ya = getYear(a), yb = getYear(b);
+        const n = nullLast(ya, yb); if (n !== null) return n;
+        return ya - yb;
+      }
+      case "title_asc":
+        return (a.title || "").localeCompare(b.title || "");
+      case "rating_desc":
+        return (b.rating || 0) - (a.rating || 0);
+      case "journal_asc": {
+        const ja = a.journal || "", jb = b.journal || "";
+        const n = nullLast(ja, jb); if (n !== null) return n;
+        return ja.localeCompare(jb);
+      }
+      case "context": {
+        const ca = a.context || "", cb = b.context || "";
+        const n = nullLast(ca, cb); if (n !== null) return n;
+        return ca.localeCompare(cb);
+      }
+      default:
+        return 0;
+    }
+  });
 
   // Compute filtered refs based on active filters (for dynamic counts)
   const refsFilteredByLabels = filterLabels.size > 0
@@ -758,7 +805,27 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       {/* References list */}
       {refs.length > 0 && (
         <div className="space-y-2">
-          {refs.map(ref => (
+          {refs.length > 1 && (
+            <div className="flex items-center justify-end gap-2 pb-2 border-b border-[var(--border)]">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Sort</label>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="text-[10px] px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none cursor-pointer"
+                title="Sort the bibliography (display only — does not change saved order)"
+              >
+                <option value="insertion">Insertion order</option>
+                <option value="author_asc">Author (A→Z)</option>
+                <option value="year_desc">Year (newest first)</option>
+                <option value="year_asc">Year (oldest first)</option>
+                <option value="title_asc">Title (A→Z)</option>
+                <option value="rating_desc">Rating (★ high first)</option>
+                <option value="journal_asc">Journal (A→Z)</option>
+                <option value="context">Context (grouped)</option>
+              </select>
+            </div>
+          )}
+          {sortedRefs.map(ref => (
             <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border transition-opacity ${ref.disabled ? "opacity-75 border-red-800/40" : "border-[var(--border)]"} ${(filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k))) || (filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name))) ? "opacity-30" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
