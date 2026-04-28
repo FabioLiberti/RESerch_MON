@@ -25,6 +25,10 @@ class PaperReference(Base):
     # Where in the manuscript this paper is cited
     context = Column(String(50), nullable=True)  # related_work | methodology | comparison | results | discussion | introduction | other
 
+    # Multi-context support: JSON array of context keys (e.g. ["introduction","methodology"]).
+    # Backward compat: when null/empty, fall back to the single `context` field above.
+    contexts_json = Column(Text, nullable=True)
+
     # Free-text note about why this paper is cited (private working notes)
     note = Column(Text, nullable=True)  # e.g. "Used as baseline in Table 3"
 

@@ -22,9 +22,21 @@ interface Reference {
   author_count: number;
   context: string | null;
   context_label: string | null;
+  contexts: string[];
+  contexts_labels: string[];
   note: string | null;
   citations_map: string | null;
   citation_count: number;
+}
+
+interface AutoDetectItem {
+  ref_id: number;
+  cited_paper_id: number;
+  title: string;
+  citations_map: string | null;
+  current_contexts: string[];
+  suggested_contexts: string[];
+  evidence: { line: string; section: string | null; theme: string; matched: string | null; context: string | null }[];
 }
 
 interface RefsResponse {
@@ -386,6 +398,78 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   const [showLabelsFilter, setShowLabelsFilter] = useState(false);
   const [expandedDetails, setExpandedDetails] = useState<Set<number>>(new Set());
   const [sortBy, setSortBy] = useState<string>("insertion");
+  const [editingContexts, setEditingContexts] = useState<Record<number, string[]>>({});
+
+  // Auto-detect contexts modal
+  const [autoDetectOpen, setAutoDetectOpen] = useState(false);
+  const [autoDetectLoading, setAutoDetectLoading] = useState(false);
+  const [autoDetectItems, setAutoDetectItems] = useState<AutoDetectItem[] | null>(null);
+  const [autoDetectSelections, setAutoDetectSelections] = useState<Record<number, Set<string>>>({});
+  const [autoDetectApplying, setAutoDetectApplying] = useState(false);
+  const [autoDetectExpanded, setAutoDetectExpanded] = useState<Set<number>>(new Set());
+
+  const updateContexts = async (refId: number, contexts: string[]) => {
+    await fetch(`/api/v1/paper-references/ref/${refId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ contexts }),
+    });
+    mutate(apiUrl);
+  };
+
+  const openAutoDetect = async () => {
+    setAutoDetectOpen(true);
+    setAutoDetectLoading(true);
+    setAutoDetectItems(null);
+    try {
+      const r = await fetch(`/api/v1/paper-references/${paperId}/auto-detect-contexts`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const items: AutoDetectItem[] = d.items || [];
+      setAutoDetectItems(items);
+      // Pre-select rows where the suggestion adds new contexts vs current
+      const initial: Record<number, Set<string>> = {};
+      items.forEach(it => {
+        const merged = new Set<string>([...(it.current_contexts || []), ...(it.suggested_contexts || [])]);
+        initial[it.ref_id] = merged;
+      });
+      setAutoDetectSelections(initial);
+    } catch (e) {
+      console.error("Auto-detect failed:", e);
+      alert("Auto-detect failed — check console.");
+    } finally {
+      setAutoDetectLoading(false);
+    }
+  };
+
+  const applyAutoDetect = async () => {
+    if (!autoDetectItems) return;
+    setAutoDetectApplying(true);
+    const selections: Record<number, string[]> = {};
+    Object.entries(autoDetectSelections).forEach(([refId, set]) => {
+      selections[Number(refId)] = Array.from(set);
+    });
+    try {
+      const r = await fetch(`/api/v1/paper-references/${paperId}/apply-detected-contexts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ selections }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      mutate(apiUrl);
+      setAutoDetectOpen(false);
+      setAutoDetectItems(null);
+      setAutoDetectSelections({});
+    } catch (e) {
+      console.error("Apply failed:", e);
+      alert("Apply failed — check console.");
+    } finally {
+      setAutoDetectApplying(false);
+    }
+  };
 
   if (isLoading) return <div className="h-16 bg-[var(--muted)] rounded-xl animate-pulse" />;
 
@@ -428,7 +512,8 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
         return ja.localeCompare(jb);
       }
       case "context": {
-        const ca = a.context || "", cb = b.context || "";
+        const ca = (a.contexts && a.contexts[0]) || a.context || "";
+        const cb = (b.contexts && b.contexts[0]) || b.context || "";
         const n = nullLast(ca, cb); if (n !== null) return n;
         return ca.localeCompare(cb);
       }
@@ -527,6 +612,15 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
           {/* Row 2: admin actions */}
           {isAdmin && (
             <div className="flex gap-2 flex-wrap justify-end">
+              {refs.length > 0 && (
+                <button
+                  onClick={openAutoDetect}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white font-bold hover:bg-amber-600 transition-colors"
+                  title="Scan each reference's citations map and propose contexts"
+                >
+                  Auto-detect contexts
+                </button>
+              )}
               <button
                 onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
                 className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
@@ -844,11 +938,17 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   {ref.rating != null && ref.rating > 0 && (
                     <span className="text-[10px] text-amber-400">{"★".repeat(ref.rating)}{"☆".repeat(5 - ref.rating)}</span>
                   )}
-                  {ref.context && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${CONTEXT_COLORS[ref.context] || "bg-gray-600"}`}>
-                      {ref.context_label || ref.context}
+                  {(ref.contexts && ref.contexts.length > 0
+                    ? ref.contexts
+                    : (ref.context ? [ref.context] : [])
+                  ).map((ctxKey, idx) => (
+                    <span
+                      key={`${ctxKey}-${idx}`}
+                      className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${CONTEXT_COLORS[ctxKey] || "bg-gray-600"}`}
+                    >
+                      {CONTEXT_OPTIONS.find(o => o.value === ctxKey)?.label || ctxKey}
                     </span>
-                  )}
+                  ))}
                   {ref.doi && <span className="text-[10px] text-[var(--muted-foreground)]">DOI: {ref.doi}</span>}
                   {ref.journal && <span className="text-[10px] text-[var(--muted-foreground)] italic">{ref.journal}</span>}
                 </div>
@@ -1028,16 +1128,52 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                 )}
               </div>
               {isAdmin ? (
-                <div className="flex flex-col gap-1 shrink-0">
-                  <select
-                    value={ref.context || ""}
-                    onChange={e => updateRef(ref.id, { context: e.target.value || null })}
-                    className="text-[9px] px-1 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] focus:outline-none"
-                  >
-                    {CONTEXT_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+                <div className="flex flex-col gap-1 shrink-0 w-44">
+                  {(() => {
+                    const draft = editingContexts[ref.id];
+                    const current = draft ?? (ref.contexts && ref.contexts.length > 0 ? ref.contexts : (ref.context ? [ref.context] : []));
+                    const isDirty = !!draft && (draft.length !== (ref.contexts?.length ?? (ref.context ? 1 : 0)) || draft.some((c, i) => c !== (ref.contexts?.[i] ?? ref.context)));
+                    return (
+                      <div className="flex flex-col gap-1 rounded bg-[var(--card)] border border-[var(--border)] p-1">
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Contexts</span>
+                        <div className="flex flex-wrap gap-0.5">
+                          {CONTEXT_OPTIONS.filter(o => o.value).map(opt => {
+                            const active = current.includes(opt.value);
+                            return (
+                              <button
+                                key={opt.value}
+                                title={opt.label}
+                                onClick={() => {
+                                  const next = active ? current.filter(c => c !== opt.value) : [...current, opt.value];
+                                  setEditingContexts(prev => ({ ...prev, [ref.id]: next }));
+                                }}
+                                className={`text-[8px] px-1 py-0.5 rounded transition-colors cursor-pointer ${
+                                  active ? `${CONTEXT_COLORS[opt.value] || "bg-gray-600"} text-white font-bold` : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                                }`}
+                              >
+                                {opt.label.split(" ")[0]}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {isDirty && (
+                          <div className="flex gap-1 mt-0.5">
+                            <button
+                              onClick={async () => {
+                                await updateContexts(ref.id, current);
+                                setEditingContexts(prev => { const n = { ...prev }; delete n[ref.id]; return n; });
+                              }}
+                              className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-700 text-white font-bold hover:bg-emerald-600"
+                            >Save</button>
+                            <button
+                              onClick={() => setEditingContexts(prev => { const n = { ...prev }; delete n[ref.id]; return n; })}
+                              className="text-[8px] px-1.5 py-0.5 rounded bg-[var(--secondary)] hover:bg-[var(--muted)]"
+                            >Cancel</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <button
                     onClick={async () => {
                       await fetch(`/api/v1/papers/${ref.cited_paper_id}/toggle-disabled`, {
@@ -1063,10 +1199,6 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                     Remove
                   </button>
                 </div>
-              ) : ref.context ? (
-                <span className={`text-[9px] px-1.5 py-0.5 rounded text-white shrink-0 ${CONTEXT_COLORS[ref.context] || "bg-gray-600"}`}>
-                  {CONTEXT_OPTIONS.find(o => o.value === ref.context)?.label || ref.context}
-                </span>
               ) : null}
             </div>
           ))}
@@ -1134,6 +1266,158 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   </ul>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-detect contexts modal */}
+      {autoDetectOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !autoDetectApplying && setAutoDetectOpen(false)}
+        >
+          <div
+            className="bg-[var(--background)] border border-amber-500/40 rounded-lg w-full max-w-5xl max-h-[88vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-amber-500">Auto-detect contexts from citations map</h3>
+                <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                  Each line of the citations_map is scanned for keywords (e.g. <em>method</em>, <em>related work</em>, <em>baseline</em>)
+                  and proposed as a context. Tick the contexts you want to keep, then Apply.
+                </p>
+              </div>
+              <button
+                onClick={() => !autoDetectApplying && setAutoDetectOpen(false)}
+                disabled={autoDetectApplying}
+                className="text-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer leading-none disabled:opacity-50"
+                aria-label="Close"
+              >✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {autoDetectLoading && <p className="text-sm text-[var(--muted-foreground)] text-center py-6">Scanning citations maps…</p>}
+
+              {!autoDetectLoading && autoDetectItems && autoDetectItems.length === 0 && (
+                <p className="text-sm text-[var(--muted-foreground)] text-center py-6">No references in this manuscript.</p>
+              )}
+
+              {!autoDetectLoading && autoDetectItems && autoDetectItems.map(item => {
+                const selected = autoDetectSelections[item.ref_id] || new Set<string>();
+                const hasMap = item.citations_map && item.citations_map.trim();
+                const expanded = autoDetectExpanded.has(item.ref_id);
+                const allSuggested = new Set([...(item.current_contexts || []), ...(item.suggested_contexts || [])]);
+                return (
+                  <div key={item.ref_id} className={`rounded-lg border p-3 ${hasMap ? "border-[var(--border)] bg-[var(--secondary)]/20" : "border-[var(--border)] bg-[var(--secondary)]/5 opacity-70"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <Link href={`/papers/${item.cited_paper_id}`} target="_blank" className="text-xs font-semibold hover:text-amber-400 line-clamp-1">
+                          {item.title}
+                        </Link>
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          <span className="text-[9px] text-[var(--muted-foreground)] uppercase tracking-wider">Current:</span>
+                          {item.current_contexts.length === 0 && <span className="text-[9px] text-[var(--muted-foreground)] italic">(none)</span>}
+                          {item.current_contexts.map(c => (
+                            <span key={c} className={`text-[9px] px-1.5 py-0.5 rounded text-white font-bold ${CONTEXT_COLORS[c] || "bg-gray-600"}`}>
+                              {CONTEXT_OPTIONS.find(o => o.value === c)?.label || c}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {!hasMap && <span className="text-[9px] text-[var(--muted-foreground)] italic shrink-0">no citations map</span>}
+                    </div>
+
+                    {/* Selectable chips — union of current + suggested */}
+                    {allSuggested.size > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[9px] text-[var(--muted-foreground)] uppercase tracking-wider">Apply:</span>
+                        {CONTEXT_OPTIONS.filter(o => o.value && allSuggested.has(o.value)).map(opt => {
+                          const isSelected = selected.has(opt.value);
+                          const isNew = !item.current_contexts.includes(opt.value);
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => {
+                                setAutoDetectSelections(prev => {
+                                  const next = { ...prev };
+                                  const set = new Set(next[item.ref_id] || []);
+                                  if (set.has(opt.value)) set.delete(opt.value); else set.add(opt.value);
+                                  next[item.ref_id] = set;
+                                  return next;
+                                });
+                              }}
+                              className={`text-[10px] px-2 py-0.5 rounded font-bold transition-colors cursor-pointer ${
+                                isSelected
+                                  ? `${CONTEXT_COLORS[opt.value] || "bg-gray-600"} text-white`
+                                  : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                              } ${isNew ? "ring-1 ring-amber-500/60" : ""}`}
+                              title={isNew ? `Suggested (new): ${opt.label}` : `Currently set: ${opt.label}`}
+                            >
+                              {isSelected ? "✓ " : ""}{opt.label}{isNew ? " ★" : ""}
+                            </button>
+                          );
+                        })}
+                        {hasMap && item.evidence.length > 0 && (
+                          <button
+                            onClick={() => {
+                              setAutoDetectExpanded(prev => {
+                                const next = new Set(prev);
+                                if (next.has(item.ref_id)) next.delete(item.ref_id); else next.add(item.ref_id);
+                                return next;
+                              });
+                            }}
+                            className="text-[9px] text-amber-500 hover:text-amber-400 ml-auto"
+                          >
+                            {expanded ? "Hide evidence ▴" : "Show evidence ▾"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {expanded && hasMap && (
+                      <div className="mt-2 pt-2 border-t border-[var(--border)] space-y-1">
+                        {item.evidence.map((ev, i) => (
+                          <div key={i} className="text-[10px] flex items-start gap-2">
+                            <span className="text-[var(--muted-foreground)] shrink-0 w-20 truncate" title={ev.section || ""}>
+                              {ev.section || "—"}
+                            </span>
+                            <span className="flex-1 text-[var(--foreground)]">{ev.theme || ev.line}</span>
+                            {ev.context ? (
+                              <span className={`text-[9px] px-1 py-0.5 rounded text-white font-bold shrink-0 ${CONTEXT_COLORS[ev.context] || "bg-gray-600"}`}>
+                                {CONTEXT_OPTIONS.find(o => o.value === ev.context)?.label || ev.context}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-[var(--muted-foreground)] italic shrink-0">no match</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between p-4 border-t border-[var(--border)] shrink-0 gap-2">
+              <span className="text-[10px] text-[var(--muted-foreground)]">
+                ★ = newly suggested · existing contexts pre-ticked · click chips to toggle
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => !autoDetectApplying && setAutoDetectOpen(false)}
+                  disabled={autoDetectApplying}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)] disabled:opacity-50"
+                >Cancel</button>
+                <button
+                  onClick={applyAutoDetect}
+                  disabled={autoDetectApplying || !autoDetectItems}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {autoDetectApplying ? "Applying…" : "Apply"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -16,6 +16,7 @@ from app.models.paper import Author, Paper, PaperAuthor
 from app.models.paper_reference import PaperReference
 from app.models.label import Label, PaperLabel
 from app.models.user import User
+from app.services.context_parser import CONTEXT_KEYS, detect_contexts
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,41 @@ router = APIRouter()
 class AddReferenceRequest(BaseModel):
     cited_paper_id: int
     context: str | None = None
+    contexts: list[str] | None = None
     note: str | None = None
     citations_map: str | None = None
 
 
 class UpdateReferenceRequest(BaseModel):
     context: str | None = None
+    contexts: list[str] | None = None
     note: str | None = None
     citations_map: str | None = None
+
+
+def _serialize_contexts(values: list[str] | None) -> str | None:
+    if not values:
+        return None
+    cleaned = [v for v in values if v in CONTEXT_KEYS]
+    if not cleaned:
+        return None
+    # de-duplicate while preserving order
+    seen: set[str] = set()
+    unique = [v for v in cleaned if not (v in seen or seen.add(v))]
+    return _json.dumps(unique)
+
+
+def _parse_contexts(raw: str | None, fallback_single: str | None) -> list[str]:
+    if raw:
+        try:
+            v = _json.loads(raw)
+            if isinstance(v, list):
+                return [c for c in v if c in CONTEXT_KEYS]
+        except Exception:
+            pass
+    if fallback_single and fallback_single in CONTEXT_KEYS:
+        return [fallback_single]
+    return []
 
 
 CONTEXT_LABELS = {
@@ -316,6 +344,9 @@ async def list_references(
     )
     refs = result.all()
 
+    def _ctx_label(key: str) -> str:
+        return CONTEXT_LABELS.get(key, key)
+
     import json as _json
 
     # Fetch labels for all cited papers in one query
@@ -363,6 +394,10 @@ async def list_references(
                 "author_count": (paper_authors_map.get(ref.PaperReference.cited_paper_id) or {}).get("author_count", 0),
                 "context": ref.PaperReference.context,
                 "context_label": CONTEXT_LABELS.get(ref.PaperReference.context, ref.PaperReference.context),
+                "contexts": _parse_contexts(ref.PaperReference.contexts_json, ref.PaperReference.context),
+                "contexts_labels": [
+                    _ctx_label(c) for c in _parse_contexts(ref.PaperReference.contexts_json, ref.PaperReference.context)
+                ],
                 "note": ref.PaperReference.note,
                 "citations_map": ref.PaperReference.citations_map,
             }
@@ -727,10 +762,15 @@ async def add_reference(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="This paper is already in the bibliography")
 
+    contexts_json_value = _serialize_contexts(body.contexts)
+    # If only `contexts` is provided, mirror its first value into `context` for back-compat
+    primary_context = body.context if body.context is not None else (body.contexts[0] if body.contexts else None)
+
     ref = PaperReference(
         manuscript_id=manuscript_id,
         cited_paper_id=body.cited_paper_id,
-        context=body.context,
+        context=primary_context,
+        contexts_json=contexts_json_value,
         note=body.note,
         citations_map=body.citations_map,
     )
@@ -748,12 +788,18 @@ async def update_reference(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update context, note or citations_map of a reference."""
+    """Update context(s), note or citations_map of a reference."""
     ref = await db.get(PaperReference, ref_id)
     if not ref:
         raise HTTPException(status_code=404, detail="Reference not found")
-    if body.context is not None:
+    if body.contexts is not None:
+        # New multi-context path: keep `context` mirrored to first item for back-compat
+        ref.contexts_json = _serialize_contexts(body.contexts)
+        ref.context = body.contexts[0] if body.contexts else None
+    elif body.context is not None:
         ref.context = body.context
+        # Keep contexts_json in sync when only the legacy field is set
+        ref.contexts_json = _serialize_contexts([body.context]) if body.context else None
     if body.note is not None:
         ref.note = body.note
     if body.citations_map is not None:
@@ -762,9 +808,88 @@ async def update_reference(
     return {
         "id": ref.id,
         "context": ref.context,
+        "contexts": _parse_contexts(ref.contexts_json, ref.context),
         "note": ref.note,
         "citations_map": ref.citations_map,
     }
+
+
+class AutoDetectApplyRequest(BaseModel):
+    # Map of ref_id -> list of context keys to apply. Caller curates this list
+    # from the preview endpoint output (typically by ticking checkboxes per row).
+    selections: dict[int, list[str]]
+
+
+@router.post("/{manuscript_id}/auto-detect-contexts")
+async def auto_detect_contexts(
+    manuscript_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview-only: parse each reference's citations_map and propose contexts.
+
+    Does NOT persist anything. Frontend renders the preview, user picks rows
+    and contexts to apply, then calls the matching apply endpoint.
+    """
+    rows = await db.execute(
+        select(PaperReference, Paper.title)
+        .join(Paper, PaperReference.cited_paper_id == Paper.id)
+        .where(PaperReference.manuscript_id == manuscript_id)
+        .order_by(PaperReference.created_at.asc())
+    )
+    items = []
+    for r in rows.all():
+        ref: PaperReference = r.PaperReference
+        current = _parse_contexts(ref.contexts_json, ref.context)
+        parsed = detect_contexts(ref.citations_map)
+        items.append({
+            "ref_id": ref.id,
+            "cited_paper_id": ref.cited_paper_id,
+            "title": r.title,
+            "citations_map": ref.citations_map,
+            "current_contexts": current,
+            "suggested_contexts": parsed["contexts"],
+            "evidence": parsed["evidence"],
+        })
+    return {"manuscript_id": manuscript_id, "items": items}
+
+
+@router.post("/{manuscript_id}/apply-detected-contexts")
+async def apply_detected_contexts(
+    manuscript_id: int,
+    body: AutoDetectApplyRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist user-confirmed context selections from the auto-detect preview.
+
+    Body: {"selections": {ref_id: [context_keys]}}.
+    Only refs that belong to this manuscript_id are touched. Empty list clears
+    contexts (`contexts_json` -> NULL, `context` -> NULL).
+    """
+    if not body.selections:
+        return {"updated": 0}
+
+    ref_ids = list(body.selections.keys())
+    rows = await db.execute(
+        select(PaperReference).where(
+            PaperReference.id.in_(ref_ids),
+            PaperReference.manuscript_id == manuscript_id,
+        )
+    )
+    refs = {ref.id: ref for ref in rows.scalars().all()}
+
+    updated = 0
+    for ref_id, contexts in body.selections.items():
+        ref = refs.get(int(ref_id))
+        if not ref:
+            continue
+        cleaned = [c for c in (contexts or []) if c in CONTEXT_KEYS]
+        ref.contexts_json = _serialize_contexts(cleaned)
+        ref.context = cleaned[0] if cleaned else None
+        updated += 1
+    await db.commit()
+    return {"manuscript_id": manuscript_id, "updated": updated}
 
 
 @router.delete("/ref/{ref_id}")
