@@ -16,44 +16,85 @@ CONTEXT_KEYS = ("introduction", "related_work", "methodology", "comparison", "re
 
 # Longer multi-word keywords come first so they win over shorter substrings
 # (e.g. "related work" before "related"; "future work" before "future").
+# Both English (matches Claude-authored section labels like "§3.1 Related Work")
+# and Italian (matches free-text Italian descriptions in additional lines).
 KEYWORD_TO_CONTEXT: list[tuple[str, str]] = [
+    # related_work
     ("state of the art", "related_work"),
+    ("stato dell'arte", "related_work"),
+    ("lavori correlati", "related_work"),
+    ("lavori precedenti", "related_work"),
     ("related work", "related_work"),
     ("prior work", "related_work"),
-    ("future work", "discussion"),
+    ("rassegna sistematica", "related_work"),
+    ("revisione sistematica", "related_work"),
+    ("scoping review", "related_work"),
     ("literature", "related_work"),
+    ("letteratura", "related_work"),
     ("background", "related_work"),
+    ("rassegna", "related_work"),
+    ("revisione", "related_work"),
     ("review", "related_work"),
     ("related", "related_work"),
     ("sota", "related_work"),
 
+    # methodology
     ("methodology", "methodology"),
+    ("metodologia", "methodology"),
     ("framework", "methodology"),
+    ("algoritmo", "methodology"),
     ("algorithm", "methodology"),
+    ("approccio", "methodology"),
     ("approach", "methodology"),
     ("proposed", "methodology"),
+    ("proposto", "methodology"),
+    ("metodo", "methodology"),
     ("method", "methodology"),
     ("design", "methodology"),
+    ("modello", "methodology"),
     ("model", "methodology"),
 
+    # comparison — note: "vs"/"versus" intentionally excluded.
+    # In Italian "vs" is a generic separator and produces false positives.
     ("comparison", "comparison"),
+    ("confronto", "comparison"),
+    ("comparazione", "comparison"),
+    ("paragone", "comparison"),
     ("benchmark", "comparison"),
     ("baseline", "comparison"),
     ("compared", "comparison"),
-    ("versus", "comparison"),
-    ("vs", "comparison"),
+    ("a confronto", "comparison"),
 
+    # results
     ("evaluation", "results"),
+    ("valutazione", "results"),
     ("experiment", "results"),
+    ("esperimento", "results"),
+    ("esperimenti", "results"),
     ("performance", "results"),
+    ("prestazioni", "results"),
+    ("risultati", "results"),
     ("results", "results"),
+    ("evidenze", "results"),
     ("finding", "results"),
 
+    # introduction
     ("introduction", "introduction"),
+    ("introduzione", "introduction"),
     ("motivation", "introduction"),
+    ("motivazione", "introduction"),
+    ("premessa", "introduction"),
     ("intro", "introduction"),
 
+    # discussion
+    ("future work", "discussion"),
+    ("lavoro futuro", "discussion"),
+    ("limitations", "discussion"),
+    ("limitazioni", "discussion"),
+    ("conclusioni", "discussion"),
+    ("implicazioni", "discussion"),
     ("discussion", "discussion"),
+    ("discussione", "discussion"),
     ("limitation", "discussion"),
     ("implication", "discussion"),
     ("conclusion", "discussion"),
@@ -103,31 +144,38 @@ def detect_contexts(citations_map: str | None) -> dict:
 
         section = _section_marker(line)
         theme = _split_theme(line)
-        haystack = theme.lower() if theme else line.lower()
+        # Scan the full line so we don't miss section labels that appear
+        # before the optional "—" separator (e.g. "§3.1 Related Work come …").
+        haystack = line.lower()
 
-        matched_keyword: str | None = None
-        matched_context: str | None = None
+        # Collect ALL contexts present on this line — a single line can mention
+        # multiple sections (e.g. "§2.1 Background e §4.1 Framework"), and a
+        # keyword from one context shouldn't suppress another.
+        line_contexts: list[str] = []
+        first_kw_for_ctx: dict[str, str] = {}
         for kw, ctx in KEYWORD_TO_CONTEXT:
-            # Word-boundary match for short keywords; substring for multi-word
+            if ctx in line_contexts:
+                continue  # already attributed for this line
             if " " in kw:
                 if kw in haystack:
-                    matched_keyword, matched_context = kw, ctx
-                    break
+                    line_contexts.append(ctx)
+                    first_kw_for_ctx[ctx] = kw
             else:
                 if re.search(rf"\b{re.escape(kw)}\b", haystack):
-                    matched_keyword, matched_context = kw, ctx
-                    break
+                    line_contexts.append(ctx)
+                    first_kw_for_ctx[ctx] = kw
 
-        if matched_context:
-            if matched_context not in detected:
-                detected.append(matched_context)
-            evidence.append({
-                "line": line,
-                "section": section,
-                "theme": theme,
-                "matched": matched_keyword,
-                "context": matched_context,
-            })
+        if line_contexts:
+            for ctx in line_contexts:
+                if ctx not in detected:
+                    detected.append(ctx)
+                evidence.append({
+                    "line": line,
+                    "section": section,
+                    "theme": theme,
+                    "matched": first_kw_for_ctx[ctx],
+                    "context": ctx,
+                })
         else:
             evidence.append({
                 "line": line,
