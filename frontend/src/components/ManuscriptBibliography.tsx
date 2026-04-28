@@ -24,6 +24,7 @@ interface Reference {
   context_label: string | null;
   note: string | null;
   citations_map: string | null;
+  citation_count: number;
 }
 
 interface RefsResponse {
@@ -282,7 +283,8 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       lines.push(meta.join(" · "));
       const tags: string[] = [];
       if (ref.context_label) tags.push(`Context: ${ref.context_label}`);
-      if (ref.rating) tags.push(`Rating: ${ref.rating}/5`);
+      tags.push(`Citations: ${ref.citation_count ?? 0}`);
+      if (ref.rating) tags.push(`My rating: ${ref.rating}/5`);
       if (tags.length > 0) lines.push(tags.join(" · "));
       lines.push(``);
       lines.push(`**Citations map:**`);
@@ -308,7 +310,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
 
   const exportCitesMapCsv = () => {
     const refs = data?.references || [];
-    const header = "No,Title,Year,Journal,DOI,Context,Rating,CitationsMap";
+    const header = "No,Title,Year,Journal,DOI,Context,Citations,MyRating,CitationsMap";
     const rows = refs
       .filter(r => r.citations_map && r.citations_map.trim())
       .map((ref, i) => [
@@ -318,6 +320,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
         `"${(ref.journal || "").replace(/"/g, '""')}"`,
         ref.doi || "",
         ref.context_label || "",
+        ref.citation_count ?? 0,
         ref.rating || "",
         `"${(ref.citations_map || "").replace(/"/g, '""').replace(/\n/g, " | ")}"`,
       ].join(","));
@@ -351,7 +354,8 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       lines.push(`    ${meta.join(" · ")}`);
       const tags: string[] = [];
       if (ref.context_label) tags.push(`Context: ${ref.context_label}`);
-      if (ref.rating) tags.push(`Rating: ${ref.rating}/5`);
+      tags.push(`Citations: ${ref.citation_count ?? 0}`);
+      if (ref.rating) tags.push(`My rating: ${ref.rating}/5`);
       if (tags.length > 0) lines.push(`    ${tags.join(" · ")}`);
       lines.push(``);
       (ref.citations_map || "").split("\n").forEach(l => lines.push(`    ${l}`));
