@@ -6,6 +6,7 @@ import useSWR, { mutate } from "swr";
 import { authFetcher } from "@/lib/api";
 import { authHeaders } from "@/lib/authHeaders";
 import { useAuth } from "@/lib/auth";
+import LabelPicker from "@/components/LabelPicker";
 
 interface Reference {
   id: number;
@@ -1430,17 +1431,12 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 p-2 rounded bg-purple-900/20 border border-purple-700/30">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300 shrink-0 w-28">Apply label</label>
-                      <select
-                        value={bibImportLabelId}
-                        onChange={e => setBibImportLabelId(e.target.value)}
-                        className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] flex-1 max-w-xs"
-                        title="Optional. The selected label is applied to EVERY imported paper (matched or newly created)."
-                      >
-                        <option value="">— no label —</option>
-                        {(bibImportLabels || []).map(l => (
-                          <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                      </select>
+                      <LabelPicker
+                        value={bibImportLabelId ? parseInt(bibImportLabelId, 10) : null}
+                        onChange={(id) => setBibImportLabelId(id !== null ? String(id) : "")}
+                        placeholder="Search or create label…"
+                        accentClass="border-purple-500/40"
+                      />
                       <span className="text-[10px] text-[var(--muted-foreground)] italic">
                         Tagged to ALL imported papers (idempotent).
                       </span>
@@ -1448,17 +1444,12 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
 
                     <div className="flex items-center gap-2 p-2 rounded bg-amber-900/20 border border-amber-700/30">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-amber-300 shrink-0 w-28">Verify label</label>
-                      <select
-                        value={bibImportVerificationLabelId}
-                        onChange={e => setBibImportVerificationLabelId(e.target.value)}
-                        className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] flex-1 max-w-xs"
-                        title="Optional. The selected label is applied ONLY to papers whose match is ambiguous (low title similarity). Filter Papers by this label later for punctual verification."
-                      >
-                        <option value="">— no verify label —</option>
-                        {(bibImportLabels || []).map(l => (
-                          <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                      </select>
+                      <LabelPicker
+                        value={bibImportVerificationLabelId ? parseInt(bibImportVerificationLabelId, 10) : null}
+                        onChange={(id) => setBibImportVerificationLabelId(id !== null ? String(id) : "")}
+                        placeholder="Search or create label…"
+                        accentClass="border-amber-500/40"
+                      />
                       <span className="text-[10px] text-[var(--muted-foreground)] italic">
                         Tagged ONLY to ambiguous matches → audit queue.
                       </span>
