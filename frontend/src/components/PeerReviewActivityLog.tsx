@@ -107,16 +107,21 @@ export default function PeerReviewActivityLog({ peerReviewId }: { peerReviewId: 
   const [editOccurredAt, setEditOccurredAt] = useState("");
 
   const addEntry = async () => {
-    if (!newDescription.trim()) return;
     setSaving(true);
     setError(null);
+    // Description is optional — for entries like "Submitted on YYYY-MM-DD" the
+    // category + timestamp are already meaningful by themselves. If empty, we
+    // fall back to a short auto-derived placeholder built from the category.
+    const trimmed = newDescription.trim();
+    const fallback = MANUAL_CATEGORIES.find(c => c.value === newEventType)?.label || "Note";
+    const finalDescription = trimmed || fallback;
     try {
       const r = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           event_type: newEventType,
-          description: newDescription,
+          description: finalDescription,
           occurred_at: newOccurredAt || undefined,
         }),
       });
@@ -219,13 +224,13 @@ export default function PeerReviewActivityLog({ peerReviewId }: { peerReviewId: 
             value={newDescription}
             onChange={e => setNewDescription(e.target.value)}
             rows={2}
-            placeholder="Description (e.g. 'Submitted to ScholarOne, manuscript ID returned by IEEE')…"
+            placeholder="Description (optional — e.g. 'Submitted to ScholarOne, manuscript ID returned by IEEE'). If empty, the category label is used."
             className="w-full px-2 py-1.5 rounded bg-[var(--card)] border border-[var(--border)] text-xs focus:outline-none"
           />
           <div className="flex gap-2 justify-end">
             <button
               onClick={addEntry}
-              disabled={saving || !newDescription.trim()}
+              disabled={saving}
               className="text-xs px-3 py-1.5 rounded bg-emerald-700 text-white font-bold hover:bg-emerald-600 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save entry"}
