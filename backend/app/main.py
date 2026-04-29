@@ -18,6 +18,7 @@ from app.models.review_journal import ReviewerEntry  # noqa: F401 — register w
 from app.models.submission_round import SubmissionRound  # noqa: F401 — register with metadata
 from app.models.paper_reference import PaperReference  # noqa: F401 — register with metadata
 from app.models.venue_key_date import VenueKeyDate  # noqa: F401 — register with metadata
+from app.models.peer_review_log import PeerReviewLog  # noqa: F401 — register with metadata
 from app.api.router import api_router
 
 logging.basicConfig(level=getattr(logging, settings.log_level))

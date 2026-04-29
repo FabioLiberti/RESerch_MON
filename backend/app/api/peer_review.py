@@ -21,8 +21,10 @@ from app.config import settings
 from app.database import get_db
 from app.models.paper import Paper
 from app.models.peer_review import PeerReview
+from app.models.peer_review_log import PeerReviewLog, EVENT_TYPES
 from app.models.user import User
 from app.services.peer_review_report import generate_review_artifacts
+from app.services.peer_review_receipt import compute_review_hash, generate_submission_receipt
 from app.services.review_templates import (
     empty_rubric_for,
     get_template,
@@ -87,6 +89,34 @@ def _serialize(pr: PeerReview) -> dict:
         "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
         "submitted_at": pr.submitted_at.isoformat() if pr.submitted_at else None,
     }
+
+
+def _log_event(
+    db: AsyncSession,
+    peer_review_id: int,
+    event_type: str,
+    description: str | None = None,
+    payload: dict | None = None,
+    actor_username: str | None = None,
+    occurred_at: datetime | None = None,
+) -> PeerReviewLog:
+    """Append an event row to the peer-review activity log.
+
+    Caller is responsible for `await db.commit()`.
+    `event_type` is informational — unknown values are accepted but warned.
+    """
+    if event_type not in EVENT_TYPES:
+        logger.warning(f"Unknown peer-review event type: {event_type}")
+    log = PeerReviewLog(
+        peer_review_id=peer_review_id,
+        event_type=event_type,
+        description=description,
+        payload_json=json.dumps(payload, default=str, ensure_ascii=False) if payload else None,
+        actor_username=actor_username,
+        occurred_at=occurred_at or datetime.utcnow(),
+    )
+    db.add(log)
+    return log
 
 
 @router.get("/templates")
@@ -175,6 +205,13 @@ async def create_peer_review(
         # in the paper detail page with the "View PDF" button.
         paper.pdf_local_path = str(out_path)
 
+    _log_event(
+        db, pr.id, "created",
+        description=f"Peer review created. Template: {template_id}. Manuscript: {manuscript_id or '(unspecified)'}.",
+        payload={"template_id": template_id, "manuscript_id": manuscript_id, "pdf_uploaded": pdf is not None},
+        actor_username=user.username,
+    )
+
     await db.commit()
     await db.refresh(pr)
     return _serialize(pr)
@@ -221,6 +258,10 @@ async def update_peer_review(
     if not pr:
         raise HTTPException(status_code=404, detail="Peer review not found")
 
+    # Capture pre-state for audit logging of meaningful changes
+    prev_status = pr.status
+    prev_recommendation = pr.recommendation
+
     if body.title is not None: pr.title = body.title
     if body.authors is not None: pr.authors = body.authors
     if body.target_journal is not None: pr.target_journal = body.target_journal
@@ -257,6 +298,31 @@ async def update_peer_review(
         if body.status == "submitted" and not pr.submitted_at:
             pr.submitted_at = datetime.utcnow()
 
+    # Audit-log only meaningful state transitions (status, recommendation).
+    # Plain-text edits to comments/rubric are not logged here to avoid noise;
+    # they are reflected in the bundle snapshots / submission receipt anyway.
+    if body.status is not None and body.status != prev_status:
+        if body.status == "submitted":
+            _log_event(
+                db, pr.id, "submitted",
+                description=f"Status: {prev_status} -> submitted. Recommendation: {pr.recommendation or '(unset)'}.",
+                payload={"prev_status": prev_status, "new_status": "submitted", "submitted_at": pr.submitted_at.isoformat() if pr.submitted_at else None},
+                actor_username=user.username,
+            )
+        elif body.status == "archived":
+            _log_event(db, pr.id, "archived", description=f"Status: {prev_status} -> archived.", payload={"prev_status": prev_status}, actor_username=user.username)
+        elif prev_status == "submitted" and body.status == "in_progress":
+            _log_event(db, pr.id, "edit_unlocked", description="Submitted review unlocked for further editing.", payload={"prev_status": prev_status}, actor_username=user.username)
+        else:
+            _log_event(db, pr.id, "metadata_updated", description=f"Status: {prev_status} -> {body.status}.", payload={"prev_status": prev_status, "new_status": body.status}, actor_username=user.username)
+    if body.recommendation is not None and body.recommendation != prev_recommendation:
+        _log_event(
+            db, pr.id, "recommendation_changed",
+            description=f"Recommendation: {prev_recommendation or '(unset)'} -> {pr.recommendation or '(unset)'}.",
+            payload={"prev": prev_recommendation, "new": pr.recommendation},
+            actor_username=user.username,
+        )
+
     # Keep on-disk artifacts (.pdf .tex .md .txt) always in sync with DB state.
     # Failures here are non-fatal: the review is saved regardless.
     try:
@@ -291,6 +357,12 @@ async def upload_pdf(
         linked_paper = await db.get(Paper, pr.paper_id)
         if linked_paper:
             linked_paper.pdf_local_path = str(out_path)
+    _log_event(
+        db, pr.id, "pdf_uploaded",
+        description=f"Manuscript PDF uploaded ({len(content)} bytes).",
+        payload={"size": len(content)},
+        actor_username=user.username,
+    )
     await db.commit()
     return {"pdf_path": pr.pdf_path, "size": len(content)}
 
@@ -438,6 +510,15 @@ async def llm_suggest_review(
     except Exception as e:
         logger.exception(f"Unexpected LLM peer review error for pr {peer_review_id}: {e}")
         raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
+
+    _meta = suggestion.get("_meta", {}) if isinstance(suggestion, dict) else {}
+    _log_event(
+        db, pr.id, "llm_suggestion_applied",
+        description=f"LLM suggestion drafted by {_meta.get('model', 'Claude Opus')} (cost ~${_meta.get('cost_usd', 0):.4f}).",
+        payload={"meta": _meta},
+        actor_username=admin.username,
+    )
+    await db.commit()
     return suggestion
 
 
@@ -517,6 +598,13 @@ async def upload_attachment(
     out_path = folder / safe_name
     content = await file.read()
     out_path.write_bytes(content)
+    _log_event(
+        db, pr.id, "attachment_added",
+        description=f"Attachment uploaded: {safe_name} ({len(content)} bytes).",
+        payload={"filename": safe_name, "size": len(content)},
+        actor_username=user.username,
+    )
+    await db.commit()
     logger.info(f"Attachment uploaded: pr_id={peer_review_id} file={safe_name} size={len(content)}")
     return {"filename": safe_name, "size": len(content)}
 
@@ -581,6 +669,12 @@ async def save_bundle_to_attachments(
             dst = folder / dst_name
             dst.write_bytes(Path(src).read_bytes())
             saved.append(dst_name)
+    _log_event(
+        db, pr.id, "bundle_snapshot_saved",
+        description=f"Manual bundle snapshot saved ({len(saved)} files, ts={timestamp}).",
+        payload={"saved": saved, "timestamp": timestamp},
+        actor_username=user.username,
+    )
     await db.commit()
     logger.info(f"Bundle snapshot saved to attachments: pr_id={peer_review_id} files={len(saved)}")
     return {"saved": saved, "count": len(saved), "timestamp": timestamp}
@@ -603,8 +697,288 @@ async def delete_attachment(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Attachment not found")
     file_path.unlink()
+    _log_event(
+        db, pr.id, "attachment_removed",
+        description=f"Attachment removed: {safe_name}.",
+        payload={"filename": safe_name},
+        actor_username=user.username,
+    )
+    await db.commit()
     logger.info(f"Attachment deleted: pr_id={peer_review_id} file={safe_name}")
     return {"deleted": safe_name}
+
+
+# ---------- Lifecycle transitions: submit / unlock / archive ----------
+
+class MarkSubmittedRequest(BaseModel):
+    submitted_at: str | None = None  # ISO datetime; defaults to "now". Editable to allow backdating.
+    note: str | None = None           # Optional reviewer note appended to the log entry.
+
+
+@router.post("/{peer_review_id}/mark-submitted")
+async def mark_submitted(
+    peer_review_id: int,
+    body: MarkSubmittedRequest = MarkSubmittedRequest(),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition the peer review to status='submitted', set the submission
+    timestamp (editable, defaults to now), generate the integrity Submission
+    Receipt PDF/TXT into the Attachments folder, and append the corresponding
+    log entries.
+    """
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+
+    submitted_at: datetime
+    if body.submitted_at:
+        try:
+            submitted_at = datetime.fromisoformat(body.submitted_at.replace("Z", "+00:00"))
+            if submitted_at.tzinfo is not None:
+                submitted_at = submitted_at.astimezone(tz=None).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="submitted_at must be ISO 8601 (e.g. 2026-04-29T18:00:00)")
+    else:
+        submitted_at = datetime.utcnow()
+
+    prev_status = pr.status
+    pr.status = "submitted"
+    pr.submitted_at = submitted_at
+
+    # Generate the Submission Receipt and store it directly in attachments/
+    receipt_info: dict | None = None
+    try:
+        attach_folder = _attachments_dir(pr.id)
+        receipt_info = generate_submission_receipt(
+            pr, submitted_at=submitted_at, output_dir=attach_folder,
+        )
+    except Exception as e:
+        logger.warning(f"Could not generate submission receipt for pr {pr.id}: {e}")
+
+    # Log the submission event + receipt event
+    _log_event(
+        db, pr.id, "submitted",
+        description=f"Status: {prev_status} -> submitted on {submitted_at.strftime('%Y-%m-%d %H:%M:%S UTC')}. "
+                    f"Recommendation: {pr.recommendation or '(unset)'}." +
+                    (f" Note: {body.note}" if body.note else ""),
+        payload={
+            "prev_status": prev_status,
+            "submitted_at": submitted_at.isoformat(),
+            "recommendation": pr.recommendation,
+            "note": body.note,
+        },
+        actor_username=user.username,
+        occurred_at=submitted_at,
+    )
+    if receipt_info:
+        _log_event(
+            db, pr.id, "receipt_generated",
+            description=f"Submission Receipt generated. Hash: {receipt_info['hash']}.",
+            payload={
+                "hash": receipt_info["hash"],
+                "basename": receipt_info["basename"],
+                "files": [str(p.name) for p in (receipt_info["pdf"], receipt_info["tex"], receipt_info["txt"]) if p],
+            },
+            actor_username=user.username,
+            occurred_at=submitted_at,
+        )
+
+    await db.commit()
+    await db.refresh(pr)
+    return {
+        "status": pr.status,
+        "submitted_at": pr.submitted_at.isoformat() if pr.submitted_at else None,
+        "receipt": {
+            "hash": receipt_info["hash"] if receipt_info else None,
+            "files": [str(p.name) for p in (receipt_info["pdf"], receipt_info["tex"], receipt_info["txt"]) if p] if receipt_info else [],
+        } if receipt_info else None,
+    }
+
+
+@router.post("/{peer_review_id}/edit-unlock")
+async def edit_unlock(
+    peer_review_id: int,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin-only: re-open a submitted peer review for editing. Status reverts
+    to 'in_progress'. Subsequent edits are tracked in the log; the original
+    Submission Receipt remains as historical evidence of the prior state.
+    """
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    if pr.status != "submitted":
+        raise HTTPException(status_code=400, detail=f"Cannot unlock: current status is '{pr.status}'.")
+
+    prev_status = pr.status
+    pr.status = "in_progress"
+    _log_event(
+        db, pr.id, "edit_unlocked",
+        description=f"Submitted review unlocked for editing by {admin.username}. "
+                    f"Original Submission Receipt retained for audit.",
+        payload={"prev_status": prev_status},
+        actor_username=admin.username,
+    )
+    await db.commit()
+    await db.refresh(pr)
+    return {"status": pr.status}
+
+
+@router.post("/{peer_review_id}/archive")
+async def archive_peer_review(
+    peer_review_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-archive: status -> 'archived'. Data and attachments are preserved."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+
+    prev_status = pr.status
+    pr.status = "archived"
+    _log_event(
+        db, pr.id, "archived",
+        description=f"Status: {prev_status} -> archived.",
+        payload={"prev_status": prev_status},
+        actor_username=user.username,
+    )
+    await db.commit()
+    await db.refresh(pr)
+    return {"status": pr.status}
+
+
+# ---------- Activity log CRUD ----------
+
+class LogEntryCreate(BaseModel):
+    event_type: str = "manual_note"
+    description: str
+    occurred_at: str | None = None  # ISO datetime; defaults to now. Editable for backdating.
+
+
+class LogEntryUpdate(BaseModel):
+    description: str | None = None
+    occurred_at: str | None = None
+
+
+def _serialize_log(row: PeerReviewLog) -> dict:
+    return {
+        "id": row.id,
+        "peer_review_id": row.peer_review_id,
+        "event_type": row.event_type,
+        "description": row.description,
+        "payload": json.loads(row.payload_json) if row.payload_json else None,
+        "actor_username": row.actor_username,
+        "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/{peer_review_id}/log")
+async def list_logs(
+    peer_review_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the activity log of this peer review, ordered chronologically."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    rows = (await db.execute(
+        select(PeerReviewLog)
+        .where(PeerReviewLog.peer_review_id == peer_review_id)
+        .order_by(PeerReviewLog.occurred_at.asc(), PeerReviewLog.id.asc())
+    )).scalars().all()
+    return {
+        "peer_review_id": peer_review_id,
+        "logs": [_serialize_log(r) for r in rows],
+        "total": len(rows),
+    }
+
+
+@router.post("/{peer_review_id}/log")
+async def create_log(
+    peer_review_id: int,
+    body: LogEntryCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually append a log entry — useful for recording an event that the
+    system did not auto-capture (e.g. ScholarOne submission timestamp once the
+    user has actually clicked Submit on the journal portal)."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+
+    occurred_at: datetime
+    if body.occurred_at:
+        try:
+            occurred_at = datetime.fromisoformat(body.occurred_at.replace("Z", "+00:00"))
+            if occurred_at.tzinfo is not None:
+                occurred_at = occurred_at.astimezone(tz=None).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="occurred_at must be ISO 8601")
+    else:
+        occurred_at = datetime.utcnow()
+
+    log = _log_event(
+        db, peer_review_id,
+        event_type=body.event_type,
+        description=body.description,
+        actor_username=user.username,
+        occurred_at=occurred_at,
+    )
+    await db.commit()
+    await db.refresh(log)
+    return _serialize_log(log)
+
+
+@router.put("/{peer_review_id}/log/{log_id}")
+async def update_log(
+    peer_review_id: int,
+    log_id: int,
+    body: LogEntryUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit description and/or `occurred_at` of a log entry — useful when the
+    user backdates a submission previously logged with the wrong timestamp."""
+    log = await db.get(PeerReviewLog, log_id)
+    if not log or log.peer_review_id != peer_review_id:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+
+    if body.description is not None:
+        log.description = body.description
+    if body.occurred_at is not None:
+        try:
+            ts = datetime.fromisoformat(body.occurred_at.replace("Z", "+00:00"))
+            if ts.tzinfo is not None:
+                ts = ts.astimezone(tz=None).replace(tzinfo=None)
+            log.occurred_at = ts
+        except ValueError:
+            raise HTTPException(status_code=400, detail="occurred_at must be ISO 8601")
+
+    await db.commit()
+    await db.refresh(log)
+    return _serialize_log(log)
+
+
+@router.delete("/{peer_review_id}/log/{log_id}")
+async def delete_log(
+    peer_review_id: int,
+    log_id: int,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin-only: remove an erroneous log entry. Used sparingly."""
+    log = await db.get(PeerReviewLog, log_id)
+    if not log or log.peer_review_id != peer_review_id:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+    await db.delete(log)
+    await db.commit()
+    return {"deleted": log_id}
 
 
 @router.delete("/{peer_review_id}")

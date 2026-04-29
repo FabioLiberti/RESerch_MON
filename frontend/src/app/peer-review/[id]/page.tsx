@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { authHeaders } from "@/lib/authHeaders";
 import ReviewJournal from "@/components/ReviewJournal";
 import PeerReviewAttachments from "@/components/PeerReviewAttachments";
+import PeerReviewActivityLog from "@/components/PeerReviewActivityLog";
 
 interface RubricItem {
   key?: string;
@@ -347,6 +348,83 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
     }
   };
 
+  // ---------- Lifecycle transitions: submit / unlock / archive ----------
+
+  const isLocked = status === "submitted" || status === "archived";
+
+  const markAsSubmitted = async () => {
+    if (!recommendation) {
+      alert("Pick a recommendation before marking as submitted.");
+      return;
+    }
+    // Save first to persist any unsaved changes (so the receipt hash reflects the latest state)
+    await save();
+    const nowLocal = new Date();
+    const tzOffset = nowLocal.getTimezoneOffset() * 60000;
+    const localISO = new Date(nowLocal.getTime() - tzOffset).toISOString().slice(0, 16);
+    const submittedAtStr = prompt(
+      "Mark this review as SUBMITTED.\n\n" +
+      "Submission date/time (ISO 8601 — defaults to now; you can backdate if you submitted earlier):",
+      localISO
+    );
+    if (submittedAtStr === null) return;
+    const note = prompt(
+      "Optional note (e.g. ScholarOne confirmation ID, comments). Leave blank to skip:",
+      ""
+    );
+    try {
+      const r = await fetch(`/api/v1/peer-review/${id}/mark-submitted`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ submitted_at: submittedAtStr, note: note || undefined }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      const d = await r.json();
+      const hashShort = d?.receipt?.hash ? d.receipt.hash.slice(0, 16) + "…" : "(no hash)";
+      alert(`Review marked as SUBMITTED.\nSubmission Receipt generated.\nIntegrity hash: ${hashShort}\n\nThe form is now locked. Use Edit (unlock) to re-open.`);
+      await reload();
+    } catch (e: any) {
+      setError(`Mark as submitted failed: ${e.message || e}`);
+    }
+  };
+
+  const editUnlock = async () => {
+    if (!confirm("Unlock this submitted review for editing?\n\nThe original Submission Receipt and all log entries are preserved as audit evidence. Subsequent edits will be tracked.")) return;
+    try {
+      const r = await fetch(`/api/v1/peer-review/${id}/edit-unlock`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      await reload();
+    } catch (e: any) {
+      setError(`Unlock failed: ${e.message || e}`);
+    }
+  };
+
+  const archive = async () => {
+    if (!confirm("Archive this peer review?\n\nStatus will become 'archived'. Data and attachments are preserved.")) return;
+    try {
+      const r = await fetch(`/api/v1/peer-review/${id}/archive`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      await reload();
+    } catch (e: any) {
+      setError(`Archive failed: ${e.message || e}`);
+    }
+  };
+
   const downloadReview = async (kind: "pdf" | "txt" | "md" | "tex") => {
     // Save first to persist any pending edits
     await save();
@@ -405,7 +483,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
           <button onClick={() => downloadReview("pdf")} className="px-3 py-2 rounded-lg bg-red-700 text-white text-xs font-medium hover:bg-red-600">
             PDF
           </button>
-          {isAdmin && (
+          {isAdmin && !isLocked && (
             <button
               onClick={save}
               disabled={saving}
@@ -414,8 +492,54 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
               {saving ? "Saving..." : saveMsg || "Save"}
             </button>
           )}
+          {isAdmin && status !== "submitted" && status !== "archived" && (
+            <button
+              onClick={markAsSubmitted}
+              className="px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-600"
+              title="Lock the review and generate the integrity Submission Receipt"
+            >
+              Mark as submitted
+            </button>
+          )}
+          {isAdmin && status === "submitted" && (
+            <button
+              onClick={editUnlock}
+              className="px-3 py-2 rounded-lg bg-amber-700 text-white text-xs font-bold hover:bg-amber-600"
+              title="Re-open the submitted review for further editing (audit-logged)"
+            >
+              Edit (unlock)
+            </button>
+          )}
+          {isAdmin && status !== "archived" && (
+            <button
+              onClick={archive}
+              className="px-3 py-2 rounded-lg bg-gray-700 text-white text-xs font-medium hover:bg-gray-600"
+              title="Soft-archive: status -> archived. Data preserved."
+            >
+              Archive
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Submission status banner */}
+      {status === "submitted" && (
+        <div className="rounded-lg bg-emerald-900/30 border border-emerald-700/50 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 font-bold">✓ Submitted</span>
+            <span className="text-xs text-emerald-300/80">
+              · the form is locked. The Submission Receipt is preserved in Attachments as integrity evidence.
+            </span>
+          </div>
+          <span className="text-[10px] text-emerald-400 italic">use "Edit (unlock)" to re-open</span>
+        </div>
+      )}
+      {status === "archived" && (
+        <div className="rounded-lg bg-gray-800/40 border border-gray-600/50 px-4 py-2">
+          <span className="text-gray-300 font-bold">📦 Archived</span>
+          <span className="text-xs text-gray-400 ml-2">— read-only. Data and attachments retained.</span>
+        </div>
+      )}
 
       {/* Side-by-side layout */}
       <div className="flex flex-col lg:flex-row gap-4 h-auto lg:h-[calc(100vh-200px)]">
@@ -468,7 +592,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* RIGHT: Review form */}
-        <fieldset disabled={!isAdmin} className="contents">
+        <fieldset disabled={!isAdmin || isLocked} className="contents">
         <div className="lg:w-[44%] rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4 space-y-4">
           {/* Metadata */}
           <details className="rounded border border-[var(--border)] bg-[var(--secondary)] p-2" open>
@@ -716,6 +840,11 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       {/* Attachments — review deliverables, screenshots, archival material */}
       <div className="mt-6">
         <PeerReviewAttachments peerReviewId={id} />
+      </div>
+
+      {/* Activity log — audit trail of all transitions and key actions */}
+      <div className="mt-6">
+        <PeerReviewActivityLog peerReviewId={id} />
       </div>
 
       {/* Review Journal — editorial guidance and reviewer feedback */}
