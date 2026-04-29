@@ -441,6 +441,127 @@ async def llm_suggest_review(
     return suggestion
 
 
+# ---------- Attachments (review-related documents) ----------
+# A peer review may accumulate several deliverables: the full review report,
+# the letter to authors, the letter to editor, screenshots of the submission
+# in the journal system, supplementary notes. These are kept as files in
+# data/peer-review/{id}/attachments/ so the manuscript PDF (paper.pdf) stays
+# semantically separate.
+
+ATTACHMENT_MEDIA_TYPES = {
+    ".pdf":  "application/pdf",
+    ".md":   "text/markdown; charset=utf-8",
+    ".tex":  "application/x-tex",
+    ".txt":  "text/plain; charset=utf-8",
+    ".png":  "image/png",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif":  "image/gif",
+    ".webp": "image/webp",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".rtf":  "application/rtf",
+    ".bib":  "application/x-bibtex",
+}
+
+
+def _attachments_dir(peer_review_id: int) -> Path:
+    d = _storage_dir(peer_review_id) / "attachments"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_attachment_name(name: str) -> str:
+    base = Path(name).name  # strip any path components
+    if not base or base.startswith(".") or base in ("..", "/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return base
+
+
+@router.get("/{peer_review_id}/attachments")
+async def list_attachments(
+    peer_review_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List review attachments for this peer review."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    folder = _attachments_dir(peer_review_id)
+    items = []
+    for p in sorted(folder.iterdir()):
+        if p.is_file():
+            stat = p.stat()
+            items.append({
+                "filename": p.name,
+                "size": stat.st_size,
+                "modified_at": datetime.utcfromtimestamp(stat.st_mtime).isoformat(),
+                "extension": p.suffix.lower().lstrip("."),
+            })
+    return {"peer_review_id": peer_review_id, "attachments": items, "total": len(items)}
+
+
+@router.post("/{peer_review_id}/attachments")
+async def upload_attachment(
+    peer_review_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a new review attachment (overwrites if same filename exists)."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    safe_name = _safe_attachment_name(file.filename or "")
+    folder = _attachments_dir(peer_review_id)
+    out_path = folder / safe_name
+    content = await file.read()
+    out_path.write_bytes(content)
+    logger.info(f"Attachment uploaded: pr_id={peer_review_id} file={safe_name} size={len(content)}")
+    return {"filename": safe_name, "size": len(content)}
+
+
+@router.get("/{peer_review_id}/attachments/{filename}")
+async def download_attachment(
+    peer_review_id: int,
+    filename: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a specific attachment."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    safe_name = _safe_attachment_name(filename)
+    folder = _attachments_dir(peer_review_id)
+    file_path = folder / safe_name
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    media_type = ATTACHMENT_MEDIA_TYPES.get(file_path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path=str(file_path), media_type=media_type, filename=safe_name)
+
+
+@router.delete("/{peer_review_id}/attachments/{filename}")
+async def delete_attachment(
+    peer_review_id: int,
+    filename: str,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an attachment (admin only)."""
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    safe_name = _safe_attachment_name(filename)
+    folder = _attachments_dir(peer_review_id)
+    file_path = folder / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    file_path.unlink()
+    logger.info(f"Attachment deleted: pr_id={peer_review_id} file={safe_name}")
+    return {"deleted": safe_name}
+
+
 @router.delete("/{peer_review_id}")
 async def delete_peer_review(
     peer_review_id: int,

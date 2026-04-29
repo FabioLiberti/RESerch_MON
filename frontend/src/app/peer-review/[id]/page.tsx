@@ -7,6 +7,7 @@ import { authFetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { authHeaders } from "@/lib/authHeaders";
 import ReviewJournal from "@/components/ReviewJournal";
+import PeerReviewAttachments from "@/components/PeerReviewAttachments";
 
 interface RubricItem {
   key?: string;
@@ -710,6 +711,11 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
           {error && <div className="text-xs text-red-400">{error}</div>}
         </div>
         </fieldset>
+      </div>
+
+      {/* Attachments — review deliverables, screenshots, archival material */}
+      <div className="mt-6">
+        <PeerReviewAttachments peerReviewId={id} />
       </div>
 
       {/* Review Journal — editorial guidance and reviewer feedback */}
