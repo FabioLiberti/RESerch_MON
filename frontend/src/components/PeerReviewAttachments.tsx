@@ -125,6 +125,50 @@ export default function PeerReviewAttachments({ peerReviewId }: { peerReviewId: 
     }
   };
 
+  // Inline view in a new tab. We fetch the file with auth headers, build a
+  // blob URL, and open it — the browser renders PDFs / images / text natively.
+  const viewAttachment = async (filename: string) => {
+    try {
+      const r = await fetch(`${apiUrl}/${encodeURIComponent(filename)}?inline=1`, {
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      // Revoke after a generous viewing window so memory doesn't leak
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
+    } catch (e: any) {
+      setError(`View failed: ${e.message || e}`);
+    }
+  };
+
+  const VIEWABLE_EXT = new Set(["pdf", "png", "jpg", "jpeg", "gif", "webp", "txt", "md"]);
+
+  const [savingBundle, setSavingBundle] = useState(false);
+  const [bundleMsg, setBundleMsg] = useState<string | null>(null);
+
+  const saveBundleSnapshot = async () => {
+    if (!confirm("Save a snapshot of the current review (PDF/TeX/MD/TXT) into Attachments? This adds 4 timestamped files; existing snapshots are kept.")) return;
+    setSavingBundle(true);
+    setBundleMsg(null);
+    try {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}/save-bundle-to-attachments`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      setBundleMsg(`Snapshot saved: ${d.count} file${d.count !== 1 ? "s" : ""} (${d.timestamp})`);
+      mutate(apiUrl);
+      setTimeout(() => setBundleMsg(null), 4000);
+    } catch (e: any) {
+      setError(`Save bundle failed: ${e.message || e}`);
+    } finally {
+      setSavingBundle(false);
+    }
+  };
+
   const deleteAttachment = async (filename: string) => {
     if (!confirm(`Delete attachment "${filename}"? This cannot be undone.`)) return;
     try {
@@ -143,8 +187,8 @@ export default function PeerReviewAttachments({ peerReviewId }: { peerReviewId: 
 
   return (
     <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold">Attachments</h3>
           <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
             Review deliverables and archival material (review report, letters, screenshots).
@@ -152,13 +196,23 @@ export default function PeerReviewAttachments({ peerReviewId }: { peerReviewId: 
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 text-white font-bold hover:bg-indigo-600 disabled:opacity-50 transition-colors"
-          >
-            {uploading ? "Uploading…" : "+ Upload files"}
-          </button>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              onClick={saveBundleSnapshot}
+              disabled={savingBundle || uploading}
+              title="Manually take a timestamped snapshot of the auto-generated review bundle (PDF/TeX/MD/TXT) and store it in Attachments. Optional — click only when you want to align the archive with the current form state."
+              className="text-xs px-3 py-1.5 rounded-lg bg-teal-700 text-white font-bold hover:bg-teal-600 disabled:opacity-50 transition-colors"
+            >
+              {savingBundle ? "Snapshotting…" : "Snapshot bundle"}
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || savingBundle}
+              className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 text-white font-bold hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+            >
+              {uploading ? "Uploading…" : "+ Upload files"}
+            </button>
+          </div>
         )}
         <input
           ref={fileInputRef}
@@ -168,6 +222,12 @@ export default function PeerReviewAttachments({ peerReviewId }: { peerReviewId: 
           onChange={onPickFiles}
         />
       </div>
+
+      {bundleMsg && (
+        <div className="text-[11px] px-2 py-1.5 rounded bg-teal-900/30 border border-teal-700/40 text-teal-300">
+          {bundleMsg}
+        </div>
+      )}
 
       {isAdmin && (
         <div
@@ -232,6 +292,15 @@ export default function PeerReviewAttachments({ peerReviewId }: { peerReviewId: 
                     {date && <span>· {date}</span>}
                   </p>
                 </div>
+                {VIEWABLE_EXT.has(att.extension) && (
+                  <button
+                    onClick={() => viewAttachment(att.filename)}
+                    className="text-[10px] px-2 py-1 rounded bg-emerald-700/80 text-white hover:bg-emerald-600 font-semibold transition-colors shrink-0"
+                    title="View inline in a new tab"
+                  >
+                    View
+                  </button>
+                )}
                 <button
                   onClick={() => downloadAttachment(att.filename)}
                   className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] font-semibold transition-colors shrink-0"

@@ -525,10 +525,16 @@ async def upload_attachment(
 async def download_attachment(
     peer_review_id: int,
     filename: str,
+    inline: bool = False,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Download a specific attachment."""
+    """Download a specific attachment.
+
+    Pass ``?inline=1`` to receive ``Content-Disposition: inline``, which lets
+    the browser render PDFs / images / text directly in a new tab. Default
+    behaviour is ``attachment`` (forces save-as).
+    """
     pr = await db.get(PeerReview, peer_review_id)
     if not pr:
         raise HTTPException(status_code=404, detail="Peer review not found")
@@ -538,7 +544,46 @@ async def download_attachment(
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Attachment not found")
     media_type = ATTACHMENT_MEDIA_TYPES.get(file_path.suffix.lower(), "application/octet-stream")
+    if inline:
+        return FileResponse(
+            path=str(file_path),
+            media_type=media_type,
+            headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+        )
     return FileResponse(path=str(file_path), media_type=media_type, filename=safe_name)
+
+
+@router.post("/{peer_review_id}/save-bundle-to-attachments")
+async def save_bundle_to_attachments(
+    peer_review_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate the resmon-bundled review (PDF/TEX/MD/TXT) and copy each
+    artifact into this peer review's Attachments folder as a snapshot.
+
+    Snapshot files are timestamped so subsequent calls do not overwrite the
+    earlier snapshots — the user explicitly chooses when to take a snapshot
+    (manual button) and history is preserved.
+    """
+    pr = await db.get(PeerReview, peer_review_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Peer review not found")
+    paths = generate_review_artifacts(pr)
+    _persist_artifacts(pr, paths)
+    folder = _attachments_dir(peer_review_id)
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    saved: list[str] = []
+    for fmt in ("pdf", "tex", "md", "txt"):
+        src = paths.get(fmt)
+        if src and Path(src).exists():
+            dst_name = f"BundledReview_{peer_review_id}_{timestamp}.{fmt}"
+            dst = folder / dst_name
+            dst.write_bytes(Path(src).read_bytes())
+            saved.append(dst_name)
+    await db.commit()
+    logger.info(f"Bundle snapshot saved to attachments: pr_id={peer_review_id} files={len(saved)}")
+    return {"saved": saved, "count": len(saved), "timestamp": timestamp}
 
 
 @router.delete("/{peer_review_id}/attachments/{filename}")
