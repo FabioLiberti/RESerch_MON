@@ -88,6 +88,15 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
 
   // Import from label
   const [showLabelImport, setShowLabelImport] = useState(false);
+  // Import bibliography from pasted text — two-phase: preview, then apply
+  const [showBibImport, setShowBibImport] = useState(false);
+  const [bibImportText, setBibImportText] = useState("");
+  const [bibImportLoading, setBibImportLoading] = useState(false);
+  const [bibImportPreview, setBibImportPreview] = useState<any | null>(null);
+  const [bibImportSelections, setBibImportSelections] = useState<Set<number>>(new Set());
+  const [bibImportApplying, setBibImportApplying] = useState(false);
+  const [bibImportError, setBibImportError] = useState<string | null>(null);
+  const [bibImportResult, setBibImportResult] = useState<{ created: number; linked: number; skipped: number } | null>(null);
   const [selectedLabel, setSelectedLabel] = useState("");
   const [labelPapers, setLabelPapers] = useState<any[] | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
@@ -115,6 +124,90 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     } finally {
       setLabelLoading(false);
     }
+  };
+
+  const runBibImportPreview = async () => {
+    if (!bibImportText.trim()) return;
+    setBibImportLoading(true);
+    setBibImportError(null);
+    setBibImportPreview(null);
+    setBibImportResult(null);
+    try {
+      const r = await fetch(`/api/v1/paper-references/${paperId}/import-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ text: bibImportText }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      const d = await r.json();
+      setBibImportPreview(d);
+      // Default selection: everything that is "in_db" (not yet linked) or "found_s2".
+      // Ambiguous and not_found stay un-ticked — user must opt in.
+      const initial = new Set<number>();
+      (d.items || []).forEach((it: any, idx: number) => {
+        if (it.already_linked) return;
+        if (it.status === "in_db" || it.status === "found_s2") initial.add(idx);
+      });
+      setBibImportSelections(initial);
+    } catch (e: any) {
+      setBibImportError(`Preview failed: ${e.message || e}`);
+    } finally {
+      setBibImportLoading(false);
+    }
+  };
+
+  const applyBibImport = async () => {
+    if (!bibImportPreview) return;
+    setBibImportApplying(true);
+    setBibImportError(null);
+    try {
+      const items = (bibImportPreview.items || [])
+        .map((it: any, idx: number) => ({ idx, it }))
+        .filter((x: any) => bibImportSelections.has(x.idx))
+        .map((x: any) => ({
+          title: x.it.title || x.it.parsed_title,
+          doi: x.it.doi || x.it.parsed_doi || null,
+          arxiv: x.it.arxiv || null,
+          abstract: x.it.abstract,
+          journal: x.it.journal,
+          publication_date: x.it.publication_date,
+          authors: x.it.authors || [],
+          keywords: x.it.keywords || [],
+          s2_id: x.it.s2_id,
+          paper_type: x.it.paper_type,
+          citation_count: x.it.citation_count || 0,
+          matched_paper_id: x.it.matched_paper_id,
+        }));
+      const r = await fetch(`/api/v1/paper-references/${paperId}/import-apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ items }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      const d = await r.json();
+      setBibImportResult({ created: d.created || 0, linked: d.linked || 0, skipped: d.skipped || 0 });
+      // Refresh the bibliography list on the page
+      mutate(apiUrl);
+    } catch (e: any) {
+      setBibImportError(`Import failed: ${e.message || e}`);
+    } finally {
+      setBibImportApplying(false);
+    }
+  };
+
+  const closeBibImport = () => {
+    setShowBibImport(false);
+    setBibImportText("");
+    setBibImportPreview(null);
+    setBibImportSelections(new Set());
+    setBibImportError(null);
+    setBibImportResult(null);
   };
 
   const importSelected = async () => {
@@ -621,6 +714,13 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   Auto-detect contexts
                 </button>
               )}
+              <button
+                onClick={() => { setShowBibImport(true); setShowLabelImport(false); setShowSearch(false); }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-cyan-700 text-white font-bold hover:bg-cyan-600 transition-colors"
+                title="Paste a bibliography text (e.g. References section of a PDF). The system parses each entry, looks it up via Semantic Scholar (DOI / arXiv / title), and links it to this manuscript."
+              >
+                Import bibliography
+              </button>
               <button
                 onClick={() => { setShowLabelImport(!showLabelImport); setShowSearch(false); }}
                 className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 text-white font-bold hover:bg-purple-600 transition-colors"
@@ -1206,6 +1306,215 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       )}
 
       </>
+      )}
+
+      {/* Import bibliography modal — paste-text → S2 lookup → linked references */}
+      {showBibImport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !bibImportLoading && !bibImportApplying && closeBibImport()}
+        >
+          <div
+            className="bg-[var(--background)] border border-cyan-500/40 rounded-lg w-full max-w-4xl max-h-[88vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border)] shrink-0">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-cyan-400">Import bibliography from text</h3>
+                <p className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                  Paste the References section of a paper. Each entry is resolved via Semantic Scholar (DOI / arXiv / title)
+                  and linked to this manuscript. Existing papers in your DB are reused.
+                </p>
+              </div>
+              <button
+                onClick={closeBibImport}
+                disabled={bibImportLoading || bibImportApplying}
+                className="text-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer leading-none disabled:opacity-50"
+                aria-label="Close"
+              >✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {!bibImportPreview && !bibImportResult && (
+                <>
+                  <textarea
+                    value={bibImportText}
+                    onChange={e => setBibImportText(e.target.value)}
+                    rows={14}
+                    placeholder={"Paste References section here, e.g.\n\n[1] Y. He et al., \"Class-wise adaptive…\" in AAAI 2022, pp. 12967-12968.\n[2] E. Diao, J. Ding, V. Tarokh, \"Heterofl…\" arXiv:2010.01264, 2020.\n[3] …"}
+                    disabled={bibImportLoading}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs font-mono focus:outline-none focus:border-cyan-500/50 resize-y"
+                  />
+                  <p className="text-[10px] text-[var(--muted-foreground)]">
+                    Recognises IEEE-style <code>[N]</code>, numbered lists, and blank-line separated entries. Lookup uses DOI &gt; arXiv &gt; title (rate-limited via Semantic Scholar — expect ~1 s per reference).
+                  </p>
+                </>
+              )}
+
+              {bibImportPreview && !bibImportResult && (
+                <>
+                  <div className="grid grid-cols-5 gap-2 text-[10px]">
+                    <div className="rounded bg-emerald-900/30 border border-emerald-700/40 p-2 text-center">
+                      <div className="text-emerald-400 font-bold text-base">{bibImportPreview.summary.in_db}</div>
+                      <div className="text-[var(--muted-foreground)]">in DB</div>
+                    </div>
+                    <div className="rounded bg-cyan-900/30 border border-cyan-700/40 p-2 text-center">
+                      <div className="text-cyan-400 font-bold text-base">{bibImportPreview.summary.found}</div>
+                      <div className="text-[var(--muted-foreground)]">found via S2</div>
+                    </div>
+                    <div className="rounded bg-amber-900/30 border border-amber-700/40 p-2 text-center">
+                      <div className="text-amber-400 font-bold text-base">{bibImportPreview.summary.ambiguous}</div>
+                      <div className="text-[var(--muted-foreground)]">ambiguous</div>
+                    </div>
+                    <div className="rounded bg-red-900/30 border border-red-700/40 p-2 text-center">
+                      <div className="text-red-400 font-bold text-base">{bibImportPreview.summary.not_found}</div>
+                      <div className="text-[var(--muted-foreground)]">not found</div>
+                    </div>
+                    <div className="rounded bg-slate-800 border border-slate-600/40 p-2 text-center">
+                      <div className="font-bold text-base">{bibImportPreview.summary.already_linked}</div>
+                      <div className="text-[var(--muted-foreground)]">already linked</div>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-[var(--muted-foreground)]">
+                    {bibImportSelections.size} of {bibImportPreview.items.length} selected. Click to toggle. Defaults: matched in DB + found via S2 (you can include ambiguous if you trust the match).
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {bibImportPreview.items.map((it: any, idx: number) => {
+                      const status = it.status as string;
+                      const isSelected = bibImportSelections.has(idx);
+                      const statusColor = status === "in_db"
+                        ? "bg-emerald-700"
+                        : status === "found_s2"
+                        ? "bg-cyan-700"
+                        : status === "ambiguous"
+                        ? "bg-amber-700"
+                        : "bg-red-800";
+                      const statusLabel = status === "in_db"
+                        ? "in DB"
+                        : status === "found_s2"
+                        ? "S2"
+                        : status === "ambiguous"
+                        ? "ambiguous"
+                        : "not found";
+                      const isDisabled = status === "not_found" || it.already_linked;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            setBibImportSelections(prev => {
+                              const next = new Set(prev);
+                              if (next.has(idx)) next.delete(idx); else next.add(idx);
+                              return next;
+                            });
+                          }}
+                          className={`flex items-start gap-2 p-2 rounded border transition-colors ${
+                            isDisabled
+                              ? "border-[var(--border)] bg-[var(--secondary)]/20 opacity-50 cursor-not-allowed"
+                              : isSelected
+                              ? "border-cyan-500/60 bg-cyan-900/20 cursor-pointer"
+                              : "border-[var(--border)] bg-[var(--secondary)]/30 cursor-pointer hover:bg-[var(--muted)]"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={isDisabled}
+                            onChange={() => {}}
+                            className="mt-0.5 shrink-0 accent-[var(--primary)]"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                              <span className={`text-[8px] px-1 py-0.5 rounded text-white font-bold ${statusColor}`}>{statusLabel}</span>
+                              {it.already_linked && <span className="text-[8px] px-1 py-0.5 rounded text-white font-bold bg-slate-600">already linked</span>}
+                              {typeof it.similarity === "number" && it.similarity > 0 && it.similarity < 1 && (
+                                <span className="text-[9px] text-[var(--muted-foreground)]">sim {Math.round(it.similarity * 100)}%</span>
+                              )}
+                              {(it.doi || it.parsed_doi) && <span className="text-[9px] text-[var(--muted-foreground)] font-mono">{it.doi || it.parsed_doi}</span>}
+                              {it.arxiv && <span className="text-[9px] text-[var(--muted-foreground)] font-mono">arXiv:{it.arxiv}</span>}
+                            </div>
+                            <p className="text-xs font-medium line-clamp-2">{it.title || it.parsed_title || <em className="text-[var(--muted-foreground)]">(no title parsed)</em>}</p>
+                            {it.parsed_first_author && (
+                              <p className="text-[10px] text-[var(--muted-foreground)] line-clamp-1">
+                                {it.parsed_first_author}{it.parsed_year ? ` · ${it.parsed_year}` : ""}{it.journal ? ` · ${it.journal}` : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {bibImportResult && (
+                <div className="space-y-3 py-4">
+                  <div className="text-emerald-400 font-bold text-center text-lg">✓ Import complete</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded bg-emerald-900/30 border border-emerald-700/40 p-3 text-center">
+                      <div className="text-emerald-400 font-bold text-2xl">{bibImportResult.created}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">papers created</div>
+                    </div>
+                    <div className="rounded bg-cyan-900/30 border border-cyan-700/40 p-3 text-center">
+                      <div className="text-cyan-400 font-bold text-2xl">{bibImportResult.linked}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">references linked</div>
+                    </div>
+                    <div className="rounded bg-slate-800 border border-slate-600/40 p-3 text-center">
+                      <div className="font-bold text-2xl">{bibImportResult.skipped}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">skipped (duplicates)</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {bibImportError && (
+                <div className="text-[11px] px-2 py-1.5 rounded bg-red-900/30 border border-red-700/40 text-red-300">
+                  {bibImportError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between p-4 border-t border-[var(--border)] shrink-0">
+              <span className="text-[10px] text-[var(--muted-foreground)] italic">
+                {bibImportLoading ? "Resolving references via Semantic Scholar — this can take ~1 s per entry…" : ""}
+              </span>
+              <div className="flex gap-2">
+                {!bibImportPreview && !bibImportResult && (
+                  <>
+                    <button onClick={closeBibImport} className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)]">Cancel</button>
+                    <button
+                      onClick={runBibImportPreview}
+                      disabled={bibImportLoading || !bibImportText.trim()}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-cyan-700 text-white font-bold hover:bg-cyan-600 disabled:opacity-50"
+                    >
+                      {bibImportLoading ? "Resolving…" : "Preview"}
+                    </button>
+                  </>
+                )}
+                {bibImportPreview && !bibImportResult && (
+                  <>
+                    <button onClick={() => { setBibImportPreview(null); setBibImportSelections(new Set()); }} className="text-xs px-3 py-1.5 rounded-lg bg-[var(--secondary)] hover:bg-[var(--muted)]">Back</button>
+                    <button
+                      onClick={applyBibImport}
+                      disabled={bibImportApplying || bibImportSelections.size === 0}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-600 disabled:opacity-50"
+                    >
+                      {bibImportApplying ? "Importing…" : `Import ${bibImportSelections.size} selected`}
+                    </button>
+                  </>
+                )}
+                {bibImportResult && (
+                  <button
+                    onClick={closeBibImport}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-cyan-700 text-white font-bold hover:bg-cyan-600"
+                  >Close</button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Global "Citations map" modal — lists all refs with citations_map */}

@@ -700,6 +700,318 @@ async def list_cited_by(
     }
 
 
+# ---------- Bibliography import (paste-text → resolved references) ----------
+# Two-step flow: (1) preview parses + resolves via S2, returns proposals;
+# (2) apply persists user-confirmed selections as Paper rows + PaperReference
+# links to this manuscript.
+
+class BibImportPreviewRequest(BaseModel):
+    text: str
+
+
+class BibImportApplyItem(BaseModel):
+    title: str | None = None
+    doi: str | None = None
+    arxiv: str | None = None
+    abstract: str | None = None
+    journal: str | None = None
+    publication_date: str | None = None
+    authors: list[str] = []
+    keywords: list[str] = []
+    s2_id: str | None = None
+    paper_type: str | None = None
+    citation_count: int = 0
+    matched_paper_id: int | None = None  # if already in DB, link directly
+
+
+class BibImportApplyRequest(BaseModel):
+    items: list[BibImportApplyItem]
+
+
+def _normalise_for_compare(s: str) -> str:
+    """Lowercase and strip non-alphanumeric for fuzzy title matching."""
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def _title_similarity(a: str | None, b: str | None) -> float:
+    """Jaccard similarity over alphanumeric tokens — robust to formatting noise."""
+    if not a or not b:
+        return 0.0
+    ta = set(re.findall(r"[a-z0-9]+", a.lower()))
+    tb = set(re.findall(r"[a-z0-9]+", b.lower()))
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
+
+
+@router.post("/{manuscript_id}/import-preview")
+async def import_bibliography_preview(
+    manuscript_id: int,
+    body: BibImportPreviewRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 1: parse the pasted bibliography text, look up each reference
+    against Semantic Scholar (DOI > arXiv > title) and return proposals.
+
+    No DB writes. The frontend renders the proposals, lets the user deselect
+    bad matches, then calls ``/import-apply`` with the curated list.
+    """
+    from app.services.bibliography_parser import split_references, parse_reference
+    from app.services.deduplication import normalize_doi
+
+    if not body.text.strip():
+        raise HTTPException(400, "No text provided")
+
+    manuscript = await db.get(Paper, manuscript_id)
+    if not manuscript:
+        raise HTTPException(404, "Manuscript not found")
+
+    raw_refs = split_references(body.text)
+    if not raw_refs:
+        raise HTTPException(400, "Could not split text into individual references")
+
+    # S2 client (rate-limited, 1 req / ~1.5 s)
+    import asyncio as _asyncio
+    s2_client = None
+    try:
+        from app.clients.semantic_scholar import SemanticScholarClient
+        s2_client = SemanticScholarClient()
+    except Exception as e:
+        logger.warning(f"S2 client unavailable: {e}")
+
+    # Pre-fetch existing references of this manuscript so we can flag duplicates
+    existing = await db.execute(
+        select(PaperReference.cited_paper_id).where(PaperReference.manuscript_id == manuscript_id)
+    )
+    already_linked = {row[0] for row in existing.all()}
+
+    items: list[dict] = []
+
+    for raw in raw_refs:
+        parsed = parse_reference(raw)
+        item: dict = {
+            "raw": parsed["raw"][:300],
+            "parsed_title": parsed["title"],
+            "parsed_doi": parsed["doi"],
+            "parsed_arxiv": parsed["arxiv"],
+            "parsed_year": parsed["year"],
+            "parsed_first_author": parsed["first_author"],
+            "status": "not_found",
+            "title": None,
+            "doi": parsed["doi"],
+            "arxiv": parsed["arxiv"],
+            "abstract": None,
+            "journal": None,
+            "publication_date": None,
+            "authors": [],
+            "keywords": [],
+            "s2_id": None,
+            "paper_type": None,
+            "citation_count": 0,
+            "matched_paper_id": None,
+            "already_linked": False,
+            "similarity": 0.0,
+        }
+
+        # 1) Try existing DB lookup by DOI first
+        if parsed["doi"]:
+            r = await db.execute(select(Paper).where(Paper.doi == normalize_doi(parsed["doi"])))
+            existing_paper = r.scalar_one_or_none()
+            if existing_paper:
+                item.update({
+                    "status": "in_db",
+                    "title": existing_paper.title,
+                    "matched_paper_id": existing_paper.id,
+                    "similarity": 1.0,
+                    "already_linked": existing_paper.id in already_linked,
+                })
+                items.append(item)
+                continue
+
+        # 2) Try S2 lookup — DOI > arXiv > title
+        if s2_client is not None:
+            await _asyncio.sleep(1.2)  # courteous rate limit
+            try:
+                if parsed["doi"]:
+                    r = await s2_client.fetch_metadata(f"DOI:{parsed['doi']}")
+                elif parsed["arxiv"]:
+                    r = await s2_client.fetch_metadata(f"arXiv:{parsed['arxiv']}")
+                elif parsed["title"]:
+                    results = await s2_client.search(parsed["title"], max_results=3)
+                    r = results[0] if results else None
+                else:
+                    r = None
+            except Exception as e:
+                logger.warning(f"S2 lookup failed: {e}")
+                r = None
+
+            if r and r.title:
+                # Compute similarity for the title-based path; for DOI/arXiv
+                # treat as 1.0 (exact lookup).
+                sim = 1.0 if (parsed["doi"] or parsed["arxiv"]) else _title_similarity(r.title, parsed["title"])
+                item["similarity"] = round(sim, 2)
+                item["title"] = r.title
+                item["doi"] = r.doi or parsed["doi"]
+                item["abstract"] = r.abstract
+                item["journal"] = r.journal
+                item["publication_date"] = r.publication_date
+                item["authors"] = [a.get("name", "") for a in (r.authors or [])]
+                item["keywords"] = r.keywords or []
+                item["s2_id"] = r.source_id
+                item["paper_type"] = r.paper_type
+                item["citation_count"] = r.citation_count or 0
+
+                # Existing in DB by DOI?
+                if item["doi"]:
+                    rr = await db.execute(select(Paper).where(Paper.doi == normalize_doi(item["doi"])))
+                    existing_paper = rr.scalar_one_or_none()
+                    if existing_paper:
+                        item["status"] = "in_db"
+                        item["matched_paper_id"] = existing_paper.id
+                        item["already_linked"] = existing_paper.id in already_linked
+                        items.append(item)
+                        continue
+                # Existing in DB by title (fuzzy) — best-effort, only if highly similar
+                rr = await db.execute(
+                    select(Paper).where(Paper.title.ilike(f"%{(item['title'] or '')[:60]}%"))
+                )
+                candidates = rr.scalars().all()
+                for cand in candidates:
+                    if _title_similarity(cand.title, item["title"]) > 0.92:
+                        item["status"] = "in_db"
+                        item["matched_paper_id"] = cand.id
+                        item["already_linked"] = cand.id in already_linked
+                        break
+                else:
+                    item["status"] = "found_s2" if sim >= 0.65 else "ambiguous"
+
+        items.append(item)
+
+    summary = {
+        "parsed": len(raw_refs),
+        "in_db":   sum(1 for i in items if i["status"] == "in_db"),
+        "found":   sum(1 for i in items if i["status"] == "found_s2"),
+        "ambiguous": sum(1 for i in items if i["status"] == "ambiguous"),
+        "not_found": sum(1 for i in items if i["status"] == "not_found"),
+        "already_linked": sum(1 for i in items if i.get("already_linked")),
+    }
+    return {"manuscript_id": manuscript_id, "summary": summary, "items": items}
+
+
+@router.post("/{manuscript_id}/import-apply")
+async def import_bibliography_apply(
+    manuscript_id: int,
+    body: BibImportApplyRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 2: persist user-confirmed import items.
+
+    For each item: if ``matched_paper_id`` is set, just create the
+    PaperReference link to that paper. Otherwise create a new Paper row
+    (with authors / source / topic classification) and the PaperReference.
+    Skips items already linked to this manuscript.
+    """
+    from app.services.deduplication import normalize_doi
+    from app.services.topic_classifier import TopicClassifier
+
+    manuscript = await db.get(Paper, manuscript_id)
+    if not manuscript:
+        raise HTTPException(404, "Manuscript not found")
+    if not body.items:
+        return {"created": 0, "linked": 0, "skipped": 0}
+
+    classifier = TopicClassifier()
+    created = 0
+    linked = 0
+    skipped = 0
+
+    # Pre-fetch existing PaperReference rows to avoid duplicate links
+    existing = await db.execute(
+        select(PaperReference.cited_paper_id).where(PaperReference.manuscript_id == manuscript_id)
+    )
+    already_linked = {row[0] for row in existing.all()}
+
+    for item in body.items:
+        paper_id: int | None = item.matched_paper_id
+
+        # If we don't have a matched paper, create one
+        if paper_id is None:
+            if not item.title:
+                skipped += 1
+                continue
+            # Re-check by DOI to avoid double-create under a race
+            if item.doi:
+                rr = await db.execute(
+                    select(Paper).where(Paper.doi == normalize_doi(item.doi))
+                )
+                ex = rr.scalar_one_or_none()
+                if ex:
+                    paper_id = ex.id
+
+        if paper_id is None:
+            # Create new Paper
+            paper = Paper(
+                doi=normalize_doi(item.doi) if item.doi else None,
+                title=item.title,
+                abstract=item.abstract,
+                journal=item.journal,
+                publication_date=item.publication_date,
+                paper_type=item.paper_type or "journal_article",
+                citation_count=item.citation_count or 0,
+                paper_role="bibliography",
+                validated=bool(item.s2_id or item.doi),
+                created_via="bibliography_import",
+            )
+            try:
+                if item.keywords:
+                    paper.keywords = item.keywords
+                if item.s2_id:
+                    paper.external_ids = {"s2_id": item.s2_id}
+            except Exception:
+                pass
+            db.add(paper)
+            await db.flush()
+            paper_id = paper.id
+
+            # Authors
+            for i, name in enumerate(item.authors):
+                if not name:
+                    continue
+                rr = await db.execute(select(Author).where(Author.name == name))
+                au = rr.scalar_one_or_none()
+                if not au:
+                    au = Author(name=name)
+                    db.add(au)
+                    await db.flush()
+                db.add(PaperAuthor(paper_id=paper.id, author_id=au.id, position=i))
+
+            # Topic classify (best-effort)
+            try:
+                await classifier.classify_paper(db, paper.id, paper.title, paper.abstract)
+            except Exception as e:
+                logger.warning(f"Topic classification failed for paper {paper.id}: {e}")
+
+            created += 1
+
+        # Link to manuscript (skip duplicates)
+        if paper_id in already_linked or paper_id == manuscript_id:
+            skipped += 1
+            continue
+
+        ref = PaperReference(
+            manuscript_id=manuscript_id,
+            cited_paper_id=paper_id,
+        )
+        db.add(ref)
+        already_linked.add(paper_id)
+        linked += 1
+
+    await db.commit()
+    return {"manuscript_id": manuscript_id, "created": created, "linked": linked, "skipped": skipped}
+
+
 @router.get("/{manuscript_id}/keywords")
 async def bibliography_keywords(
     manuscript_id: int,

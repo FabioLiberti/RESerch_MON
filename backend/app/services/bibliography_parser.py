@@ -66,6 +66,132 @@ def extract_dois_with_titles(text: str) -> list[dict]:
     return results
 
 
+# ---------- Reference splitter + per-reference parser ----------
+# Used by the manuscript bibliography import flow when the user pastes the
+# whole "References" section of a paper. Each reference is then independently
+# resolved (by DOI / arXiv / title) against Semantic Scholar and linked to
+# the target manuscript via a PaperReference row.
+
+# Bracketed numbering [1], [2], ... at the start of a line/paragraph.
+_REF_BRACKET_RE = re.compile(r'(?:^|\n)\s*\[(\d+)\]\s*', re.MULTILINE)
+# Plain numbered list "1. ", "2. ", ...
+_REF_NUMBERED_RE = re.compile(r'(?:^|\n)\s*(\d{1,3})\.\s+(?=[A-ZĀ-ſ])', re.MULTILINE)
+# arXiv ID — supports both new (1234.56789) and legacy (cs.LG/9999999) formats
+_ARXIV_RE = re.compile(
+    r'arXiv\s*:?\s*([0-9]{4}\.[0-9]{4,5}(?:v\d+)?|[a-z\-]+(?:\.[A-Z]{2})?/\d{7})',
+    re.IGNORECASE,
+)
+# Title in straight or curly quotes
+_TITLE_QUOTED_RE = re.compile(r'["“‟]([^"“”‟]+?)["”‟]')
+# 4-digit year (1900-2099)
+_YEAR_RE = re.compile(r'\b(19|20)\d{2}\b')
+
+
+def split_references(text: str) -> list[str]:
+    """Split a bibliography blob into individual reference entries.
+
+    Recognises three layouts:
+    1. IEEE-style "[1] ... [2] ... [3] ..."
+    2. Numbered list "1. ... 2. ..." (must start with capital letter to avoid
+       false splits on "vol. 36, no. 11" etc.)
+    3. Blank-line separated paragraphs (fallback)
+
+    Returns the raw text of each entry (whitespace-collapsed, no leading number).
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    # 1. Bracketed [N]
+    parts = _REF_BRACKET_RE.split(text)
+    if len(parts) >= 3:  # at least one [N] match
+        refs: list[str] = []
+        # parts: [preamble, "1", ref1, "2", ref2, ...]
+        for i in range(2, len(parts), 2):
+            ref = re.sub(r'\s+', ' ', parts[i]).strip()
+            if ref:
+                refs.append(ref)
+        if refs:
+            return refs
+
+    # 2. Numbered list "1. "
+    parts = _REF_NUMBERED_RE.split(text)
+    if len(parts) >= 3:
+        refs = []
+        for i in range(2, len(parts), 2):
+            ref = re.sub(r'\s+', ' ', parts[i]).strip()
+            if ref:
+                refs.append(ref)
+        if refs:
+            return refs
+
+    # 3. Blank-line separated
+    refs = [re.sub(r'\s+', ' ', p).strip() for p in re.split(r'\n\s*\n', text)]
+    return [r for r in refs if r]
+
+
+def parse_reference(text: str) -> dict:
+    """Extract structured fields from a single reference entry.
+
+    Returns a dict with: ``raw``, ``title``, ``doi``, ``arxiv``, ``year``,
+    ``first_author``. All fields except ``raw`` may be None.
+    """
+    raw = text
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # Title — first occurrence between matching quotation marks
+    title: str | None = None
+    m = _TITLE_QUOTED_RE.search(text)
+    if m:
+        title = m.group(1).strip().rstrip(',').rstrip('.').strip()
+        # Reject obvious noise (e.g. one-word "quoted" venue names)
+        if len(title) < 6:
+            title = None
+
+    # DOI (reuse existing extractor)
+    doi_list = extract_dois(text)
+    doi = doi_list[0] if doi_list else None
+
+    # arXiv
+    arxiv: str | None = None
+    am = _ARXIV_RE.search(text)
+    if am:
+        arxiv = am.group(1)
+
+    # Year — pick the LAST 4-digit year in the text (publication year is
+    # typically near the end of the reference string; the first one might be
+    # part of an arXiv id like 2010.01264, an issue number, or a page span).
+    year: int | None = None
+    # Strip arXiv id portion before scanning so its leading 4 digits don't
+    # masquerade as a publication year.
+    text_no_arxiv = _ARXIV_RE.sub("", text) if arxiv else text
+    year_matches = _YEAR_RE.findall(text_no_arxiv)
+    if year_matches:
+        try:
+            # findall returns the captured group 1 (the prefix), reconstruct full year by re-finding
+            full_years = [int(m.group(0)) for m in _YEAR_RE.finditer(text_no_arxiv)]
+            if full_years:
+                year = full_years[-1]
+        except ValueError:
+            year = None
+
+    # First author — naive: take text up to the first comma; strip leading
+    # initials/dots and trailing "and" tokens.
+    first_author: str | None = None
+    head = text.split(',')[0].strip() if text else ""
+    if 1 < len(head) < 80:
+        first_author = head
+
+    return {
+        "raw": raw,
+        "title": title,
+        "doi": doi,
+        "arxiv": arxiv,
+        "year": year,
+        "first_author": first_author,
+    }
+
+
 def _find_title_for_doi(text: str, doi: str) -> str | None:
     """Find the title associated with a DOI in the bibliography text."""
     # Find the DOI position in text
