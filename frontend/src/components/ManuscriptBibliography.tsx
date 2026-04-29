@@ -624,7 +624,19 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     if (bE) return -1;
     return null;
   };
-  const sortedRefs = sortBy === "insertion" ? refs : [...refs].sort((a, b) => {
+  // Multi-label filter uses INTERSECTION (paper must have ALL selected labels).
+  // Used in three places: counts, dim/highlight on the row, and the priority
+  // partition for the sortedRefs ordering (matching items first).
+  const labelMatchesAll = (r: Reference): boolean => {
+    if (filterLabels.size === 0) return true;
+    for (const name of filterLabels) {
+      if (!r.labels.some(l => l.name === name)) return false;
+    }
+    return true;
+  };
+
+  // First apply the user-chosen SORT criterion to the whole list…
+  const baseSorted = sortBy === "insertion" ? refs : [...refs].sort((a, b) => {
     switch (sortBy) {
       case "author_asc": {
         const sa = getSurname(a), sb = getSurname(b);
@@ -661,9 +673,18 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     }
   });
 
+  // …then, if the user has a label filter active, partition matching refs to
+  // the top of the list while preserving the SORT order within each group.
+  const sortedRefs: Reference[] = filterLabels.size > 0
+    ? [
+        ...baseSorted.filter(r => labelMatchesAll(r)),
+        ...baseSorted.filter(r => !labelMatchesAll(r)),
+      ]
+    : baseSorted;
+
   // Compute filtered refs based on active filters (for dynamic counts)
   const refsFilteredByLabels = filterLabels.size > 0
-    ? refs.filter(r => r.labels.some(l => filterLabels.has(l.name)))
+    ? refs.filter(r => labelMatchesAll(r))
     : refs;
   const refsFilteredByKeywords = filterKeywords.size > 0
     ? refs.filter(r => r.keywords.some(k => filterKeywords.has(k)))
@@ -699,7 +720,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   ? (() => {
                       const matched = refs.filter(r =>
                         (filterKeywords.size === 0 || r.keywords.some(k => filterKeywords.has(k))) &&
-                        (filterLabels.size === 0 || r.labels.some(l => filterLabels.has(l.name)))
+                        labelMatchesAll(r)
                       ).length;
                       const parts: string[] = [];
                       if (filterKeywords.size > 0) parts.push(`${filterKeywords.size} keyword${filterKeywords.size > 1 ? "s" : ""}`);
@@ -1070,7 +1091,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
             </div>
           )}
           {sortedRefs.map(ref => (
-            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border transition-opacity ${ref.disabled ? "opacity-75 border-red-800/40" : "border-[var(--border)]"} ${(filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k))) || (filterLabels.size > 0 && !ref.labels.some(l => filterLabels.has(l.name))) ? "opacity-30" : ""}`}>
+            <div key={ref.id} className={`flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary)]/30 border transition-opacity ${ref.disabled ? "opacity-75 border-red-800/40" : "border-[var(--border)]"} ${(filterKeywords.size > 0 && !ref.keywords.some(k => filterKeywords.has(k))) || (filterLabels.size > 0 && !labelMatchesAll(ref)) ? "opacity-30" : ""}`}>
               <div className="flex-1 min-w-0 space-y-1">
                 <Link
                   href={`/papers/${ref.cited_paper_id}`}
