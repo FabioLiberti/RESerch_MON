@@ -120,6 +120,15 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const [recommendation, setRecommendation] = useState<string>("");
   const [status, setStatus] = useState<string>("draft");
 
+  // Mark-as-submitted modal — replaces fragile chained prompt() flow that was
+  // dropping data when the user switched browser tabs / windows. The modal is
+  // a regular React component, persists across focus changes, and lets the
+  // user type a multi-line note at their own pace.
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [submitDateTime, setSubmitDateTime] = useState("");
+  const [submitNote, setSubmitNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
   const reload = async () => {
     // Resolve paper.id -> peer_review (single record, single round). Falls back
     // to /peer-review/{urlParam} treating the URL value as a legacy
@@ -372,26 +381,30 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       alert("Pick a recommendation before marking as submitted.");
       return;
     }
-    // Save first to persist any unsaved changes (so the receipt hash reflects the latest state)
+    // Save first to persist any unsaved changes (so the receipt hash reflects
+    // the latest state)
     await save();
+    // Pre-populate the dialog with "now" (local time, formatted for
+    // datetime-local input). User can edit before confirming.
     const nowLocal = new Date();
     const tzOffset = nowLocal.getTimezoneOffset() * 60000;
     const localISO = new Date(nowLocal.getTime() - tzOffset).toISOString().slice(0, 16);
-    const submittedAtStr = prompt(
-      "Mark this review as SUBMITTED.\n\n" +
-      "Submission date/time (ISO 8601 — defaults to now; you can backdate if you submitted earlier):",
-      localISO
-    );
-    if (submittedAtStr === null) return;
-    const note = prompt(
-      "Optional note (e.g. ScholarOne confirmation ID, comments). Leave blank to skip:",
-      ""
-    );
+    setSubmitDateTime(localISO);
+    setSubmitNote("");
+    setSubmitModalOpen(true);
+  };
+
+  const confirmMarkAsSubmitted = async () => {
+    if (!peerReviewId) return;
+    setSubmitting(true);
     try {
       const r = await fetch(`/api/v1/peer-review/${peerReviewId}/mark-submitted`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ submitted_at: submittedAtStr, note: note || undefined }),
+        body: JSON.stringify({
+          submitted_at: submitDateTime,
+          note: submitNote.trim() || undefined,
+        }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -399,10 +412,16 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       }
       const d = await r.json();
       const hashShort = d?.receipt?.hash ? d.receipt.hash.slice(0, 16) + "…" : "(no hash)";
-      alert(`Review marked as SUBMITTED.\nSubmission Receipt generated.\nIntegrity hash: ${hashShort}\n\nThe form is now locked. Use Edit (unlock) to re-open.`);
+      setSubmitModalOpen(false);
+      setSubmitNote("");
+      alert(
+        `Review marked as SUBMITTED.\nSubmission Receipt generated.\nIntegrity hash: ${hashShort}\n\nThe form is now locked. Use Edit (unlock) to re-open.`
+      );
       await reload();
     } catch (e: any) {
       setError(`Mark as submitted failed: ${e.message || e}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -863,6 +882,84 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       {peerReviewId !== null && (
         <div className="mt-6">
           <PeerReviewActivityLog peerReviewId={peerReviewId} />
+        </div>
+      )}
+
+      {/* Mark-as-submitted modal — replaces the fragile prompt() chain.
+          Stays open across browser tab/focus changes; user can paste/edit a
+          multi-line note at their own pace. */}
+      {submitModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !submitting && setSubmitModalOpen(false)}
+        >
+          <div
+            className="bg-[var(--background)] border border-emerald-500/40 rounded-lg w-full max-w-lg p-5 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base font-bold text-emerald-500">Mark Review as Submitted</h3>
+              <p className="text-[11px] text-[var(--muted-foreground)] mt-1 leading-snug">
+                This will lock the review form, generate the immutable integrity Submission Receipt PDF
+                (with SHA-256 hash of the review payload), and add the corresponding entries to the
+                activity log. The form can later be re-opened via "Edit (unlock)".
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-1">
+                Submission date / time
+              </label>
+              <input
+                type="datetime-local"
+                value={submitDateTime}
+                onChange={e => setSubmitDateTime(e.target.value)}
+                disabled={submitting}
+                className="w-full px-3 py-2 rounded bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none focus:border-emerald-500/50"
+              />
+              <p className="text-[10px] text-[var(--muted-foreground)] italic mt-1">
+                Defaults to now. You can backdate if you actually submitted earlier (e.g. via ScholarOne yesterday).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-1">
+                Note (optional)
+              </label>
+              <textarea
+                value={submitNote}
+                onChange={e => setSubmitNote(e.target.value)}
+                disabled={submitting}
+                rows={4}
+                placeholder="e.g. submitted via https://mc.manuscriptcentral.com/tai-ieee, confirmation ID #####, additional context for the audit log..."
+                className="w-full px-3 py-2 rounded bg-[var(--card)] border border-[var(--border)] text-sm focus:outline-none focus:border-emerald-500/50 resize-y"
+              />
+              <p className="text-[10px] text-[var(--muted-foreground)] italic mt-1">
+                Saved into the corresponding activity-log entry. You can also edit the entry later via the Activity Log section.
+              </p>
+            </div>
+
+            <div className="text-[11px] bg-emerald-900/20 border border-emerald-700/30 rounded p-2 text-emerald-300">
+              <strong>Recommendation that will be locked:</strong> {recommendation || <span className="text-red-400">(NOT SET — pick one before submitting)</span>}
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border)]">
+              <button
+                onClick={() => !submitting && setSubmitModalOpen(false)}
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] text-xs font-bold hover:bg-[var(--muted)] disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmMarkAsSubmitted}
+                disabled={submitting || !submitDateTime || !recommendation}
+                className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+              >
+                {submitting ? "Submitting…" : "Confirm submission"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
