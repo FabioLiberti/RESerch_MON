@@ -96,7 +96,14 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   const [bibImportSelections, setBibImportSelections] = useState<Set<number>>(new Set());
   const [bibImportApplying, setBibImportApplying] = useState(false);
   const [bibImportError, setBibImportError] = useState<string | null>(null);
-  const [bibImportResult, setBibImportResult] = useState<{ created: number; linked: number; skipped: number } | null>(null);
+  const [bibImportResult, setBibImportResult] = useState<{ created: number; linked: number; skipped: number; labeled: number } | null>(null);
+  const [bibImportLabelId, setBibImportLabelId] = useState<string>("");
+
+  // Labels for the import modal — fetched lazily when the modal opens.
+  const { data: bibImportLabels } = useSWR<{ id: number; name: string; color: string }[]>(
+    showBibImport ? "/api/v1/labels" : null,
+    authFetcher
+  );
   const [selectedLabel, setSelectedLabel] = useState("");
   const [labelPapers, setLabelPapers] = useState<any[] | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
@@ -184,14 +191,22 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       const r = await fetch(`/api/v1/paper-references/${paperId}/import-apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({
+          items,
+          label_id: bibImportLabelId ? parseInt(bibImportLabelId, 10) : null,
+        }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${r.status}`);
       }
       const d = await r.json();
-      setBibImportResult({ created: d.created || 0, linked: d.linked || 0, skipped: d.skipped || 0 });
+      setBibImportResult({
+        created: d.created || 0,
+        linked: d.linked || 0,
+        skipped: d.skipped || 0,
+        labeled: d.labeled || 0,
+      });
       // Refresh the bibliography list on the page
       mutate(apiUrl);
     } catch (e: any) {
@@ -208,6 +223,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     setBibImportSelections(new Set());
     setBibImportError(null);
     setBibImportResult(null);
+    setBibImportLabelId("");
   };
 
   const importSelected = async () => {
@@ -1380,6 +1396,24 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                     {bibImportSelections.size} of {bibImportPreview.items.length} selected. Click to toggle. Defaults: matched in DB + found via S2 (you can include ambiguous if you trust the match).
                   </div>
 
+                  <div className="flex items-center gap-2 p-2 rounded bg-purple-900/20 border border-purple-700/30">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300 shrink-0">Apply label</label>
+                    <select
+                      value={bibImportLabelId}
+                      onChange={e => setBibImportLabelId(e.target.value)}
+                      className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] flex-1 max-w-xs"
+                      title="Optional. The selected label will be applied to every imported paper (existing or newly created), enabling later filter / Import-from-Label workflows."
+                    >
+                      <option value="">— no label —</option>
+                      {(bibImportLabels || []).map(l => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] text-[var(--muted-foreground)] italic">
+                      Applied to all imported papers (idempotent — already-tagged papers are skipped).
+                    </span>
+                  </div>
+
                   <div className="space-y-1.5">
                     {bibImportPreview.items.map((it: any, idx: number) => {
                       const status = it.status as string;
@@ -1452,7 +1486,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
               {bibImportResult && (
                 <div className="space-y-3 py-4">
                   <div className="text-emerald-400 font-bold text-center text-lg">✓ Import complete</div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
                     <div className="rounded bg-emerald-900/30 border border-emerald-700/40 p-3 text-center">
                       <div className="text-emerald-400 font-bold text-2xl">{bibImportResult.created}</div>
                       <div className="text-xs text-[var(--muted-foreground)]">papers created</div>
@@ -1460,6 +1494,10 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                     <div className="rounded bg-cyan-900/30 border border-cyan-700/40 p-3 text-center">
                       <div className="text-cyan-400 font-bold text-2xl">{bibImportResult.linked}</div>
                       <div className="text-xs text-[var(--muted-foreground)]">references linked</div>
+                    </div>
+                    <div className="rounded bg-purple-900/30 border border-purple-700/40 p-3 text-center">
+                      <div className="text-purple-400 font-bold text-2xl">{bibImportResult.labeled || 0}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">labeled</div>
                     </div>
                     <div className="rounded bg-slate-800 border border-slate-600/40 p-3 text-center">
                       <div className="font-bold text-2xl">{bibImportResult.skipped}</div>
