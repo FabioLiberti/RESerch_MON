@@ -894,6 +894,37 @@ async def import_bibliography_preview(
 
         items.append(item)
 
+    # ---- Intra-batch duplicate detection ----
+    # When the source bibliography contains the same paper under two
+    # different reference numbers (e.g. FLEdge [16] vs [30] both pointing to
+    # DFRD), our resolver returns the same matched_paper_id / DOI / s2_id for
+    # both. Surface this so the user understands the create-vs-link counts
+    # and can choose which entry to import.
+    from app.services.deduplication import normalize_doi as _norm_doi
+    seen_pid: dict[int, int] = {}
+    seen_doi: dict[str, int] = {}
+    seen_s2:  dict[str, int] = {}
+    for idx, it in enumerate(items):
+        pid = it.get("matched_paper_id")
+        doi_n = _norm_doi(it.get("doi") or "") if it.get("doi") else None
+        s2 = it.get("s2_id")
+        dup_of = None
+        if pid and pid in seen_pid:
+            dup_of = seen_pid[pid]
+        elif doi_n and doi_n in seen_doi:
+            dup_of = seen_doi[doi_n]
+        elif s2 and s2 in seen_s2:
+            dup_of = seen_s2[s2]
+        if dup_of is not None:
+            it["duplicate_of_index"] = dup_of
+        else:
+            if pid:
+                seen_pid[pid] = idx
+            if doi_n:
+                seen_doi[doi_n] = idx
+            if s2:
+                seen_s2[s2] = idx
+
     # Batch-fetch existing labels for every matched paper so the user can see
     # which labels are already attached before deciding whether to add the
     # main / verify label in this import. This is what makes the preview
@@ -920,6 +951,7 @@ async def import_bibliography_preview(
         "ambiguous": sum(1 for i in items if i["status"] == "ambiguous"),
         "not_found": sum(1 for i in items if i["status"] == "not_found"),
         "already_linked": sum(1 for i in items if i.get("already_linked")),
+        "duplicates_within_batch": sum(1 for i in items if i.get("duplicate_of_index") is not None),
     }
     return {"manuscript_id": manuscript_id, "summary": summary, "items": items}
 

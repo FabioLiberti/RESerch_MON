@@ -147,11 +147,15 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
       }
       const d = await r.json();
       setBibImportPreview(d);
-      // Default selection: everything that is "in_db" (not yet linked) or "found_s2".
+      // Default selection: everything that is "in_db" (not yet linked) or
+      // "found_s2", EXCEPT items flagged as duplicates within the batch
+      // (only the first occurrence is auto-selected; the user can manually
+      // tick duplicates if they want them processed too — idempotent anyway).
       // Ambiguous and not_found stay un-ticked — user must opt in.
       const initial = new Set<number>();
       (d.items || []).forEach((it: any, idx: number) => {
         if (it.already_linked) return;
+        if (typeof it.duplicate_of_index === "number") return;
         if (it.status === "in_db" || it.status === "found_s2") initial.add(idx);
       });
       setBibImportSelections(initial);
@@ -1148,7 +1152,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                 ) : isAdmin ? (
                   <button
                     onClick={() => setNoteEditMode(prev => ({ ...prev, [ref.id]: true }))}
-                    className="text-[9px] text-amber-500 hover:text-amber-400 mt-1 self-start"
+                    className="block w-fit text-[9px] text-amber-500 hover:text-amber-400 mt-1"
                   >+ Add private note</button>
                 ) : null}
 
@@ -1210,7 +1214,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                 ) : isAdmin ? (
                   <button
                     onClick={() => setCitesEditMode(prev => ({ ...prev, [ref.id]: true }))}
-                    className="text-[9px] text-indigo-500 hover:text-indigo-400 mt-1 self-start"
+                    className="block w-fit text-[9px] text-indigo-500 hover:text-indigo-400 mt-1"
                   >+ Add citations map</button>
                 ) : null}
 
@@ -1241,7 +1245,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   <>
                     <button
                       onClick={() => setExpandedDetails(prev => { const next = new Set(prev); if (next.has(ref.id)) next.delete(ref.id); else next.add(ref.id); return next; })}
-                      className="text-[9px] text-[var(--primary)] hover:underline mt-1 self-start"
+                      className="block w-fit text-[9px] text-[var(--primary)] hover:underline mt-1"
                     >
                       {expandedDetails.has(ref.id) ? "Hide details ▴" : `Details ▾ (${ref.keywords.length} kw, ${ref.labels.length} labels)`}
                     </button>
@@ -1395,7 +1399,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
 
               {bibImportPreview && !bibImportResult && (
                 <>
-                  <div className="grid grid-cols-5 gap-2 text-[10px]">
+                  <div className="grid grid-cols-6 gap-2 text-[10px]">
                     <div className="rounded bg-emerald-900/30 border border-emerald-700/40 p-2 text-center">
                       <div className="text-emerald-400 font-bold text-base">{bibImportPreview.summary.in_db}</div>
                       <div className="text-[var(--muted-foreground)]">in DB</div>
@@ -1411,6 +1415,10 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                     <div className="rounded bg-red-900/30 border border-red-700/40 p-2 text-center">
                       <div className="text-red-400 font-bold text-base">{bibImportPreview.summary.not_found}</div>
                       <div className="text-[var(--muted-foreground)]">not found</div>
+                    </div>
+                    <div className="rounded bg-fuchsia-900/30 border border-fuchsia-700/40 p-2 text-center" title="Duplicates detected within the same pasted bibliography (e.g. references [16] and [30] pointing to the same paper)">
+                      <div className="text-fuchsia-400 font-bold text-base">{bibImportPreview.summary.duplicates_within_batch || 0}</div>
+                      <div className="text-[var(--muted-foreground)]">dup in batch</div>
                     </div>
                     <div className="rounded bg-slate-800 border border-slate-600/40 p-2 text-center">
                       <div className="font-bold text-base">{bibImportPreview.summary.already_linked}</div>
@@ -1497,8 +1505,15 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                              <span className="text-[9px] text-[var(--muted-foreground)] font-mono">[{idx + 1}]</span>
                               <span className={`text-[8px] px-1 py-0.5 rounded text-white font-bold ${statusColor}`}>{statusLabel}</span>
                               {it.already_linked && <span className="text-[8px] px-1 py-0.5 rounded text-white font-bold bg-slate-600">already linked</span>}
+                              {typeof it.duplicate_of_index === "number" && (
+                                <span
+                                  className="text-[8px] px-1 py-0.5 rounded text-white font-bold bg-fuchsia-700"
+                                  title={`Same paper as entry #${it.duplicate_of_index + 1} — will be merged on import (only one PaperReference is created)`}
+                                >DUP of #{it.duplicate_of_index + 1}</span>
+                              )}
                               {typeof it.similarity === "number" && it.similarity > 0 && it.similarity < 1 && (
                                 <span className="text-[9px] text-[var(--muted-foreground)]">sim {Math.round(it.similarity * 100)}%</span>
                               )}
