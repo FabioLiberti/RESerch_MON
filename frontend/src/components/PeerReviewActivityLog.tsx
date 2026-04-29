@@ -23,7 +23,12 @@ interface LogResponse {
   total: number;
 }
 
+// SYSTEM events (auto-logged by backend) and MANUAL categories (user-pickable
+// when adding an entry). The two are unified in the timeline display so the
+// reviewer reads a single chronological story; the MANUAL_CATEGORIES list is
+// what the dropdown in the entry form exposes (5 grouped options).
 const EVENT_LABEL: Record<string, string> = {
+  // System
   created: "Created",
   metadata_updated: "Metadata updated",
   pdf_uploaded: "Manuscript PDF uploaded",
@@ -39,10 +44,16 @@ const EVENT_LABEL: Record<string, string> = {
   archived: "Archived",
   deleted: "Deleted",
   receipt_generated: "Submission receipt generated",
-  manual_note: "Manual note",
+  // Manual (user-pickable)
+  manual_received: "📥 Received",
+  manual_working: "📝 Working note",
+  manual_submitted: "📤 Submitted",
+  manual_communication: "💬 Communication",
+  manual_note: "📌 Note",
 };
 
 const EVENT_COLOR: Record<string, string> = {
+  // System
   created: "bg-indigo-700",
   pdf_uploaded: "bg-blue-700",
   llm_suggestion_applied: "bg-purple-700",
@@ -54,8 +65,23 @@ const EVENT_COLOR: Record<string, string> = {
   archived: "bg-gray-700",
   receipt_generated: "bg-emerald-800",
   recommendation_changed: "bg-fuchsia-700",
-  manual_note: "bg-slate-700",
+  // Manual
+  manual_received: "bg-sky-700",
+  manual_working: "bg-slate-700",
+  manual_submitted: "bg-emerald-700",
+  manual_communication: "bg-violet-700",
+  manual_note: "bg-stone-700",
 };
+
+// 5 user-pickable categories — covers the full review process without
+// overwhelming the form. Default is "manual_working" (most frequent case).
+const MANUAL_CATEGORIES: { value: string; label: string; hint: string }[] = [
+  { value: "manual_received",      label: "📥 Received",      hint: "Incoming: assignment, editor msg, decision letter, query" },
+  { value: "manual_working",       label: "📝 Working note",  hint: "Internal: reading memo, milestone, reminder" },
+  { value: "manual_submitted",     label: "📤 Submitted",     hint: "Outgoing: review sent to journal, response transmitted" },
+  { value: "manual_communication", label: "💬 Communication", hint: "Email to/from editor, journal, co-authors" },
+  { value: "manual_note",          label: "📌 Other",         hint: "Generic note that doesn't fit elsewhere" },
+];
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "";
@@ -71,7 +97,8 @@ export default function PeerReviewActivityLog({ peerReviewId }: { peerReviewId: 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newDescription, setNewDescription] = useState("");
   const [newOccurredAt, setNewOccurredAt] = useState("");
-  const [newEventType, setNewEventType] = useState("manual_note");
+  // Default category: "Working note" — most frequent case for a reviewer
+  const [newEventType, setNewEventType] = useState("manual_working");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +123,7 @@ export default function PeerReviewActivityLog({ peerReviewId }: { peerReviewId: 
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setNewDescription("");
       setNewOccurredAt("");
-      setNewEventType("manual_note");
+      setNewEventType("manual_working");
       setShowAddForm(false);
       mutate(apiUrl);
     } catch (e: any) {
@@ -164,24 +191,30 @@ export default function PeerReviewActivityLog({ peerReviewId }: { peerReviewId: 
 
       {showAddForm && (
         <div className="rounded-lg bg-[var(--secondary)]/40 border border-[var(--border)] p-3 space-y-2">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Category</label>
             <select
               value={newEventType}
               onChange={e => setNewEventType(e.target.value)}
               className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)]"
+              title={MANUAL_CATEGORIES.find(c => c.value === newEventType)?.hint || ""}
             >
-              {Object.entries(EVENT_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {MANUAL_CATEGORIES.map(c => (
+                <option key={c.value} value={c.value} title={c.hint}>{c.label}</option>
               ))}
             </select>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] ml-2">When</label>
             <input
               type="datetime-local"
               value={newOccurredAt}
               onChange={e => setNewOccurredAt(e.target.value)}
               className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)]"
-              title="When this event happened (defaults to now)"
+              title="When this event happened (defaults to now; editable for backdating)"
             />
           </div>
+          <p className="text-[9px] text-[var(--muted-foreground)] italic">
+            {MANUAL_CATEGORIES.find(c => c.value === newEventType)?.hint}
+          </p>
           <textarea
             value={newDescription}
             onChange={e => setNewDescription(e.target.value)}

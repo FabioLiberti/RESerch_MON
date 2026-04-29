@@ -17,7 +17,11 @@ from app.models.paper import Base
 
 
 # Canonical event type vocabulary. Free-form description goes in `description`.
+# Two semantic groups:
+#   - SYSTEM: events auto-emitted by API endpoints (lifecycle, attachments, ...)
+#   - MANUAL: 5 grouped categories the user explicitly picks when adding a note
 EVENT_TYPES = (
+    # --- SYSTEM events (auto-logged, not user-pickable) ---
     "created",
     "metadata_updated",
     "pdf_uploaded",
@@ -33,7 +37,12 @@ EVENT_TYPES = (
     "archived",
     "deleted",
     "receipt_generated",
-    "manual_note",
+    # --- MANUAL categories (user-pickable in the form) ---
+    "manual_received",       # Incoming: assignment, editor message, decision letter, query
+    "manual_working",        # Internal note: working memo, milestones, reminders   (DEFAULT)
+    "manual_submitted",      # Outgoing: review sent to journal, response transmitted
+    "manual_communication",  # Bidirectional: email to/from editor, journal, co-authors
+    "manual_note",           # Generic catch-all (also kept for backward compat)
 )
 
 

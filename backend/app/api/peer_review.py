@@ -217,6 +217,30 @@ async def create_peer_review(
     return _serialize(pr)
 
 
+@router.get("/by-paper/{paper_id}")
+async def get_peer_review_by_paper(
+    paper_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resolve a peer review by the underlying Paper id.
+
+    Used by the frontend so the URL can be aligned to ``paper_id`` (consistent
+    with ``/papers/{id}`` and ``/my-manuscripts/{id}``) while internal API
+    calls keep using ``peer_review.id`` for record identity.
+    """
+    rows = (await db.execute(
+        select(PeerReview).where(PeerReview.paper_id == paper_id).order_by(PeerReview.id.asc())
+    )).scalars().all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No peer review for this paper")
+    # For now (single-round) there is one row per paper; return it directly.
+    # Multi-round (DEVPLAN_PEER_REVIEW_ROUNDS): we will return the latest round
+    # plus a `rounds` list when round_number is introduced.
+    pr = rows[-1]
+    return _serialize(pr)
+
+
 @router.get("/{peer_review_id}")
 async def get_peer_review(
     peer_review_id: int,

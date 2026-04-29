@@ -113,7 +113,8 @@ export default function PeerReviewPage() {
       setDeadline(""); setReviewerRole(""); setPrivateNotes(""); setPdfFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       mutate();
-      router.push(`/peer-review/${created.id}`);
+      // Route by paper.id so the URL is aligned with /papers/{id} and /my-manuscripts/{id}
+      router.push(`/peer-review/${created.paper_id || created.id}`);
     } catch (e: any) {
       setError(e.message || "Create failed");
     } finally {
@@ -269,7 +270,7 @@ export default function PeerReviewPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/peer-review/${pr.id}`} className="text-[10px] px-2 py-1 rounded bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300 mr-1">
+                    <Link href={`/peer-review/${pr.paper_id || pr.id}`} className="text-[10px] px-2 py-1 rounded bg-yellow-400 text-black font-bold border-2 border-red-600 hover:bg-yellow-300 mr-1">
                       Open
                     </Link>
                     {isAdmin && <button onClick={() => remove(pr.id)} className="text-[10px] px-2 py-1 rounded bg-red-800 text-white hover:bg-red-700">

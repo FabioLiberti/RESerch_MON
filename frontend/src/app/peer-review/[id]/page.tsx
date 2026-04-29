@@ -78,8 +78,13 @@ const REC_COLORS: Record<string, string> = {
 };
 
 export default function PeerReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // The URL parameter is the paper.id (aligned with /papers/{id} and
+  // /my-manuscripts/{id}). We resolve it to the internal peer_review.id below.
+  // Legacy URLs of the form /peer-review/{peer_review_id} are still supported
+  // via a fallback in `reload()` so existing bookmarks keep working.
   const { id: idStr } = use(params);
-  const id = parseInt(idStr, 10);
+  const id = parseInt(idStr, 10);  // semantically paper.id (used for display + initial resolve)
+  const [peerReviewId, setPeerReviewId] = useState<number | null>(null);
 
   const [pr, setPr] = useState<PeerReviewDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,15 +121,25 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const [status, setStatus] = useState<string>("draft");
 
   const reload = async () => {
-    const r = await fetch(`/api/v1/peer-review/${id}`, {
+    // Resolve paper.id -> peer_review (single record, single round). Falls back
+    // to /peer-review/{urlParam} treating the URL value as a legacy
+    // peer_review.id so old bookmarks keep working.
+    const urlParam = id;
+    let r = await fetch(`/api/v1/peer-review/by-paper/${urlParam}`, {
       headers: authHeaders(),
     });
+    if (r.status === 404) {
+      r = await fetch(`/api/v1/peer-review/${urlParam}`, {
+        headers: authHeaders(),
+      });
+    }
     if (!r.ok) {
       setError("Not found");
       setLoading(false);
       return;
     }
     const d: PeerReviewDetail = await r.json();
+    setPeerReviewId(d.id);
     setPr(d);
     setTitle(d.title || "");
     setAuthors(d.authors || "");
@@ -170,7 +185,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   useEffect(() => {
     if (!pr?.has_pdf || pdfBlobUrl || pdfLoading) return;
     setPdfLoading(true);
-    fetch(`/api/v1/peer-review/${id}/pdf`, {
+    fetch(`/api/v1/peer-review/${peerReviewId}/pdf`, {
       headers: authHeaders(),
     })
       .then((r) => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
@@ -192,7 +207,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
     setSaveMsg(null);
     setError(null);
     try {
-      const r = await fetch(`/api/v1/peer-review/${id}`, {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -239,7 +254,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
 
     setSwitchingTemplate(true);
     try {
-      const r = await fetch(`/api/v1/peer-review/${id}`, {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -283,7 +298,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
     setLlmSuggestionApplied(null);
     setError(null);
     try {
-      const r = await fetch(`/api/v1/peer-review/${id}/llm-suggest`, {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}/llm-suggest`, {
         method: "POST",
         headers: authHeaders(),
       });
@@ -333,7 +348,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const uploadPdf = async (file: File) => {
     const fd = new FormData();
     fd.append("pdf", file);
-    const r = await fetch(`/api/v1/peer-review/${id}/upload-pdf`, {
+    const r = await fetch(`/api/v1/peer-review/${peerReviewId}/upload-pdf`, {
       method: "POST",
       headers: authHeaders(),
       body: fd,
@@ -373,7 +388,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       ""
     );
     try {
-      const r = await fetch(`/api/v1/peer-review/${id}/mark-submitted`, {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}/mark-submitted`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ submitted_at: submittedAtStr, note: note || undefined }),
@@ -394,7 +409,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const editUnlock = async () => {
     if (!confirm("Unlock this submitted review for editing?\n\nThe original Submission Receipt and all log entries are preserved as audit evidence. Subsequent edits will be tracked.")) return;
     try {
-      const r = await fetch(`/api/v1/peer-review/${id}/edit-unlock`, {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}/edit-unlock`, {
         method: "POST",
         headers: authHeaders(),
       });
@@ -411,7 +426,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const archive = async () => {
     if (!confirm("Archive this peer review?\n\nStatus will become 'archived'. Data and attachments are preserved.")) return;
     try {
-      const r = await fetch(`/api/v1/peer-review/${id}/archive`, {
+      const r = await fetch(`/api/v1/peer-review/${peerReviewId}/archive`, {
         method: "POST",
         headers: authHeaders(),
       });
@@ -428,7 +443,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
   const downloadReview = async (kind: "pdf" | "txt" | "md" | "tex") => {
     // Save first to persist any pending edits
     await save();
-    const r = await fetch(`/api/v1/peer-review/${id}/review-${kind}`, {
+    const r = await fetch(`/api/v1/peer-review/${peerReviewId}/review-${kind}`, {
       headers: authHeaders(),
     });
     if (!r.ok) {
@@ -838,14 +853,18 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       {/* Attachments — review deliverables, screenshots, archival material */}
-      <div className="mt-6">
-        <PeerReviewAttachments peerReviewId={id} />
-      </div>
+      {peerReviewId !== null && (
+        <div className="mt-6">
+          <PeerReviewAttachments peerReviewId={peerReviewId} />
+        </div>
+      )}
 
       {/* Activity log — audit trail of all transitions and key actions */}
-      <div className="mt-6">
-        <PeerReviewActivityLog peerReviewId={id} />
-      </div>
+      {peerReviewId !== null && (
+        <div className="mt-6">
+          <PeerReviewActivityLog peerReviewId={peerReviewId} />
+        </div>
+      )}
 
       {/* Review Journal — editorial guidance and reviewer feedback */}
       {pr.paper_id && (
