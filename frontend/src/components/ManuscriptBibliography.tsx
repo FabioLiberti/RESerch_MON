@@ -212,6 +212,20 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
         labeled: d.labeled || 0,
         flagged_for_verification: d.flagged_for_verification || 0,
       });
+      // Mark imported items in the in-memory preview state so that, if the
+      // user clicks "Continue with another batch", those rows show up as
+      // already_linked (greyed out, not re-selectable). Saves a full 60s
+      // re-preview round-trip.
+      setBibImportPreview((prev: any) => {
+        if (!prev) return prev;
+        const importedIdx = new Set(bibImportSelections);
+        return {
+          ...prev,
+          items: prev.items.map((it: any, idx: number) =>
+            importedIdx.has(idx) ? { ...it, already_linked: true } : it
+          ),
+        };
+      });
       // Refresh the bibliography list on the page
       mutate(apiUrl);
     } catch (e: any) {
@@ -230,6 +244,17 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     setBibImportResult(null);
     setBibImportLabelId("");
     setBibImportVerificationLabelId("");
+  };
+
+  // Process a second batch (e.g. ambiguous items with a different verify
+  // label) without losing the resolved preview — saves the ~1s/ref S2
+  // resolution time. Keeps preview + labels (user can change them); resets
+  // selections + result so the user can pick different items.
+  const continueBibImport = () => {
+    setBibImportResult(null);
+    setBibImportError(null);
+    setBibImportSelections(new Set());
+    // Keep bibImportPreview, bibImportText, label IDs — let the user adjust
   };
 
   const importSelected = async () => {
@@ -1574,10 +1599,19 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                   </>
                 )}
                 {bibImportResult && (
-                  <button
-                    onClick={closeBibImport}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-cyan-700 text-white font-bold hover:bg-cyan-600"
-                  >Close</button>
+                  <>
+                    <button
+                      onClick={continueBibImport}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 text-white font-bold hover:bg-amber-600"
+                      title="Go back to the preview view (data preserved). Useful for processing remaining items with a different label, e.g. tag ambiguous matches with 'needs-verify' after the certain ones."
+                    >
+                      Continue with another batch
+                    </button>
+                    <button
+                      onClick={closeBibImport}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-cyan-700 text-white font-bold hover:bg-cyan-600"
+                    >Done</button>
+                  </>
                 )}
               </div>
             </div>
