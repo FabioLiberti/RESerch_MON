@@ -722,11 +722,16 @@ class BibImportApplyItem(BaseModel):
     paper_type: str | None = None
     citation_count: int = 0
     matched_paper_id: int | None = None  # if already in DB, link directly
+    needs_verification: bool = False     # set by frontend for ambiguous matches
 
 
 class BibImportApplyRequest(BaseModel):
     items: list[BibImportApplyItem]
-    label_id: int | None = None  # optional — apply this label to each imported paper
+    label_id: int | None = None              # main label, applied to ALL papers
+    verification_label_id: int | None = None # secondary label, applied ONLY to items
+                                              # flagged ``needs_verification`` so the
+                                              # user can later filter the list and
+                                              # punctually verify those entries
 
 
 def _normalise_for_compare(s: str) -> str:
@@ -925,17 +930,22 @@ async def import_bibliography_apply(
 
     from app.models.label import PaperLabel as _PaperLabel, Label as _Label
 
-    # Validate the optional label_id once up-front
+    # Validate the optional label IDs once up-front
     if body.label_id is not None:
         exists = await db.get(_Label, body.label_id)
         if not exists:
             raise HTTPException(404, f"Label {body.label_id} not found")
+    if body.verification_label_id is not None:
+        exists = await db.get(_Label, body.verification_label_id)
+        if not exists:
+            raise HTTPException(404, f"Verification label {body.verification_label_id} not found")
 
     classifier = TopicClassifier()
     created = 0
     linked = 0
     skipped = 0
     labeled = 0
+    flagged_for_verification = 0
 
     # Pre-fetch existing PaperReference rows to avoid duplicate links
     existing = await db.execute(
@@ -1005,7 +1015,7 @@ async def import_bibliography_apply(
 
             created += 1
 
-        # Apply label (if requested) — idempotent: skip if already applied
+        # Apply main label (if requested) — idempotent: skip if already applied
         if body.label_id is not None and paper_id is not None:
             already = await db.execute(
                 select(_PaperLabel).where(
@@ -1016,6 +1026,24 @@ async def import_bibliography_apply(
             if already.scalar_one_or_none() is None:
                 db.add(_PaperLabel(paper_id=paper_id, label_id=body.label_id))
                 labeled += 1
+
+        # Apply verification label only to items flagged as needing verification.
+        # Useful for audit follow-up: the user filters papers by this label to
+        # check titles/authors/year against the original bibliography text.
+        if (
+            body.verification_label_id is not None
+            and paper_id is not None
+            and item.needs_verification
+        ):
+            already = await db.execute(
+                select(_PaperLabel).where(
+                    _PaperLabel.paper_id == paper_id,
+                    _PaperLabel.label_id == body.verification_label_id,
+                )
+            )
+            if already.scalar_one_or_none() is None:
+                db.add(_PaperLabel(paper_id=paper_id, label_id=body.verification_label_id))
+                flagged_for_verification += 1
 
         # Link to manuscript (skip duplicates)
         if paper_id in already_linked or paper_id == manuscript_id:
@@ -1037,6 +1065,7 @@ async def import_bibliography_apply(
         "linked": linked,
         "skipped": skipped,
         "labeled": labeled,
+        "flagged_for_verification": flagged_for_verification,
     }
 
 

@@ -96,8 +96,9 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   const [bibImportSelections, setBibImportSelections] = useState<Set<number>>(new Set());
   const [bibImportApplying, setBibImportApplying] = useState(false);
   const [bibImportError, setBibImportError] = useState<string | null>(null);
-  const [bibImportResult, setBibImportResult] = useState<{ created: number; linked: number; skipped: number; labeled: number } | null>(null);
+  const [bibImportResult, setBibImportResult] = useState<{ created: number; linked: number; skipped: number; labeled: number; flagged_for_verification: number } | null>(null);
   const [bibImportLabelId, setBibImportLabelId] = useState<string>("");
+  const [bibImportVerificationLabelId, setBibImportVerificationLabelId] = useState<string>("");
 
   // Labels for the import modal — fetched lazily when the modal opens.
   const { data: bibImportLabels } = useSWR<{ id: number; name: string; color: string }[]>(
@@ -187,6 +188,8 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
           paper_type: x.it.paper_type,
           citation_count: x.it.citation_count || 0,
           matched_paper_id: x.it.matched_paper_id,
+          // Status "ambiguous" → flag for later punctual verification
+          needs_verification: x.it.status === "ambiguous",
         }));
       const r = await fetch(`/api/v1/paper-references/${paperId}/import-apply`, {
         method: "POST",
@@ -194,6 +197,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
         body: JSON.stringify({
           items,
           label_id: bibImportLabelId ? parseInt(bibImportLabelId, 10) : null,
+          verification_label_id: bibImportVerificationLabelId ? parseInt(bibImportVerificationLabelId, 10) : null,
         }),
       });
       if (!r.ok) {
@@ -206,6 +210,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
         linked: d.linked || 0,
         skipped: d.skipped || 0,
         labeled: d.labeled || 0,
+        flagged_for_verification: d.flagged_for_verification || 0,
       });
       // Refresh the bibliography list on the page
       mutate(apiUrl);
@@ -224,6 +229,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     setBibImportError(null);
     setBibImportResult(null);
     setBibImportLabelId("");
+    setBibImportVerificationLabelId("");
   };
 
   const importSelected = async () => {
@@ -1396,22 +1402,42 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                     {bibImportSelections.size} of {bibImportPreview.items.length} selected. Click to toggle. Defaults: matched in DB + found via S2 (you can include ambiguous if you trust the match).
                   </div>
 
-                  <div className="flex items-center gap-2 p-2 rounded bg-purple-900/20 border border-purple-700/30">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300 shrink-0">Apply label</label>
-                    <select
-                      value={bibImportLabelId}
-                      onChange={e => setBibImportLabelId(e.target.value)}
-                      className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] flex-1 max-w-xs"
-                      title="Optional. The selected label will be applied to every imported paper (existing or newly created), enabling later filter / Import-from-Label workflows."
-                    >
-                      <option value="">— no label —</option>
-                      {(bibImportLabels || []).map(l => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
-                      ))}
-                    </select>
-                    <span className="text-[10px] text-[var(--muted-foreground)] italic">
-                      Applied to all imported papers (idempotent — already-tagged papers are skipped).
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2 rounded bg-purple-900/20 border border-purple-700/30">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-purple-300 shrink-0 w-28">Apply label</label>
+                      <select
+                        value={bibImportLabelId}
+                        onChange={e => setBibImportLabelId(e.target.value)}
+                        className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] flex-1 max-w-xs"
+                        title="Optional. The selected label is applied to EVERY imported paper (matched or newly created)."
+                      >
+                        <option value="">— no label —</option>
+                        {(bibImportLabels || []).map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-[var(--muted-foreground)] italic">
+                        Tagged to ALL imported papers (idempotent).
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 p-2 rounded bg-amber-900/20 border border-amber-700/30">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-amber-300 shrink-0 w-28">Verify label</label>
+                      <select
+                        value={bibImportVerificationLabelId}
+                        onChange={e => setBibImportVerificationLabelId(e.target.value)}
+                        className="text-xs px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] flex-1 max-w-xs"
+                        title="Optional. The selected label is applied ONLY to papers whose match is ambiguous (low title similarity). Filter Papers by this label later for punctual verification."
+                      >
+                        <option value="">— no verify label —</option>
+                        {(bibImportLabels || []).map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-[var(--muted-foreground)] italic">
+                        Tagged ONLY to ambiguous matches → audit queue.
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1486,7 +1512,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
               {bibImportResult && (
                 <div className="space-y-3 py-4">
                   <div className="text-emerald-400 font-bold text-center text-lg">✓ Import complete</div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-5 gap-3">
                     <div className="rounded bg-emerald-900/30 border border-emerald-700/40 p-3 text-center">
                       <div className="text-emerald-400 font-bold text-2xl">{bibImportResult.created}</div>
                       <div className="text-xs text-[var(--muted-foreground)]">papers created</div>
@@ -1498,6 +1524,10 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                     <div className="rounded bg-purple-900/30 border border-purple-700/40 p-3 text-center">
                       <div className="text-purple-400 font-bold text-2xl">{bibImportResult.labeled || 0}</div>
                       <div className="text-xs text-[var(--muted-foreground)]">labeled</div>
+                    </div>
+                    <div className="rounded bg-amber-900/30 border border-amber-700/40 p-3 text-center">
+                      <div className="text-amber-400 font-bold text-2xl">{bibImportResult.flagged_for_verification || 0}</div>
+                      <div className="text-xs text-[var(--muted-foreground)]">flagged to verify</div>
                     </div>
                     <div className="rounded bg-slate-800 border border-slate-600/40 p-3 text-center">
                       <div className="font-bold text-2xl">{bibImportResult.skipped}</div>
