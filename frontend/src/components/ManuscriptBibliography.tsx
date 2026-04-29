@@ -100,12 +100,6 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
   const [bibImportResult, setBibImportResult] = useState<{ created: number; linked: number; skipped: number; labeled: number; flagged_for_verification: number } | null>(null);
   const [bibImportLabelId, setBibImportLabelId] = useState<string>("");
   const [bibImportVerificationLabelId, setBibImportVerificationLabelId] = useState<string>("");
-
-  // Labels for the import modal — fetched lazily when the modal opens.
-  const { data: bibImportLabels } = useSWR<{ id: number; name: string; color: string }[]>(
-    showBibImport ? "/api/v1/labels" : null,
-    authFetcher
-  );
   const [selectedLabel, setSelectedLabel] = useState("");
   const [labelPapers, setLabelPapers] = useState<any[] | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
@@ -1516,6 +1510,24 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
                               <p className="text-[10px] text-[var(--muted-foreground)] line-clamp-1">
                                 {it.parsed_first_author}{it.parsed_year ? ` · ${it.parsed_year}` : ""}{it.journal ? ` · ${it.journal}` : ""}
                               </p>
+                            )}
+                            {/* Existing labels of the matched paper — gives context
+                                so the user knows whether the paper is already
+                                tagged with their main / verify label, or with
+                                some unrelated label from a previous import */}
+                            {Array.isArray(it.existing_labels) && it.existing_labels.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {it.existing_labels.map((lab: any) => (
+                                  <span
+                                    key={lab.id}
+                                    className="text-[8px] px-1.5 py-0.5 rounded-full font-medium"
+                                    style={{ backgroundColor: `${lab.color}25`, color: lab.color }}
+                                    title={`Already labeled with "${lab.name}"`}
+                                  >
+                                    {lab.name}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>

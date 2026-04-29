@@ -894,6 +894,25 @@ async def import_bibliography_preview(
 
         items.append(item)
 
+    # Batch-fetch existing labels for every matched paper so the user can see
+    # which labels are already attached before deciding whether to add the
+    # main / verify label in this import. This is what makes the preview
+    # actionable for audit ("is this already tagged 'needs-verify'?").
+    matched_ids = [i["matched_paper_id"] for i in items if i.get("matched_paper_id")]
+    labels_map: dict[int, list[dict]] = {}
+    if matched_ids:
+        label_rows = await db.execute(
+            select(PaperLabel.paper_id, Label.id, Label.name, Label.color)
+            .join(Label, PaperLabel.label_id == Label.id)
+            .where(PaperLabel.paper_id.in_(matched_ids))
+        )
+        for pid, lid, lname, lcolor in label_rows.all():
+            labels_map.setdefault(pid, []).append({"id": lid, "name": lname, "color": lcolor})
+
+    for i in items:
+        pid = i.get("matched_paper_id")
+        i["existing_labels"] = labels_map.get(pid, []) if pid else []
+
     summary = {
         "parsed": len(raw_refs),
         "in_db":   sum(1 for i in items if i["status"] == "in_db"),
