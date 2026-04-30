@@ -5,7 +5,7 @@ Supports:
 - Local Ollama (Gemma4:e4b) — fallback when no API key
 
 Both Quick and Deep modes analyze the FULL TEXT of the paper.
-Quick = compact (1500-2500 words), Deep = detailed (3500-6000 words).
+Quick = compact (1500-2500 words), Deep = detailed (3500-5500 words, max 10 pages).
 """
 
 import logging
@@ -269,7 +269,9 @@ DEEP_ANALYSIS_PROMPT = SYSTEM_PROMPT + """
 
 ## Modalita': Deep Analysis
 Analisi approfondita e dettagliata del full text completo del paper, incluse appendici.
-Lunghezza target: 3500-6000 parole.
+Lunghezza target: 3500-5500 parole. Massimo 10 pagine A4 stampate.
+Idealmente piu' conciso del paper originale (~70% della sua lunghezza):
+preferisci densita' interpretativa rispetto a sola riformulazione.
 Lingua: ITALIANO (titoli sezioni in inglese).
 
 ---
@@ -448,7 +450,7 @@ async def generate_paper_analysis(
 
     Both Quick and Deep analyze the full text if PDF is available.
     Quick = compact output (1500-2500 words)
-    Deep = detailed output (3500-6000 words)
+    Deep = detailed output (3500-5500 words, max 10 A4 pages, target ~70% of paper length)
     """
     from datetime import datetime
 
@@ -473,7 +475,10 @@ async def generate_paper_analysis(
     # Select prompt template
     if mode == "deep":
         template = DEEP_ANALYSIS_PROMPT
-        max_tokens = 8192
+        # 5500-word IT target × ~1.7 tok/word + LaTeX/markdown overhead
+        # ≈ 9700-10500 token. 10000 leaves a safe margin without bloating
+        # Anthropic spend.
+        max_tokens = 10000
     elif mode == "summary":
         template = SUMMARY_PROMPT
         max_tokens = 1500
