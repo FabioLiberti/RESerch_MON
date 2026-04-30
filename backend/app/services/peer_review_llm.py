@@ -1,4 +1,4 @@
-"""LLM-assisted peer review (Claude Opus 4.6 with extended thinking).
+"""LLM-assisted peer review (Claude Opus 4.7 with extended thinking).
 
 Generates a complete *suggested* peer review for a manuscript, structured
 according to the active review template (rubric, extras, recommendation,
@@ -21,13 +21,13 @@ from app.services.review_templates import ReviewTemplate, get_template
 
 logger = logging.getLogger(__name__)
 
-CLAUDE_OPUS_MODEL = "claude-opus-4-6"
+CLAUDE_OPUS_MODEL = "claude-opus-4-7"
 
 # Extended thinking budget (in tokens) — large enough for genuinely deliberate
 # reasoning over a full manuscript without being wasteful.
 EXTENDED_THINKING_BUDGET = 12000
 
-# Maximum manuscript text fed to the model (chars). Opus 4.6 1M context easily
+# Maximum manuscript text fed to the model (chars). Opus 4.7 1M context easily
 # handles this; the truncation guards against absurdly large or corrupted PDFs.
 MAX_MANUSCRIPT_CHARS = 250_000
 
@@ -186,7 +186,7 @@ Now write the complete peer review as the JSON object specified above. Use exten
 # ---------- LLM call ----------
 
 async def suggest_peer_review(pr: PeerReview) -> dict:
-    """Run Claude Opus 4.6 with extended thinking to produce a suggested review.
+    """Run Claude Opus 4.7 with extended thinking to produce a suggested review.
 
     Returns a dict with the suggested fields, ready to be merged into the
     PeerReview state on the frontend (no DB writes here).
@@ -309,7 +309,7 @@ async def suggest_peer_review(pr: PeerReview) -> dict:
     if rec not in valid_rec:
         rec = ""
 
-    # Cost calculation (Opus 4.6: $15/M input, $75/M output, thinking counted as input)
+    # Cost calculation (Opus 4.7: $15/M input, $75/M output, thinking counted as input)
     input_tokens = getattr(message.usage, "input_tokens", 0) or 0
     output_tokens = getattr(message.usage, "output_tokens", 0) or 0
     cost = (input_tokens * 15 + output_tokens * 75) / 1_000_000

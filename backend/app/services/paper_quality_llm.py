@@ -1,4 +1,4 @@
-"""LLM-assisted Paper Quality Assessment (Opus 4.6 with extended thinking).
+"""LLM-assisted Paper Quality Assessment (Opus 4.7 with extended thinking).
 
 Admin-only. Reads the paper's local PDF and produces a complete suggested
 quality assessment (rubric scores per dimension, structured extras, overall
@@ -17,7 +17,7 @@ from app.services.review_templates import get_template
 
 logger = logging.getLogger(__name__)
 
-CLAUDE_OPUS_MODEL = "claude-opus-4-6"
+CLAUDE_OPUS_MODEL = "claude-opus-4-7"
 EXTENDED_THINKING_BUDGET = 12000
 MAX_PAPER_CHARS = 250_000
 

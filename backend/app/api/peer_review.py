@@ -516,7 +516,7 @@ async def llm_suggest_review(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """ADMIN ONLY: ask Claude Opus 4.6 (extended thinking) to draft a complete
+    """ADMIN ONLY: ask Claude Opus 4.7 (extended thinking) to draft a complete
     peer review for the manuscript. The result is RETURNED but NOT saved — the
     human reviewer must explicitly save after editing.
     """

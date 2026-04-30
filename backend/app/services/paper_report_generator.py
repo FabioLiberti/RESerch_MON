@@ -744,7 +744,7 @@ def _latex_inline(text: str) -> str:
     return text
 
 
-def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, engine: str = "Claude Opus 4.6", version: int | None = None) -> Path:
+def save_latex(analysis_text: str, paper_id: int, mode: str, paper_data: dict, engine: str = "Claude Opus 4.7", version: int | None = None) -> Path:
     """Save analysis as LaTeX file with versioned naming."""
     reports_dir = Path(settings.reports_path) / "analysis"
     reports_dir.mkdir(parents=True, exist_ok=True)

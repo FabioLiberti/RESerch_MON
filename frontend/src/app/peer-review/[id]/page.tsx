@@ -293,11 +293,11 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
       return;
     }
     const ok = confirm(
-      "AI-assisted review (Claude Opus 4.6, extended reasoning)\n\n" +
+      "AI-assisted review (Claude Opus 4.7, extended reasoning)\n\n" +
       "This will read the entire manuscript PDF and produce a complete suggested review " +
       "(rubric scores, structured assessments, comments to authors, confidential comments to editor). " +
       "The suggestion is a STARTING POINT — you must read it carefully and edit any field before saving.\n\n" +
-      "Estimated cost: ~$0.40-1.00 per review (Opus 4.6 + extended thinking).\n" +
+      "Estimated cost: ~$0.40-1.00 per review (Opus 4.7 + extended thinking).\n" +
       "Estimated time: 30-90 seconds.\n\n" +
       "Continue?"
     );
@@ -500,7 +500,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
               onClick={llmSuggestReview}
               disabled={llmSuggesting || !pr.has_pdf}
               className="px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-700 to-purple-700 text-white text-xs font-bold border border-indigo-400 hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50"
-              title="Admin only — Claude Opus 4.6 with extended reasoning. ~$0.40-1.00 per call. Requires manuscript PDF."
+              title="Admin only — Claude Opus 4.7 with extended reasoning. ~$0.40-1.00 per call. Requires manuscript PDF."
             >
               {llmSuggesting ? "Drafting review (extended reasoning)…" : "AI Suggest Review (Opus)"}
             </button>
@@ -652,7 +652,7 @@ export default function PeerReviewDetailPage({ params }: { params: Promise<{ id:
                 AI suggestion applied
               </div>
               <div className="text-[var(--foreground)]">
-                The fields below have been pre-populated by Claude Opus 4.6 with extended reasoning.
+                The fields below have been pre-populated by Claude Opus 4.7 with extended reasoning.
                 <strong className="text-amber-300"> Read carefully and edit every field before saving.</strong>
               </div>
               <div className="text-[var(--muted-foreground)] mt-1">

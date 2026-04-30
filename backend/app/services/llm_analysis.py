@@ -1,7 +1,7 @@
 """LLM-based paper analysis.
 
 Supports:
-- Claude API (Opus 4.6) — default, high quality
+- Claude API (Opus 4.7) — default, high quality
 - Local Ollama (Gemma4:e4b) — fallback when no API key
 
 Both Quick and Deep modes analyze the FULL TEXT of the paper.
@@ -22,7 +22,7 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "gemma4:e4b"
 
 # Claude API settings (default)
-CLAUDE_MODEL = "claude-opus-4-6"
+CLAUDE_MODEL = "claude-opus-4-7"
 
 
 # ---------------------------------------------------------------------------

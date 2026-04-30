@@ -83,7 +83,7 @@ export default function AboutPage() {
             { label: "Frontend", value: "Next.js 16, React 19, TypeScript 6, Tailwind CSS 4" },
             { label: "Backend", value: "FastAPI, SQLAlchemy async, httpx, APScheduler, SlowAPI" },
             { label: "Database", value: "SQLite (aiosqlite)" },
-            { label: "LLM (cloud)", value: "Claude Opus 4.6 (extended thinking) + Claude Haiku 4.5" },
+            { label: "LLM (cloud)", value: "Claude Opus 4.7 (extended thinking) + Claude Haiku 4.5" },
             { label: "LLM (local)", value: "Ollama + Gemma4:e4b (9.6 GB)" },
             { label: "PDF", value: "pdflatex (TeX Live) + WeasyPrint (fallback)" },
             { label: "Containerization", value: "Docker multi-stage + Caddy 2 (HTTPS + HTTP/3)" },

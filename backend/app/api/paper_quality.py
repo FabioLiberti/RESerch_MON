@@ -9,7 +9,7 @@ Endpoints:
     POST   /paper-quality/{paper_id}/new-version           — fork current → v+1
     DELETE /paper-quality/{paper_id}/v/{version}           — delete a specific version
     GET    /paper-quality/{paper_id}/v/{version}/{format}  — download pdf/tex/md/txt
-    POST   /paper-quality/{paper_id}/llm-suggest           — admin only, Opus 4.6 suggestion
+    POST   /paper-quality/{paper_id}/llm-suggest           — admin only, Opus 4.7 suggestion
 """
 
 import json
@@ -462,7 +462,7 @@ async def llm_suggest(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """ADMIN ONLY: Claude Opus 4.6 with extended reasoning drafts a quality
+    """ADMIN ONLY: Claude Opus 4.7 with extended reasoning drafts a quality
     assessment based on the paper's local PDF. The result is RETURNED but
     NOT saved — the human reviewer must explicitly save after editing.
     """

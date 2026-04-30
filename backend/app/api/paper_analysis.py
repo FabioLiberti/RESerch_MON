@@ -51,7 +51,7 @@ def _parse_engine(error_message: str | None) -> str:
         if part.startswith("engine:"):
             engine = part.replace("engine:", "")
             if "opus" in engine:
-                return "Claude Opus 4.6"
+                return "Claude Opus 4.7"
             if "sonnet" in engine:
                 return "Claude Sonnet 4.6"
             if "gemma" in engine:
@@ -183,10 +183,10 @@ async def trigger_analysis(
                 _raw_path.write_text(analysis_text, encoding="utf-8")
                 logger.info(f"Raw LLM text saved: {_raw_path}")
 
-                html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.6", mode=body.mode)
+                html = render_paper_report(paper_data, analysis_text, engine="Claude Opus 4.7", mode=body.mode)
                 html_path = save_report(html, paper_id, mode=body.mode, version=version)
                 md_path = save_markdown(analysis_text, paper_id, body.mode, paper_data, version=version)
-                tex_path = save_latex(analysis_text, paper_id, body.mode, paper_data, engine="Claude Opus 4.6", version=version)
+                tex_path = save_latex(analysis_text, paper_id, body.mode, paper_data, engine="Claude Opus 4.7", version=version)
                 pdf_path = generate_pdf(html_path, tex_path=tex_path)
 
                 # Save as new entry (keep history)
@@ -199,7 +199,7 @@ async def trigger_analysis(
                     md_path=str(md_path),
                     tex_path=str(tex_path),
                     version=version,
-                    error_message=f"engine:claude-opus-4-6|chars:{chars}|duration:{duration_s}s",
+                    error_message=f"engine:claude-opus-4-7|chars:{chars}|duration:{duration_s}s",
                     started_at=start_time,
                     completed_at=end_time,
                 )
@@ -274,7 +274,7 @@ async def trigger_analysis(
                     "paper_id": paper_id,
                     "title": paper.title[:80],
                     "mode": body.mode,
-                    "engine": "Claude Opus 4.6",
+                    "engine": "Claude Opus 4.7",
                     "chars": chars,
                     "duration_s": duration_s,
                     "report": str(html_path),

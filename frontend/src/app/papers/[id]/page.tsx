@@ -1135,7 +1135,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
       }
 
       const detail = res.details?.[0];
-      const engineName = res.engine === "claude" ? "Claude Opus 4.6 (API)" : "Gemma4:e4b (local)";
+      const engineName = res.engine === "claude" ? "Claude Opus 4.7 (API)" : "Gemma4:e4b (local)";
       const duration = detail?.duration_s || (startTime ? Math.round((Date.now() - startTime) / 1000) : 0);
       const chars = detail?.chars || "?";
       const now = new Date().toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -1213,7 +1213,7 @@ function AnalysisButton({ paperId }: { paperId: number }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {analysisMode.toUpperCase()} Analysis via Claude Opus 4.6... {startTime && <ElapsedTimer startTime={startTime} />}
+              {analysisMode.toUpperCase()} Analysis via Claude Opus 4.7... {startTime && <ElapsedTimer startTime={startTime} />}
             </>
           ) : (
             "Rigenera Analisi"
@@ -1629,7 +1629,7 @@ function AnalysisHistory({ paperId, hasZoteroKey, hasPaperPdf, viewerOnly = fals
   };
 
   const engineLabel = (engine: string) => {
-    if (engine.includes("claude")) return "Claude Opus 4.6";
+    if (engine.includes("claude")) return "Claude Opus 4.7";
     if (engine.includes("gemma")) return "Gemma4:e4b (local)";
     return engine;
   };

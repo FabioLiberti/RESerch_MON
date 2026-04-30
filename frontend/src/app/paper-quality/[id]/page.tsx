@@ -275,7 +275,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
       return;
     }
     if (!confirm(
-      "AI-assisted Paper Quality Assessment (Claude Opus 4.6, extended reasoning)\n\n" +
+      "AI-assisted Paper Quality Assessment (Claude Opus 4.7, extended reasoning)\n\n" +
       "This will read the entire paper PDF and produce a complete suggested quality assessment " +
       "(per-dimension scores, structured extras, overall grade, overall assessment).\n\n" +
       "The suggestion is a STARTING POINT — you must read it carefully and edit any field before saving.\n\n" +
@@ -342,7 +342,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
               onClick={llmSuggest}
               disabled={llmSuggesting || !paperHasPdf}
               className="px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-700 to-purple-700 text-white text-xs font-bold border border-indigo-400 hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50"
-              title="Admin only — Claude Opus 4.6 extended reasoning. ~$0.40-1.00."
+              title="Admin only — Claude Opus 4.7 extended reasoning. ~$0.40-1.00."
             >
               {llmSuggesting ? "Drafting (extended reasoning)…" : "AI Suggest (Opus)"}
             </button>
@@ -431,7 +431,7 @@ export default function PaperQualityPage({ params }: { params: Promise<{ id: str
             <div className="rounded border-2 border-indigo-500 bg-indigo-900/20 p-2 text-[10px]">
               <div className="font-bold text-indigo-300 uppercase tracking-wider mb-1">AI suggestion applied</div>
               <div className="text-[var(--foreground)]">
-                Pre-populated by Claude Opus 4.6 with extended reasoning.
+                Pre-populated by Claude Opus 4.7 with extended reasoning.
                 <strong className="text-amber-300"> Read carefully and edit before saving.</strong>
               </div>
               <div className="text-[var(--muted-foreground)] mt-1">cost ~${llmCost.toFixed(4)}</div>
