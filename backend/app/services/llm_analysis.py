@@ -479,7 +479,10 @@ async def generate_paper_analysis(
         max_tokens = 1500
     elif mode == "extended":
         template = EXTENDED_ABSTRACT_PROMPT
-        max_tokens = 3000
+        # Was 3000 — too tight: 1300-word target × ~1.7 tokens/word (IT) +
+        # markdown structure + LaTeX formulas regularly hit the cap and
+        # truncated mid-section. 4500 gives a comfortable 50% margin.
+        max_tokens = 4500
     else:
         template = QUICK_ANALYSIS_PROMPT
         max_tokens = 4096
