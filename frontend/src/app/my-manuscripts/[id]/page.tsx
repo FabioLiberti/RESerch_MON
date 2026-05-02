@@ -24,6 +24,12 @@ interface SubmissionRoundLite {
   has_document: boolean;
 }
 
+interface SubmissionRoundsResponse {
+  paper_id: number;
+  rounds: SubmissionRoundLite[];
+  total_rounds: number;
+}
+
 export default function MyManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const paperId = Number(id);
@@ -43,11 +49,15 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
 
   // Submission round PDFs — one tab per round with a document attached.
   // Lazily fetched (only on tab click) to keep page-load light.
-  const { data: rounds } = useSWR<SubmissionRoundLite[]>(
+  // The endpoint returns ``{paper_id, rounds: [...], total_rounds}``;
+  // unpack ``rounds`` before filtering. (Earlier we typed this as an array
+  // directly, which produced ``rounds.filter is not a function`` and crashed
+  // the page client-side.)
+  const { data: roundsResponse } = useSWR<SubmissionRoundsResponse>(
     `/api/v1/submission-rounds/${paperId}`,
     authFetcher
   );
-  const inlineableRounds = (rounds || []).filter(
+  const inlineableRounds = (roundsResponse?.rounds || []).filter(
     r => r.has_document && r.document_path && /\.(pdf|txt|md)$/i.test(r.document_path)
   );
   const [roundBlobUrls, setRoundBlobUrls] = useState<Record<number, string>>({});
