@@ -130,6 +130,93 @@ def split_references(text: str) -> list[str]:
     return [r for r in refs if r]
 
 
+# Two-tier boundary detection. Strong markers (venue, publisher, page span,
+# arXiv) are unambiguous. The year alone is weaker because it sometimes
+# appears INSIDE a title (e.g. "The 2024 Ageing Report") — we use it only
+# as a fallback when no strong marker is present after the authors.
+_VENUE_BOUNDARY_STRONG_RE = re.compile(
+    r'('
+        r'\bin\s+Proc(?:\.|eedings)?\b'                # "in Proceedings"
+        r'|\bin\s+\d{4}\s+IEEE\b'                       # "in 2024 IEEE Conf"
+        r'|\b(?:vol|no|pp?)\.\s*[\dA-Za-z]'             # "vol. 6", "no. 11", "pp. 1-31"
+        r'|\bart\.\s*[\de]'                              # "art. 119" / "art. e0000033"
+        r'|\barXiv\b'                                    # arXiv preprint
+        r'|\[Online\]'                                   # online resource marker
+        r'|(?:Geneva|Paris|London|Luxembourg|Berlin|Rome|Roma|Brussels|Bruxelles|Washington|Cambridge|Oxford|New\s+York):'  # "Geneva:" publisher city
+        r'|IEEE\s+Trans(?:actions)?'                    # "IEEE Transactions on..."
+        r'|\bDecree\s+\d'                                # legal decree (with number)
+        r'|\bRegulation\s*\(EU\)'                        # EU regulation marker
+        r'|\bDirective\s+\d'                             # EU directive
+        r'|\bInstitutional\s+Paper\b'                    # EU institutional papers
+        r'|\bTechnical\s+Report\b'                       # generic tech report
+        r'|\bStatistical\s+Report\b'                     # statistical report
+        r'|\bWorking\s+Paper\b'                          # working paper
+    r')',
+    re.IGNORECASE,
+)
+_VENUE_BOUNDARY_YEAR_RE = re.compile(r'\b(?:19|20)\d{2}\b')
+
+
+def _extract_unquoted_title(text: str) -> str | None:
+    """Heuristic extractor for titles that aren't enclosed in quotation marks.
+
+    Strips a leading "[N]" marker if present, skips the authors segment
+    (everything up to the first comma after a typical author token), then
+    returns the substring up to the first venue/year/publisher boundary.
+
+    Returns None if no plausible title is recovered.
+    """
+    # Strip optional leading "[N] " (split_references usually drops it but be safe)
+    work = re.sub(r'^\s*\[\d+\]\s*', '', text)
+
+    # Find author-list end. Heuristic priority:
+    #   1. "et al.," — definitive author-list terminator in IEEE/APA style
+    #   2. First comma in the work — gov / single-author / institutional refs
+    #      where the prefix is "ORG, Title..." or "First Last, Title..."
+    # The "first comma" works because for academic multi-author papers the
+    # quoted-title path catches it earlier and we never enter this fallback.
+    author_end = None
+    m_etal = re.search(r'\bet\s+al\.?,', work)
+    if m_etal:
+        author_end = m_etal.end()
+    else:
+        first_comma = work.find(',')
+        if first_comma != -1:
+            author_end = first_comma + 1
+
+    if author_end is None:
+        return None
+
+    after_authors = work[author_end:].strip()
+    if not after_authors:
+        return None
+
+    # Two-tier boundary search: strong marker first (venue/publisher/etc.),
+    # year only as last-ditch fallback to avoid cutting titles like
+    # "The 2024 Ageing Report" where the year is part of the title itself.
+    bm_strong = _VENUE_BOUNDARY_STRONG_RE.search(after_authors)
+    if bm_strong:
+        candidate = after_authors[:bm_strong.start()].strip()
+    else:
+        bm_year = _VENUE_BOUNDARY_YEAR_RE.search(after_authors)
+        if bm_year:
+            candidate = after_authors[:bm_year.start()].strip()
+        else:
+            # No boundary — take up to first "period + space" (sentence end)
+            period_match = re.search(r'\.\s+', after_authors)
+            candidate = after_authors[:period_match.start()].strip() if period_match else after_authors.strip()
+
+    # Cleanup: strip trailing punctuation, collapse whitespace
+    candidate = re.sub(r'[\s.,;:]+$', '', candidate).strip()
+
+    # Sanity bounds: a real title is typically 10-220 chars and contains letters
+    if not (10 <= len(candidate) <= 220):
+        return None
+    if not any(c.isalpha() for c in candidate):
+        return None
+    return candidate
+
+
 def parse_reference(text: str) -> dict:
     """Extract structured fields from a single reference entry.
 
@@ -147,6 +234,16 @@ def parse_reference(text: str) -> dict:
         # Reject obvious noise (e.g. one-word "quoted" venue names)
         if len(title) < 6:
             title = None
+
+    # Fallback: title without quotes (common for books, gov reports, EU docs).
+    # Heuristic: skip the leading authors/affiliation segment, then take text
+    # up to the first venue / year / publisher / page-number marker.
+    # Example that this recovers:
+    #   "WHO and UN-Habitat, Health at the Heart of Urban and Territorial
+    #    Planning. Geneva: WHO, 2021."
+    # → title = "Health at the Heart of Urban and Territorial Planning"
+    if not title:
+        title = _extract_unquoted_title(text)
 
     # DOI (reuse existing extractor)
     doi_list = extract_dois(text)
