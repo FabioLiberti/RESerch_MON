@@ -2,6 +2,8 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import useSWR from "swr";
+import { authFetcher } from "@/lib/api";
 import { usePaper } from "@/hooks/usePapers";
 import { authHeaders } from "@/lib/authHeaders";
 import { useAuth } from "@/lib/auth";
@@ -12,14 +14,25 @@ import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 import UserNotes from "@/components/UserNotes";
 import VenueKeyDates from "@/components/VenueKeyDates";
 
+interface SubmissionRoundLite {
+  id: number;
+  round_number: number;
+  venue: string | null;
+  submitted_at: string | null;
+  document_type: string;
+  document_path: string | null;
+  has_document: boolean;
+}
+
 export default function MyManuscriptDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const paperId = Number(id);
   const { isAdmin } = useAuth();
   const { data: paper, isLoading } = usePaper(paperId);
 
-  // Document tab: Main vs Supplementary
-  const [docTab, setDocTab] = useState<"main" | "supplementary">("main");
+  // Document tab: "main", "supplementary", or "round-<id>" for each
+  // submission round whose attached document we can preview.
+  const [docTab, setDocTab] = useState<string>("main");
 
   // PDF viewer state (main)
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
@@ -27,6 +40,31 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
   // Supplementary viewer state
   const [suppBlobUrl, setSuppBlobUrl] = useState<string | null>(null);
   const [suppLoading, setSuppLoading] = useState(false);
+
+  // Submission round PDFs — one tab per round with a document attached.
+  // Lazily fetched (only on tab click) to keep page-load light.
+  const { data: rounds } = useSWR<SubmissionRoundLite[]>(
+    `/api/v1/submission-rounds/${paperId}`,
+    authFetcher
+  );
+  const inlineableRounds = (rounds || []).filter(
+    r => r.has_document && r.document_path && /\.(pdf|txt|md)$/i.test(r.document_path)
+  );
+  const [roundBlobUrls, setRoundBlobUrls] = useState<Record<number, string>>({});
+  const [roundLoading, setRoundLoading] = useState<Record<number, boolean>>({});
+
+  // Load a round's PDF into a blob URL on demand
+  useEffect(() => {
+    if (!docTab.startsWith("round-")) return;
+    const rid = parseInt(docTab.slice(6), 10);
+    if (!rid || roundBlobUrls[rid] || roundLoading[rid]) return;
+    setRoundLoading(prev => ({ ...prev, [rid]: true }));
+    fetch(`/api/v1/submission-rounds/round/${rid}/document?inline=1`, { headers: authHeaders() })
+      .then(r => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(blob => setRoundBlobUrls(prev => ({ ...prev, [rid]: URL.createObjectURL(blob) })))
+      .catch(() => {})
+      .finally(() => setRoundLoading(prev => ({ ...prev, [rid]: false })));
+  }, [docTab, roundBlobUrls, roundLoading]);
 
   // Load main PDF
   useEffect(() => {
@@ -55,8 +93,9 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
     return () => {
       if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
       if (suppBlobUrl) URL.revokeObjectURL(suppBlobUrl);
+      Object.values(roundBlobUrls).forEach(u => URL.revokeObjectURL(u));
     };
-  }, [pdfBlobUrl, suppBlobUrl]);
+  }, [pdfBlobUrl, suppBlobUrl, roundBlobUrls]);
 
   const uploadFile = async (file: File) => {
     const fd = new FormData();
@@ -290,12 +329,12 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
 
-          {/* Tab selector: Main / Supplementary */}
-          {(paper.has_pdf || (paper as any).has_supplementary) && (
-            <div className="flex border-b border-gray-300">
+          {/* Tab selector: Main / Supplementary / Rounds */}
+          {(paper.has_pdf || (paper as any).has_supplementary || inlineableRounds.length > 0) && (
+            <div className="flex border-b border-gray-300 overflow-x-auto">
               <button
                 onClick={() => setDocTab("main")}
-                className={`flex-1 text-[10px] font-bold py-1.5 text-center transition-colors ${
+                className={`shrink-0 text-[10px] font-bold py-1.5 px-3 text-center transition-colors ${
                   docTab === "main" ? "bg-white text-gray-800 border-b-2 border-blue-600" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                 }`}
               >
@@ -303,12 +342,33 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
               </button>
               <button
                 onClick={() => setDocTab("supplementary")}
-                className={`flex-1 text-[10px] font-bold py-1.5 text-center transition-colors ${
+                className={`shrink-0 text-[10px] font-bold py-1.5 px-3 text-center transition-colors ${
                   docTab === "supplementary" ? "bg-white text-gray-800 border-b-2 border-red-600" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                 }`}
               >
                 Supplementary {(paper as any).has_supplementary && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 ml-1" />}
               </button>
+              {/* One tab per submission round with an inlineable document, in
+                  chronological order (R1 → R2 → R3) to mirror the submission
+                  history.  Default-active tab stays "main" — the user opts
+                  into a round explicitly. */}
+              {inlineableRounds.map(r => {
+                const tabKey = `round-${r.id}`;
+                const active = docTab === tabKey;
+                const dateShort = r.submitted_at ? r.submitted_at.slice(5).replace("-", "/") : "";
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setDocTab(tabKey)}
+                    className={`shrink-0 text-[10px] font-bold py-1.5 px-3 text-center transition-colors whitespace-nowrap ${
+                      active ? "bg-white text-gray-800 border-b-2 border-amber-600" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                    title={`Round ${r.round_number} — ${r.venue || "venue n/a"}${r.submitted_at ? ` · submitted ${r.submitted_at}` : ""}`}
+                  >
+                    R{r.round_number}{r.venue ? `: ${r.venue}` : ""}{dateShort ? ` · ${dateShort}` : ""}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -368,6 +428,43 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                 </>
               )}
             </div>
+
+            {/* One absolute-positioned panel per submission round, lazy-loaded.
+                All mounted; visibility flipped via CSS so blob URLs stay alive
+                across tab switches. */}
+            {inlineableRounds.map(r => {
+              const tabKey = `round-${r.id}`;
+              const blobUrl = roundBlobUrls[r.id];
+              const isLoading = roundLoading[r.id];
+              return (
+                <div key={r.id} className={`absolute inset-0 ${docTab === tabKey ? "" : "invisible"}`}>
+                  {isLoading || !blobUrl ? (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                      Loading round {r.round_number} document…
+                    </div>
+                  ) : (
+                    <>
+                      <iframe
+                        title={`Round ${r.round_number} document`}
+                        src={`${blobUrl}#view=FitH`}
+                        className="w-full h-full border-0 hidden sm:block"
+                      />
+                      <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                        <p className="text-sm text-gray-600">PDF preview not available on mobile.</p>
+                        <a
+                          href={blobUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold hover:bg-amber-500"
+                        >
+                          Open Round {r.round_number}
+                        </a>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
