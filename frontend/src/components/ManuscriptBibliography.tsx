@@ -1420,30 +1420,30 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
 
               {bibImportPreview && !bibImportResult && (
                 <>
-                  <div className="grid grid-cols-6 gap-2 text-[10px]">
-                    <div className="rounded bg-emerald-900/30 border border-emerald-700/40 p-2 text-center">
-                      <div className="text-emerald-400 font-bold text-base">{bibImportPreview.summary.in_db}</div>
-                      <div className="text-[var(--muted-foreground)]">in DB</div>
+                  <div className="grid grid-cols-6 gap-2 text-[11px]">
+                    <div className="rounded bg-emerald-900/60 border border-emerald-500/60 p-2 text-center">
+                      <div className="text-white font-bold text-lg leading-tight">{bibImportPreview.summary.in_db}</div>
+                      <div className="text-emerald-100 font-semibold">in DB</div>
                     </div>
-                    <div className="rounded bg-cyan-900/30 border border-cyan-700/40 p-2 text-center">
-                      <div className="text-cyan-400 font-bold text-base">{bibImportPreview.summary.found}</div>
-                      <div className="text-[var(--muted-foreground)]">found via S2</div>
+                    <div className="rounded bg-cyan-900/60 border border-cyan-500/60 p-2 text-center">
+                      <div className="text-white font-bold text-lg leading-tight">{bibImportPreview.summary.found}</div>
+                      <div className="text-cyan-100 font-semibold">found via S2</div>
                     </div>
-                    <div className="rounded bg-amber-900/30 border border-amber-700/40 p-2 text-center">
-                      <div className="text-amber-400 font-bold text-base">{bibImportPreview.summary.ambiguous}</div>
-                      <div className="text-[var(--muted-foreground)]">ambiguous</div>
+                    <div className="rounded bg-amber-900/60 border border-amber-500/60 p-2 text-center">
+                      <div className="text-white font-bold text-lg leading-tight">{bibImportPreview.summary.ambiguous}</div>
+                      <div className="text-amber-100 font-semibold">ambiguous</div>
                     </div>
-                    <div className="rounded bg-red-900/30 border border-red-700/40 p-2 text-center">
-                      <div className="text-red-400 font-bold text-base">{bibImportPreview.summary.not_found}</div>
-                      <div className="text-[var(--muted-foreground)]">not found</div>
+                    <div className="rounded bg-red-900/60 border border-red-500/60 p-2 text-center">
+                      <div className="text-white font-bold text-lg leading-tight">{bibImportPreview.summary.not_found}</div>
+                      <div className="text-red-100 font-semibold">not found</div>
                     </div>
-                    <div className="rounded bg-fuchsia-900/30 border border-fuchsia-700/40 p-2 text-center" title="Duplicates detected within the same pasted bibliography (e.g. references [16] and [30] pointing to the same paper)">
-                      <div className="text-fuchsia-400 font-bold text-base">{bibImportPreview.summary.duplicates_within_batch || 0}</div>
-                      <div className="text-[var(--muted-foreground)]">dup in batch</div>
+                    <div className="rounded bg-fuchsia-900/60 border border-fuchsia-500/60 p-2 text-center" title="Duplicates detected within the same pasted bibliography (e.g. references [16] and [30] pointing to the same paper)">
+                      <div className="text-white font-bold text-lg leading-tight">{bibImportPreview.summary.duplicates_within_batch || 0}</div>
+                      <div className="text-fuchsia-100 font-semibold">dup in batch</div>
                     </div>
-                    <div className="rounded bg-slate-800 border border-slate-600/40 p-2 text-center">
-                      <div className="font-bold text-base">{bibImportPreview.summary.already_linked}</div>
-                      <div className="text-[var(--muted-foreground)]">already linked</div>
+                    <div className="rounded bg-slate-700 border border-slate-500/60 p-2 text-center">
+                      <div className="text-white font-bold text-lg leading-tight">{bibImportPreview.summary.already_linked}</div>
+                      <div className="text-slate-200 font-semibold">already linked</div>
                     </div>
                   </div>
 
