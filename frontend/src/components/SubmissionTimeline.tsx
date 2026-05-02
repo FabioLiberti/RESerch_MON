@@ -144,6 +144,45 @@ export default function SubmissionTimeline({ paperId, defaultCollapsed = false }
     mutate(apiUrl);
   };
 
+  // Open the round's document inline in a new browser tab. Auth is required,
+  // so we fetch as Blob and open via blob URL (window.open with target=_blank
+  // can't pass auth headers).
+  const viewDoc = async (roundId: number) => {
+    try {
+      const r = await fetch(`/api/v1/submission-rounds/round/${roundId}/document?inline=1`, {
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      // Revoke after generous viewing window so we don't leak the blob URL
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
+    } catch (e) {
+      console.error("View doc failed:", e);
+      alert(`Could not open document — ${e instanceof Error ? e.message : e}`);
+    }
+  };
+
+  const downloadDoc = async (roundId: number, suggestedName?: string) => {
+    try {
+      const r = await fetch(`/api/v1/submission-rounds/round/${roundId}/document`, {
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = suggestedName || "document";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Download doc failed:", e);
+      alert(`Download failed — ${e instanceof Error ? e.message : e}`);
+    }
+  };
+
   const deleteRound = async (roundId: number) => {
     if (!confirm("Delete this submission round?")) return;
     await fetch(`/api/v1/submission-rounds/round/${roundId}`, {
@@ -340,11 +379,37 @@ export default function SubmissionTimeline({ paperId, defaultCollapsed = false }
                       })()}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {round.has_document && round.document_path && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-800 text-white">
-                          {round.document_path.split(".").pop()?.toUpperCase() || "DOC"}
-                        </span>
-                      )}
+                      {round.has_document && round.document_path && (() => {
+                        const ext = round.document_path.split(".").pop()?.toLowerCase() || "doc";
+                        const fname = round.document_path.split("/").pop() || `round_${round.round_number}.${ext}`;
+                        const inlineable = ["pdf", "txt", "md"].includes(ext);
+                        return (
+                          <>
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-red-800 text-white font-mono"
+                              title={fname}
+                            >
+                              {ext.toUpperCase()}
+                            </span>
+                            {inlineable && (
+                              <button
+                                onClick={() => viewDoc(round.id)}
+                                className="text-[10px] px-2 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-600 font-semibold transition-colors"
+                                title="View inline in a new tab"
+                              >
+                                View
+                              </button>
+                            )}
+                            <button
+                              onClick={() => downloadDoc(round.id, fname)}
+                              className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] font-semibold transition-colors"
+                              title="Download"
+                            >
+                              Download
+                            </button>
+                          </>
+                        );
+                      })()}
                       {isAdmin && (
                         <label className="text-[10px] px-2 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)] cursor-pointer transition-colors">
                           {round.has_document ? "Replace" : "Upload"}

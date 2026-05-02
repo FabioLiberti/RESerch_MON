@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -162,6 +163,46 @@ async def delete_round(
     await db.delete(r)
     await db.commit()
     return {"deleted": round_id}
+
+
+_DOC_MEDIA_TYPES = {
+    ".pdf":  "application/pdf",
+    ".md":   "text/markdown; charset=utf-8",
+    ".tex":  "application/x-tex",
+    ".txt":  "text/plain; charset=utf-8",
+}
+
+
+@router.get("/round/{round_id}/document")
+async def get_document(
+    round_id: int,
+    inline: bool = False,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve the document attached to a submission round.
+
+    Pass ``?inline=1`` to receive ``Content-Disposition: inline`` so the
+    browser renders the PDF in a new tab instead of forcing download.
+    """
+    r = await db.get(SubmissionRound, round_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Round not found")
+    if not r.document_path:
+        raise HTTPException(status_code=404, detail="No document attached to this round")
+    from pathlib import Path as _Path
+    p = _Path(r.document_path)
+    if not p.exists() or not p.is_file():
+        raise HTTPException(status_code=404, detail="Document file missing on disk")
+    media_type = _DOC_MEDIA_TYPES.get(p.suffix.lower(), "application/octet-stream")
+    safe_name = p.name
+    if inline:
+        return FileResponse(
+            path=str(p),
+            media_type=media_type,
+            headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+        )
+    return FileResponse(path=str(p), media_type=media_type, filename=safe_name)
 
 
 @router.post("/round/{round_id}/document")
