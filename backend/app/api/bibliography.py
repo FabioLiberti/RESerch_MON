@@ -24,7 +24,7 @@ def _get_pubmed():
         from app.clients.pubmed import PubMedClient
         _pubmed_client = PubMedClient()
     return _pubmed_client
-from app.services.deduplication import find_existing_paper, normalize_doi
+from app.services.deduplication import find_existing_paper, normalize_doi, normalize_title
 from app.services.topic_classifier import TopicClassifier
 
 logger = logging.getLogger(__name__)
@@ -422,6 +422,61 @@ async def save_imported(
                 source_id=item.doi,
             ))
             saved += 1
+
+        elif item.status in ("not_found", "error") and item.title:
+            # Save-as-is (Option A): no DOI, S2/PubMed/CrossRef all failed,
+            # but the user explicitly selected this entry to keep — typically
+            # institutional / government / EU reports without an inline DOI.
+            # Create a minimal Paper so the user can label, annotate and
+            # enrich it later. Dedup by fuzzy title to avoid duplicates on
+            # re-import.
+            t_norm = normalize_title(item.title)
+            words = t_norm.split()[:3]
+            existing_paper = None
+            if len(words) >= 2:
+                like_pattern = "%" + "%".join(words) + "%"
+                rr = await db.execute(
+                    select(Paper).where(Paper.title.ilike(like_pattern))
+                )
+                for cand in rr.scalars().all():
+                    if normalize_title(cand.title) == t_norm:
+                        existing_paper = cand
+                        break
+
+            if existing_paper:
+                paper_id = existing_paper.id
+                # Don't double-count as saved — fall through to label-apply.
+            else:
+                paper = Paper(
+                    doi=None,
+                    title=item.title,
+                    publication_date=f"{item.year:04d}-01-01" if item.year else None,
+                    paper_type=item.paper_type or "report",
+                    validated=False,
+                    created_via="bibliography_import_unresolved",
+                )
+                db.add(paper)
+                await db.flush()
+                paper_id = paper.id
+
+                db.add(PaperSource(
+                    paper_id=paper.id,
+                    source_name="bibliography",
+                    source_id=f"title:{t_norm[:120]}",
+                ))
+
+                for i, name in enumerate(item.authors or []):
+                    if not name:
+                        continue
+                    rr = await db.execute(select(Author).where(Author.name == name))
+                    author = rr.scalar_one_or_none()
+                    if not author:
+                        author = Author(name=name)
+                        db.add(author)
+                        await db.flush()
+                    db.add(PaperAuthor(paper_id=paper.id, author_id=author.id, position=i))
+
+                saved += 1
         else:
             skipped += 1
             continue
