@@ -67,6 +67,10 @@ class ImportResultItem(BaseModel):
     citation_count: int = 0
     publication_date: str | None = None
     paper_type: str = "journal_article"
+    # CELEX identifier for EU legislative acts detected by the parser (regulation /
+    # directive / decision). When set, used as the dedup key for save-as-is and
+    # stored in `Paper.external_ids["celex"]`.
+    celex: str | None = None
 
 
 class ImportResponse(BaseModel):
@@ -202,6 +206,16 @@ async def extract_and_resolve(
             title=parsed["title"],
             year=parsed["year"],
         )
+        # EU legislative-act detection (regulation/directive/decision + CELEX + full date).
+        # When the parser recognised an EU act we override the defaults so the
+        # save-as-is branch uses the correct paper_type/date/external id even
+        # if Semantic Scholar later fails to resolve the entry.
+        if parsed.get("paper_type"):
+            item.paper_type = parsed["paper_type"]
+        if parsed.get("celex"):
+            item.celex = parsed["celex"]
+        if parsed.get("publication_date"):
+            item.publication_date = parsed["publication_date"]
 
         # Phase 1 — existing in DB by DOI?
         if parsed["doi"]:
@@ -428,42 +442,87 @@ async def save_imported(
             # but the user explicitly selected this entry to keep — typically
             # institutional / government / EU reports without an inline DOI.
             # Create a minimal Paper so the user can label, annotate and
-            # enrich it later. Dedup by fuzzy title to avoid duplicates on
-            # re-import.
-            t_norm = normalize_title(item.title)
-            words = t_norm.split()[:3]
+            # enrich it later.
+            #
+            # Dedup priority:
+            #   1. CELEX identifier (when present — unambiguous for EU acts)
+            #   2. Normalized title match
             existing_paper = None
-            if len(words) >= 2:
-                like_pattern = "%" + "%".join(words) + "%"
+
+            # 1. CELEX-based dedup (search across existing PaperSources for a
+            #    matching celex source_id, OR Paper.external_ids["celex"])
+            if item.celex:
+                from sqlalchemy import or_
                 rr = await db.execute(
-                    select(Paper).where(Paper.title.ilike(like_pattern))
+                    select(Paper).join(PaperSource, PaperSource.paper_id == Paper.id).where(
+                        or_(
+                            PaperSource.source_id == f"celex:{item.celex}",
+                            PaperSource.source_id == item.celex,
+                        )
+                    )
                 )
-                for cand in rr.scalars().all():
-                    if normalize_title(cand.title) == t_norm:
-                        existing_paper = cand
-                        break
+                existing_paper = rr.scalars().first()
+
+            # 2. Title-based dedup (fallback)
+            if not existing_paper:
+                t_norm = normalize_title(item.title)
+                words = t_norm.split()[:3]
+                if len(words) >= 2:
+                    like_pattern = "%" + "%".join(words) + "%"
+                    rr = await db.execute(
+                        select(Paper).where(Paper.title.ilike(like_pattern))
+                    )
+                    for cand in rr.scalars().all():
+                        if normalize_title(cand.title) == t_norm:
+                            existing_paper = cand
+                            break
 
             if existing_paper:
                 paper_id = existing_paper.id
                 # Don't double-count as saved — fall through to label-apply.
             else:
+                # Resolve paper_type, source_name, publication_date based on
+                # whether this is a recognised EU legislative act.
+                is_eu_act = item.paper_type in ("regulation", "directive", "decision")
+                resolved_type = (
+                    item.paper_type if item.paper_type and item.paper_type != "journal_article"
+                    else "report"
+                )
+                # Honour parser-extracted ISO date; fall back to year-only when present.
+                pub_date = item.publication_date
+                if not pub_date and item.year:
+                    pub_date = f"{item.year:04d}"  # year-only stored as "YYYY" (frontend tolerates)
+
                 paper = Paper(
                     doi=None,
                     title=item.title,
-                    publication_date=f"{item.year:04d}-01-01" if item.year else None,
-                    paper_type=item.paper_type or "report",
+                    publication_date=pub_date,
+                    paper_type=resolved_type,
                     validated=False,
                     created_via="bibliography_import_unresolved",
                 )
+                # Persist CELEX in external_ids for traceability + EUR-Lex linking.
+                if item.celex:
+                    paper.external_ids = {"celex": item.celex}
                 db.add(paper)
                 await db.flush()
                 paper_id = paper.id
 
-                db.add(PaperSource(
-                    paper_id=paper.id,
-                    source_name="bibliography",
-                    source_id=f"title:{t_norm[:120]}",
-                ))
+                # Source row — use "eur-lex" when the document is an EU act so
+                # downstream filters / counts attribute it correctly.
+                if item.celex:
+                    db.add(PaperSource(
+                        paper_id=paper.id,
+                        source_name="eur-lex" if is_eu_act else "bibliography",
+                        source_id=f"celex:{item.celex}",
+                    ))
+                else:
+                    t_norm = normalize_title(item.title)
+                    db.add(PaperSource(
+                        paper_id=paper.id,
+                        source_name="bibliography",
+                        source_id=f"title:{t_norm[:120]}",
+                    ))
 
                 for i, name in enumerate(item.authors or []):
                     if not name:

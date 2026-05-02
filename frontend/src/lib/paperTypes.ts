@@ -12,6 +12,9 @@ export const PAPER_TYPE_OPTIONS = [
   { value: "guideline", label: "Guideline", badge: "GUIDELINE", color: "bg-cyan-700" },
   { value: "white_paper", label: "White Paper", badge: "WHITE PAPER", color: "bg-stone-700" },
   { value: "standard", label: "Standard", badge: "STANDARD", color: "bg-zinc-700" },
+  { value: "regulation", label: "Regulation (EU/EC)", badge: "REGULATION", color: "bg-blue-800" },
+  { value: "directive", label: "Directive (EU)", badge: "DIRECTIVE", color: "bg-sky-800" },
+  { value: "decision", label: "Decision (EU)", badge: "DECISION", color: "bg-indigo-800" },
 ] as const;
 
 /** Subset shown in the "Add External Document" form (grey literature). */

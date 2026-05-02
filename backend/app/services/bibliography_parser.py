@@ -157,6 +157,143 @@ _VENUE_BOUNDARY_STRONG_RE = re.compile(
 _VENUE_BOUNDARY_YEAR_RE = re.compile(r'\b(?:19|20)\d{2}\b')
 
 
+# ---------- EU institutional document detection ----------
+# These regexes catch the canonical citation formats used by EUR-Lex for
+# Regulations, Directives and Decisions, in both modern (post-Lisbon) and
+# legacy (EC/EEC) styles. The year may appear before or after the number.
+
+# Modern: "Regulation (EU) 2025/327" or "Regulation (EU) 2016/679"
+# Legacy: "Regulation (EC) No 765/2008" / "Regulation (EEC) No 1612/68"
+_EU_REGULATION_RE = re.compile(
+    r'\bRegulation\s*\((?:EU|EC|EEC)\)\s*(?:No\s*)?'
+    r'(?:(\d{4})/(\d{1,4})|(\d{1,4})/(\d{2,4}))',
+    re.IGNORECASE,
+)
+# Modern: "Directive (EU) 2016/680"
+# Legacy: "Directive 2011/24/EU" / "Directive 95/46/EC" / "Directive 2009/138/EC"
+_EU_DIRECTIVE_RE = re.compile(
+    r'\bDirective\s*'
+    r'(?:\((?:EU|EC|EEC)\)\s*(\d{4})/(\d{1,4})'      # (EU) YYYY/NN
+    r'|(\d{2,4})/(\d{1,4})/(?:EU|EC|EEC))',           # YYYY/NN/EU
+    re.IGNORECASE,
+)
+# Modern: "Decision (EU) 2024/2847"
+# Legacy: "Decision No 1082/2013/EU"
+_EU_DECISION_RE = re.compile(
+    r'\bDecision\s*'
+    r'(?:\((?:EU|EC|EEC)\)\s*(?:No\s*)?(\d{4})/(\d{1,4})'   # (EU) YYYY/NN
+    r'|No\s*(\d{1,4})/(\d{2,4})/(?:EU|EC|EEC))',             # No NNN/YYYY/EU
+    re.IGNORECASE,
+)
+
+# "of 11 February 2025" — full date inside the title (typical EU citation form).
+_EU_DATE_RE = re.compile(
+    r'\bof\s+(\d{1,2})\s+'
+    r'(January|February|March|April|May|June|July|August|September|October|November|December)'
+    r'\s+(\d{4})\b',
+    re.IGNORECASE,
+)
+_MONTH_TO_NUM = {m.lower(): i for i, m in enumerate(
+    ["January", "February", "March", "April", "May", "June",
+     "July", "August", "September", "October", "November", "December"], start=1)}
+
+
+def _normalize_two_digit_year(y: int) -> int:
+    """Convert legacy 2-digit EU years to 4-digit. 95 -> 1995, 04 -> 2004."""
+    if y >= 100:
+        return y
+    return 1900 + y if y >= 50 else 2000 + y
+
+
+def _build_celex(year: int, sector_letter: str, number: int) -> str:
+    """Construct a CELEX identifier for an EU legislative act.
+
+    Format: 3 + YYYY + sector + NNNN
+    Examples:
+      Regulation (EU) 2025/327  -> 32025R0327
+      Directive 2011/24/EU      -> 32011L0024
+      Decision (EU) 2024/2847   -> 32024D2847
+    """
+    return f"3{year:04d}{sector_letter}{number:04d}"
+
+
+def detect_eu_document(title: str) -> dict:
+    """Detect EU legislative document type, CELEX id and publication date.
+
+    Inspects the title for canonical EUR-Lex citation patterns and, if
+    matched, returns a dict with:
+      ``paper_type``  — one of ``regulation`` / ``directive`` / ``decision``
+      ``celex``       — CELEX identifier (e.g. "32025R0327"), or None
+      ``publication_date`` — ISO date "YYYY-MM-DD" extracted from "of D Month YYYY", or None
+
+    Returns ``{}`` when the title doesn't look like an EU legislative act.
+    Detection is conservative: only acts with a year + number are matched.
+    """
+    if not title:
+        return {}
+
+    out: dict = {}
+
+    def _pick_year_number(m: re.Match, sector_letter: str) -> tuple[int, int] | None:
+        """Pick (year, number) from a regex with two alternative capture pairs."""
+        groups = m.groups()
+        # First pair: (year, number) modern style; second pair: (number, year) or (year, number) legacy
+        # We try both interpretations and pick the one with a plausible year (1950-2099).
+        candidates = []
+        for i in range(0, len(groups), 2):
+            a, b = groups[i], groups[i + 1] if i + 1 < len(groups) else None
+            if a and b:
+                ai, bi = int(a), int(b)
+                # Heuristic: which is the year?
+                # Modern format always has year first (4 digits, >=2000 typically).
+                # Legacy may have number first then 2- or 4-digit year.
+                if 1950 <= ai <= 2099 and bi <= 9999:
+                    candidates.append((ai, bi))
+                elif 1950 <= bi <= 2099 and ai <= 9999:
+                    candidates.append((bi, ai))
+                elif ai <= 99:  # 2-digit legacy year for "NN/YY" e.g. "1612/68"
+                    candidates.append((_normalize_two_digit_year(bi), ai))
+                elif bi <= 99:
+                    candidates.append((_normalize_two_digit_year(ai), bi))
+        return candidates[0] if candidates else None
+
+    m = _EU_REGULATION_RE.search(title)
+    if m:
+        yn = _pick_year_number(m, "R")
+        if yn:
+            year, number = yn
+            out["paper_type"] = "regulation"
+            out["celex"] = _build_celex(year, "R", number)
+    elif _EU_DIRECTIVE_RE.search(title):
+        m2 = _EU_DIRECTIVE_RE.search(title)
+        yn = _pick_year_number(m2, "L")
+        if yn:
+            year, number = yn
+            out["paper_type"] = "directive"
+            out["celex"] = _build_celex(year, "L", number)
+    elif _EU_DECISION_RE.search(title):
+        m3 = _EU_DECISION_RE.search(title)
+        yn = _pick_year_number(m3, "D")
+        if yn:
+            year, number = yn
+            out["paper_type"] = "decision"
+            out["celex"] = _build_celex(year, "D", number)
+
+    # Full publication date — independent of the document type detection
+    dm = _EU_DATE_RE.search(title)
+    if dm:
+        try:
+            day = int(dm.group(1))
+            month = _MONTH_TO_NUM.get(dm.group(2).lower())
+            year = int(dm.group(3))
+            if month and 1 <= day <= 31 and 1950 <= year <= 2099:
+                out["publication_date"] = f"{year:04d}-{month:02d}-{day:02d}"
+        except (ValueError, AttributeError):
+            pass
+
+    return out
+
+
 def _extract_unquoted_title(text: str) -> str | None:
     """Heuristic extractor for titles that aren't enclosed in quotation marks.
 
@@ -279,6 +416,9 @@ def parse_reference(text: str) -> dict:
     if 1 < len(head) < 80:
         first_author = head
 
+    # EU institutional document detection (regulation/directive/decision + CELEX + full date)
+    eu = detect_eu_document(title) if title else {}
+
     return {
         "raw": raw,
         "title": title,
@@ -286,6 +426,9 @@ def parse_reference(text: str) -> dict:
         "arxiv": arxiv,
         "year": year,
         "first_author": first_author,
+        "paper_type": eu.get("paper_type"),
+        "celex": eu.get("celex"),
+        "publication_date": eu.get("publication_date"),
     }
 
 

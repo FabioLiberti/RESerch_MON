@@ -727,6 +727,18 @@ export default function PaperDetailPage({ params }: { params: Promise<{ id: stri
           </a>
         )}
 
+        {paper.external_ids?.celex && (
+          <a
+            href={`https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:${paper.external_ids.celex}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/15 text-blue-300 text-sm font-medium hover:bg-blue-500/25 transition-colors"
+            title={`CELEX: ${paper.external_ids.celex}`}
+          >
+            EUR-Lex
+          </a>
+        )}
+
         {/* Compendium link only for compendium papers */}
         {paper.source_details.some((s: any) => s.source_name === "compendium") && (
           <Link

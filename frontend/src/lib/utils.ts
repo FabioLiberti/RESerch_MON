@@ -4,6 +4,9 @@ export function cn(...classes: (string | undefined | false)[]): string {
 
 export function formatDate(dateStr: string | null): string {
   if (!dateStr) return "N/A";
+  // Year-only entries (e.g. "2025" from grey-literature imports without a full date)
+  // should render as just the year, not "Jan 1, 2025".
+  if (/^\d{4}$/.test(dateStr)) return dateStr;
   try {
     return new Date(dateStr).toLocaleDateString("en-US", {
       year: "numeric",
