@@ -10,7 +10,7 @@ import { SOURCE_LABELS, SOURCE_COLORS, formatDate, cn } from "@/lib/utils";
 import type { SourceInfo, FetchLogEntry, Paper } from "@/lib/types";
 import { usePapers } from "@/hooks/usePapers";
 import { EXTERNAL_DOCUMENT_TYPES } from "@/lib/paperTypes";
-import LabelPicker from "@/components/LabelPicker";
+import { MultiLabelEditor } from "@/components/LabelPicker";
 
 export default function DiscoveryPage() {
   const { data: sources, isLoading } = useSWR<SourceInfo[]>("/api/v1/sources", authFetcher);
@@ -265,9 +265,6 @@ function ImportBibliography() {
   const [expanded, setExpanded] = useState(false);
   const [extractStartTime, setExtractStartTime] = useState<number | null>(null);
   const [selectedLabelIds, setSelectedLabelIds] = useState<number[]>([]);
-  const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>(
-    "/api/v1/labels", authFetcher
-  );
 
   if (!isAdmin) return null;
 
@@ -527,7 +524,6 @@ function ImportBibliography() {
                   count={selectedPapers.size}
                   saving={saving}
                   onSave={savePapers}
-                  allLabels={allLabels || []}
                   selectedLabelIds={selectedLabelIds}
                   onLabelIdsChange={setSelectedLabelIds}
                   selectedPaperIds={
@@ -550,31 +546,16 @@ function ImportBibliography() {
 
 // --- Bib Save Bar with inline label creation ---
 
-function BibSaveBar({ count, saving, onSave, allLabels, selectedLabelIds, onLabelIdsChange, selectedPaperIds }: {
+function BibSaveBar({ count, saving, onSave, selectedLabelIds, onLabelIdsChange, selectedPaperIds }: {
   count: number;
   saving: boolean;
   onSave: () => void;
-  allLabels: { id: number; name: string; color: string }[];
   selectedLabelIds: number[];
   onLabelIdsChange: (ids: number[]) => void;
   selectedPaperIds?: number[];
 }) {
   const [assigning, setAssigning] = useState(false);
   const [assignMsg, setAssignMsg] = useState<string | null>(null);
-  // Always show one trailing picker (value=null) so the user can add another label
-  const [pickerKey, setPickerKey] = useState(0);
-
-  const removeLabel = (id: number) => {
-    onLabelIdsChange(selectedLabelIds.filter((x) => x !== id));
-  };
-
-  const addLabel = (id: number | null) => {
-    if (id === null) return;
-    if (selectedLabelIds.includes(id)) return;
-    onLabelIdsChange([...selectedLabelIds, id]);
-    // Reset the picker to empty so the user can immediately add another
-    setPickerKey((k) => k + 1);
-  };
 
   const assignAll = async () => {
     if (!selectedPaperIds || selectedPaperIds.length === 0 || selectedLabelIds.length === 0) return;
@@ -613,36 +594,11 @@ function BibSaveBar({ count, saving, onSave, allLabels, selectedLabelIds, onLabe
         {assignMsg && <span className="text-xs text-emerald-400">{assignMsg}</span>}
       </div>
 
-      <div className="flex items-start gap-2 flex-wrap">
-        <span className="text-xs text-[var(--muted-foreground)] py-1">with labels:</span>
-        {selectedLabelIds.map((id) => {
-          const l = allLabels.find((x) => x.id === id);
-          if (!l) return null;
-          return (
-            <span
-              key={id}
-              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border border-[var(--border)] bg-[var(--card)]"
-            >
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />
-              <span>{l.name}</span>
-              <button
-                onClick={() => removeLabel(id)}
-                className="text-[var(--muted-foreground)] hover:text-red-400 ml-0.5"
-                title="Remove label"
-              >
-                ✕
-              </button>
-            </span>
-          );
-        })}
-        <LabelPicker
-          key={pickerKey}
-          value={null}
-          onChange={addLabel}
-          placeholder={selectedLabelIds.length === 0 ? "Search or create label…" : "Add another label…"}
-          allowClear={false}
-        />
-      </div>
+      <MultiLabelEditor
+        value={selectedLabelIds}
+        onChange={onLabelIdsChange}
+        label="with labels:"
+      />
     </div>
   );
 }
