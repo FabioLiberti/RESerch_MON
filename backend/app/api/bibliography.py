@@ -47,7 +47,11 @@ class ImportRequest(BaseModel):
 
 
 class ImportResultItem(BaseModel):
-    doi: str
+    # doi is now optional: many references (arXiv preprints, conference papers,
+    # gov reports) lack an inline DOI but can still be resolved via arXiv id
+    # or fuzzy title search on Semantic Scholar.
+    doi: str | None = None
+    arxiv: str | None = None
     title: str | None = None
     authors: list[str] = []
     year: int | None = None
@@ -141,28 +145,45 @@ async def _try_pubmed_fallback(doi: str, bib_title: str | None, item: ImportResu
     return item
 
 
+def _title_jaccard(a: str | None, b: str | None) -> float:
+    """Jaccard similarity over alphanumeric tokens — robust to formatting noise."""
+    import re as _re
+    if not a or not b:
+        return 0.0
+    ta = set(_re.findall(r"[a-z0-9]+", a.lower()))
+    tb = set(_re.findall(r"[a-z0-9]+", b.lower()))
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
+
+
 @router.post("/extract", response_model=ImportResponse)
 async def extract_and_resolve(
     body: ImportRequest,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Extract DOIs from bibliography text and resolve via Semantic Scholar."""
+    """Parse bibliography text into individual references and resolve each
+    via Semantic Scholar with priority DOI > arXiv > title.
+
+    Replaces the legacy DOI-only parser (which failed on bibliographies
+    without inline DOIs, e.g. lots of arXiv / conference / gov-report
+    references). Same response shape — frontend stays compatible — but
+    items can now have ``doi=None`` when only arXiv id or title was found.
+    """
     if not body.text.strip():
         raise HTTPException(status_code=400, detail="No text provided")
 
+    from app.services.bibliography_parser import split_references, parse_reference
+
     try:
-        dois_with_titles = extract_dois_with_titles(body.text)
+        raw_refs = split_references(body.text)
     except Exception as e:
         logger.error(f"[bibliography] Parse error: {e}")
         raise HTTPException(status_code=400, detail=f"Parse error: {str(e)[:100]}")
 
-    if not dois_with_titles:
-        raise HTTPException(status_code=400, detail="No DOIs found in text")
-
-    # Build title lookup from bibliography text
-    bib_titles = {d["doi"]: d["title"] for d in dois_with_titles}
-    dois = [d["doi"] for d in dois_with_titles]
+    if not raw_refs:
+        raise HTTPException(status_code=400, detail="Could not split text into individual references")
 
     s2 = _get_s2()
     results: list[ImportResultItem] = []
@@ -170,74 +191,101 @@ async def extract_and_resolve(
     not_found = 0
     already_in_db_count = 0
 
-    for doi in dois:
-        item = ImportResultItem(doi=doi)
-
-        # Check if already in DB
-        existing = await db.execute(
-            select(Paper).where(Paper.doi == normalize_doi(doi))
+    for raw in raw_refs:
+        parsed = parse_reference(raw)
+        item = ImportResultItem(
+            doi=parsed["doi"],
+            arxiv=parsed["arxiv"],
+            title=parsed["title"],
+            year=parsed["year"],
         )
-        existing_paper = existing.scalar_one_or_none()
-        if existing_paper:
-            item.status = "already_in_db"
-            item.title = existing_paper.title
-            item.db_paper_id = existing_paper.id
-            already_in_db_count += 1
-            results.append(item)
-            continue
 
-        # Resolve via Semantic Scholar (rate limit: 1 req/sec with key)
-        await asyncio.sleep(1.5)
+        # Phase 1 — existing in DB by DOI?
+        if parsed["doi"]:
+            existing = await db.execute(
+                select(Paper).where(Paper.doi == normalize_doi(parsed["doi"]))
+            )
+            existing_paper = existing.scalar_one_or_none()
+            if existing_paper:
+                item.status = "already_in_db"
+                item.title = existing_paper.title
+                item.db_paper_id = existing_paper.id
+                already_in_db_count += 1
+                results.append(item)
+                continue
+
+        # Phase 2 — Semantic Scholar lookup (rate-limited)
+        await asyncio.sleep(1.2)
+        result = None
         try:
-            result = await s2.fetch_metadata(f"DOI:{doi}")
-            if result and result.title:
-                item.title = result.title
-                item.authors = [a.get("name", "") for a in result.authors]
-                item.abstract = result.abstract
-                item.journal = result.journal
-                item.publication_date = result.publication_date
-                item.paper_type = result.paper_type
-                item.open_access = result.open_access
-                item.pdf_url = result.pdf_url
-                item.citation_count = result.citation_count
-                item.keywords = result.keywords or []
-                item.external_ids = result.external_ids or {}
-                item.status = "found"
-                resolved += 1
+            if parsed["doi"]:
+                result = await s2.fetch_metadata(f"DOI:{parsed['doi']}")
+            elif parsed["arxiv"]:
+                result = await s2.fetch_metadata(f"arXiv:{parsed['arxiv']}")
+            elif parsed["title"]:
+                hits = await s2.search(parsed["title"], max_results=1)
+                result = hits[0] if hits else None
+        except Exception as e:
+            logger.warning(f"[bibliography] S2 lookup failed: {e}")
+            result = None
 
-                # Also check by title
-                from app.clients.base import RawPaperResult
-                raw = RawPaperResult(
-                    source="semantic_scholar",
-                    source_id=result.source_id,
-                    title=result.title,
-                    doi=doi,
+        if result and result.title:
+            # For title-only matches, sanity-check similarity
+            if not parsed["doi"] and not parsed["arxiv"]:
+                sim = _title_jaccard(result.title, parsed["title"])
+                if sim < 0.65:
+                    # Low confidence — treat as not_found rather than risk wrong link
+                    item.status = "not_found"
+                    not_found += 1
+                    results.append(item)
+                    continue
+
+            # Populate from S2
+            item.title = result.title
+            item.doi = result.doi or parsed["doi"]
+            item.authors = [a.get("name", "") for a in (result.authors or [])]
+            item.abstract = result.abstract
+            item.journal = result.journal
+            item.publication_date = result.publication_date
+            item.paper_type = result.paper_type
+            item.open_access = result.open_access
+            item.pdf_url = result.pdf_url
+            item.citation_count = result.citation_count or 0
+            item.keywords = result.keywords or []
+            item.external_ids = result.external_ids or {}
+            item.source = "semantic_scholar"
+            item.status = "found"
+            resolved += 1
+
+            # Re-check DB after enrichment (S2 might give us a DOI we already have)
+            if item.doi:
+                rr = await db.execute(
+                    select(Paper).where(Paper.doi == normalize_doi(item.doi))
                 )
-                existing_by_title = await find_existing_paper(db, raw)
-                if existing_by_title:
+                ex = rr.scalar_one_or_none()
+                if ex:
                     item.status = "already_in_db"
-                    item.db_paper_id = existing_by_title.id
+                    item.db_paper_id = ex.id
                     already_in_db_count += 1
                     resolved -= 1
-            else:
-                # S2 failed — try PubMed fallback
-                item = await _try_pubmed_fallback(doi, bib_titles.get(doi), item)
-                if item.status == "found":
-                    resolved += 1
-                else:
-                    not_found += 1
-        except Exception as e:
-            logger.warning(f"S2 lookup failed for DOI {doi}: {e}")
-            # Try PubMed fallback on S2 error too
-            item = await _try_pubmed_fallback(doi, bib_titles.get(doi), item)
+        elif parsed["doi"]:
+            # S2 failed but we have a DOI — try PubMed/CrossRef fallback
+            item = await _try_pubmed_fallback(parsed["doi"], parsed["title"], item)
             if item.status == "found":
                 resolved += 1
             else:
                 not_found += 1
+        else:
+            # No DOI and S2 didn't find it — give up
+            item.status = "not_found"
+            not_found += 1
 
         results.append(item)
 
-    logger.info(f"[bibliography] Done: {len(dois)} DOIs, {resolved} resolved, {not_found} not found, {already_in_db_count} already in DB")
+    logger.info(
+        f"[bibliography] Done: {len(raw_refs)} refs parsed, "
+        f"{resolved} resolved, {not_found} not found, {already_in_db_count} already in DB"
+    )
 
     # Save to smart_search_jobs for Recent Searches visibility
     import json as json_mod
@@ -250,14 +298,14 @@ async def extract_and_resolve(
         already_in_db=already_in_db_count,
         completed_at=datetime.utcnow(),
     )
-    job.keywords = [f"{len(dois)} DOIs imported"]
+    job.keywords = [f"{len(raw_refs)} references imported"]
     job.sources = ["semantic_scholar", "pubmed", "crossref"]
     job.results = [{"doi": r.doi, "title": r.title, "status": r.status} for r in results]
     db.add(job)
     await db.flush()
 
     return ImportResponse(
-        total_dois=len(dois),
+        total_dois=len(raw_refs),  # field name kept for back-compat; now counts references parsed (DOI / arXiv / title)
         resolved=resolved,
         not_found=not_found,
         already_in_db=already_in_db_count,
@@ -287,16 +335,20 @@ async def save_imported(
             paper_id = item.db_paper_id
 
         elif item.status == "found" and item.title:
-            # New paper — save
-            existing = await db.execute(
-                select(Paper).where(Paper.doi == normalize_doi(item.doi))
-            )
-            existing_paper = existing.scalar_one_or_none()
+            # New paper — save. With multi-method extractor (DOI/arXiv/title)
+            # the item may carry no DOI; deduplicate by DOI when present,
+            # otherwise create the Paper without DOI.
+            existing_paper = None
+            if item.doi:
+                existing = await db.execute(
+                    select(Paper).where(Paper.doi == normalize_doi(item.doi))
+                )
+                existing_paper = existing.scalar_one_or_none()
             if existing_paper:
                 paper_id = existing_paper.id
             else:
                 paper = Paper(
-                    doi=normalize_doi(item.doi),
+                    doi=normalize_doi(item.doi) if item.doi else None,
                     title=item.title,
                     abstract=item.abstract,
                     publication_date=item.publication_date,

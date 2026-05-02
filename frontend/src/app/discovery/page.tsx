@@ -232,7 +232,9 @@ export default function DiscoveryPage() {
 // --- Import Bibliography ---
 
 interface BibResult {
-  doi: string;
+  // doi is optional now: the parser supports DOI / arXiv / title-based lookup
+  doi: string | null;
+  arxiv: string | null;
   title: string | null;
   authors: string[];
   year: number | null;
@@ -356,7 +358,7 @@ function ImportBibliography() {
           Import Bibliography
           {results && (
             <span className="text-xs text-[var(--muted-foreground)]">
-              ({stats?.total_dois} DOIs, {newCount} new)
+              ({stats?.total_dois} references, {newCount} new)
             </span>
           )}
         </h3>
@@ -373,7 +375,7 @@ function ImportBibliography() {
           {/* Textarea */}
           <div>
             <p className="text-xs text-[var(--muted-foreground)] mb-2">
-              Paste a bibliography (Harvard, APA, or any format with DOIs). The system will extract DOIs and resolve each paper via Semantic Scholar.
+              Paste a bibliography (IEEE-style [N], numbered list, or any format). The system splits each reference and resolves it via Semantic Scholar — priority DOI &gt; arXiv &gt; title.
             </p>
             <textarea
               value={bibText}
@@ -432,7 +434,7 @@ function ImportBibliography() {
           {/* Stats */}
           {stats && (
             <div className="flex gap-4 text-sm">
-              <span><strong>{stats.total_dois}</strong> DOIs found</span>
+              <span><strong>{stats.total_dois}</strong> references parsed</span>
               <span className="text-emerald-400"><strong>{stats.resolved}</strong> resolved</span>
               <span className="text-[var(--muted-foreground)]"><strong>{stats.already_in_db}</strong> DB</span>
               {stats.not_found > 0 && (
@@ -474,19 +476,30 @@ function ImportBibliography() {
                     <div className="flex-1 min-w-0">
                       {r.status === "already_in_db" && r.db_paper_id ? (
                         <a href={`/papers/${r.db_paper_id}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
-                          {r.title || r.doi}
+                          {r.title || r.doi || "(no title)"}
                         </a>
                       ) : r.title ? (
-                        <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
-                          {r.title}
-                        </a>
-                      ) : (
+                        r.doi ? (
+                          <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                            {r.title}
+                          </a>
+                        ) : r.arxiv ? (
+                          <a href={`https://arxiv.org/abs/${r.arxiv}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-[var(--primary)] line-clamp-2">
+                            {r.title}
+                          </a>
+                        ) : (
+                          <span className="text-sm line-clamp-2">{r.title}</span>
+                        )
+                      ) : r.doi ? (
                         <a href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)]">
                           {r.doi}
                         </a>
+                      ) : (
+                        <span className="text-sm italic text-[var(--muted-foreground)]">(no title / no identifier)</span>
                       )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{r.doi}</span>
+                        {r.doi && <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{r.doi}</span>}
+                        {!r.doi && r.arxiv && <span className="text-[10px] text-[var(--muted-foreground)] font-mono">arXiv:{r.arxiv}</span>}
                         {r.authors.length > 0 && (
                           <span className="text-[10px] text-[var(--muted-foreground)] truncate max-w-48">
                             {r.authors.slice(0, 3).join(", ")}{r.authors.length > 3 ? " et al." : ""}
