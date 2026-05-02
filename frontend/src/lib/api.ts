@@ -246,11 +246,22 @@ export const api = {
       if (!r.ok) throw new Error(`API Error: ${r.status}`);
       return r.json();
     }),
-  bibliographySave: (papers: any[], labelId?: number) =>
-    fetchAPI<any>("/bibliography/save", {
+  bibliographySave: (papers: any[], labelIdOrIds?: number | number[]) => {
+    const payload: { papers: any[]; label_id: number | null; label_ids: number[] | null } = {
+      papers,
+      label_id: null,
+      label_ids: null,
+    };
+    if (Array.isArray(labelIdOrIds)) {
+      payload.label_ids = labelIdOrIds.length > 0 ? labelIdOrIds : null;
+    } else if (typeof labelIdOrIds === "number") {
+      payload.label_id = labelIdOrIds;
+    }
+    return fetchAPI<any>("/bibliography/save", {
       method: "POST",
-      body: JSON.stringify({ papers, label_id: labelId || null }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
 
   // Zotero
   syncToZotero: (paperIds: number[]) =>

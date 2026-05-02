@@ -10,6 +10,7 @@ import { SOURCE_LABELS, SOURCE_COLORS, formatDate, cn } from "@/lib/utils";
 import type { SourceInfo, FetchLogEntry, Paper } from "@/lib/types";
 import { usePapers } from "@/hooks/usePapers";
 import { EXTERNAL_DOCUMENT_TYPES } from "@/lib/paperTypes";
+import LabelPicker from "@/components/LabelPicker";
 
 export default function DiscoveryPage() {
   const { data: sources, isLoading } = useSWR<SourceInfo[]>("/api/v1/sources", authFetcher);
@@ -263,7 +264,7 @@ function ImportBibliography() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [extractStartTime, setExtractStartTime] = useState<number | null>(null);
-  const [selectedLabelId, setSelectedLabelId] = useState<number | undefined>(undefined);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<number[]>([]);
   const { data: allLabels } = useSWR<{ id: number; name: string; color: string }[]>(
     "/api/v1/labels", authFetcher
   );
@@ -316,7 +317,7 @@ function ImportBibliography() {
     setMessage(null);
     const toSave = Array.from(selectedPapers).map((i) => results[i]);
     try {
-      const res = await api.bibliographySave(toSave, selectedLabelId);
+      const res = await api.bibliographySave(toSave, selectedLabelIds);
       const parts = [];
       if (res.saved) parts.push(`${res.saved} paper salvati`);
       if (res.labeled) parts.push(`${res.labeled} label assegnate`);
@@ -527,8 +528,8 @@ function ImportBibliography() {
                   saving={saving}
                   onSave={savePapers}
                   allLabels={allLabels || []}
-                  selectedLabelId={selectedLabelId}
-                  onLabelChange={setSelectedLabelId}
+                  selectedLabelIds={selectedLabelIds}
+                  onLabelIdsChange={setSelectedLabelIds}
                   selectedPaperIds={
                     results
                       ? Array.from(selectedPapers)
@@ -549,116 +550,98 @@ function ImportBibliography() {
 
 // --- Bib Save Bar with inline label creation ---
 
-function BibSaveBar({ count, saving, onSave, allLabels, selectedLabelId, onLabelChange, selectedPaperIds }: {
+function BibSaveBar({ count, saving, onSave, allLabels, selectedLabelIds, onLabelIdsChange, selectedPaperIds }: {
   count: number;
   saving: boolean;
   onSave: () => void;
   allLabels: { id: number; name: string; color: string }[];
-  selectedLabelId: number | undefined;
-  onLabelChange: (id: number | undefined) => void;
+  selectedLabelIds: number[];
+  onLabelIdsChange: (ids: number[]) => void;
   selectedPaperIds?: number[];
 }) {
   const [assigning, setAssigning] = useState(false);
   const [assignMsg, setAssignMsg] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState("#6366f1");
+  // Always show one trailing picker (value=null) so the user can add another label
+  const [pickerKey, setPickerKey] = useState(0);
 
-  const createLabel = async () => {
-    if (!newName.trim()) return;
-    try {
-      const label = await api.createLabel({ name: newName, color: newColor });
-      onLabelChange(label.id);
-      setCreating(false);
-      setNewName("");
-      mutate("/api/v1/labels");
-    } catch { }
+  const removeLabel = (id: number) => {
+    onLabelIdsChange(selectedLabelIds.filter((x) => x !== id));
   };
 
-  const COLORS = ["#6366f1", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#3b82f6", "#ec4899", "#14b8a6"];
+  const addLabel = (id: number | null) => {
+    if (id === null) return;
+    if (selectedLabelIds.includes(id)) return;
+    onLabelIdsChange([...selectedLabelIds, id]);
+    // Reset the picker to empty so the user can immediately add another
+    setPickerKey((k) => k + 1);
+  };
+
+  const assignAll = async () => {
+    if (!selectedPaperIds || selectedPaperIds.length === 0 || selectedLabelIds.length === 0) return;
+    setAssigning(true);
+    setAssignMsg(null);
+    try {
+      let totalAssigned = 0;
+      for (const lid of selectedLabelIds) {
+        const res = await api.batchAssignLabel(selectedPaperIds, lid);
+        totalAssigned += res.assigned ?? 0;
+      }
+      setAssignMsg(`${totalAssigned} label assegnate`);
+    } catch { setAssignMsg("Error"); }
+    setAssigning(false);
+  };
 
   return (
-    <div className="pt-3 border-t border-[var(--border)] flex items-center gap-3 flex-wrap">
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
-      >
-        {saving ? "Saving..." : `Save ${count} to DB`}
-      </button>
-      {selectedPaperIds && selectedPaperIds.length > 0 && selectedLabelId && (
+    <div className="pt-3 border-t border-[var(--border)] space-y-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button
-          onClick={async () => {
-            setAssigning(true);
-            setAssignMsg(null);
-            try {
-              const res = await api.batchAssignLabel(selectedPaperIds, selectedLabelId);
-              setAssignMsg(`${res.assigned} label assegnate`);
-            } catch { setAssignMsg("Error"); }
-            setAssigning(false);
-          }}
-          disabled={assigning}
-          className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+          onClick={onSave}
+          disabled={saving}
+          className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
-          {assigning ? "Assigning..." : `Assign Label (${count})`}
+          {saving ? "Saving..." : `Save ${count} to DB`}
         </button>
-      )}
-      {assignMsg && <span className="text-xs text-emerald-400">{assignMsg}</span>}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-[var(--muted-foreground)]">with label:</span>
-        <select
-          value={selectedLabelId || ""}
-          onChange={(e) => onLabelChange(e.target.value ? Number(e.target.value) : undefined)}
-          className="px-2 py-1.5 rounded bg-[var(--secondary)] border border-[var(--border)] text-xs"
-        >
-          <option value="">No label</option>
-          {allLabels.map((l) => (
-            <option key={l.id} value={l.id}>{l.name}</option>
-          ))}
-        </select>
-        {!creating ? (
+        {selectedPaperIds && selectedPaperIds.length > 0 && selectedLabelIds.length > 0 && (
           <button
-            onClick={() => setCreating(true)}
-            className="text-xs px-2 py-1.5 rounded border border-dashed border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+            onClick={assignAll}
+            disabled={assigning}
+            className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
           >
-            + New
+            {assigning ? "Assigning..." : `Assign ${selectedLabelIds.length} label${selectedLabelIds.length > 1 ? "s" : ""} (${count})`}
           </button>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createLabel()}
-              placeholder="Label name"
-              className="px-2 py-1 rounded bg-[var(--secondary)] border border-[var(--border)] text-xs w-28 focus:outline-none focus:border-[var(--primary)]"
-              autoFocus
-            />
-            <div className="flex gap-0.5">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setNewColor(c)}
-                  className={cn("w-4 h-4 rounded-full", newColor === c && "ring-1 ring-offset-1 ring-white")}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-            <button
-              onClick={createLabel}
-              disabled={!newName.trim()}
-              className="text-xs px-2 py-1 rounded bg-[var(--primary)] text-white disabled:opacity-50"
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setCreating(false)}
-              className="text-xs text-[var(--muted-foreground)]"
-            >
-              &times;
-            </button>
-          </div>
         )}
+        {assignMsg && <span className="text-xs text-emerald-400">{assignMsg}</span>}
+      </div>
+
+      <div className="flex items-start gap-2 flex-wrap">
+        <span className="text-xs text-[var(--muted-foreground)] py-1">with labels:</span>
+        {selectedLabelIds.map((id) => {
+          const l = allLabels.find((x) => x.id === id);
+          if (!l) return null;
+          return (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border border-[var(--border)] bg-[var(--card)]"
+            >
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />
+              <span>{l.name}</span>
+              <button
+                onClick={() => removeLabel(id)}
+                className="text-[var(--muted-foreground)] hover:text-red-400 ml-0.5"
+                title="Remove label"
+              >
+                ✕
+              </button>
+            </span>
+          );
+        })}
+        <LabelPicker
+          key={pickerKey}
+          value={null}
+          onChange={addLabel}
+          placeholder={selectedLabelIds.length === 0 ? "Search or create label…" : "Add another label…"}
+          allowClear={false}
+        />
       </div>
     </div>
   );

@@ -79,7 +79,10 @@ class ImportResponse(BaseModel):
 
 class SaveImportRequest(BaseModel):
     papers: list[ImportResultItem]
+    # Legacy single-label field — kept for back-compat with older callers.
     label_id: int | None = None
+    # Preferred multi-label field. When both are set, both are applied (union, deduped).
+    label_ids: list[int] | None = None
 
 
 async def _try_pubmed_fallback(doi: str, bib_title: str | None, item: ImportResultItem) -> ImportResultItem:
@@ -327,6 +330,14 @@ async def save_imported(
     labeled = 0
     skipped = 0
 
+    # Build the union of label ids to apply (back-compat: single label_id + new label_ids list)
+    label_ids_to_apply: list[int] = []
+    seen_label_ids: set[int] = set()
+    for lid in [body.label_id, *(body.label_ids or [])]:
+        if lid is not None and lid not in seen_label_ids:
+            seen_label_ids.add(lid)
+            label_ids_to_apply.append(lid)
+
     for item in body.papers:
         paper_id = None
 
@@ -415,17 +426,18 @@ async def save_imported(
             skipped += 1
             continue
 
-        # Assign label
-        if paper_id and body.label_id:
-            existing_label = await db.execute(
-                select(PaperLabel).where(
-                    PaperLabel.paper_id == paper_id,
-                    PaperLabel.label_id == body.label_id,
+        # Assign labels (multi-label, dedup against existing PaperLabel rows)
+        if paper_id and label_ids_to_apply:
+            for lid in label_ids_to_apply:
+                existing_label = await db.execute(
+                    select(PaperLabel).where(
+                        PaperLabel.paper_id == paper_id,
+                        PaperLabel.label_id == lid,
+                    )
                 )
-            )
-            if not existing_label.scalar_one_or_none():
-                db.add(PaperLabel(paper_id=paper_id, label_id=body.label_id))
-                labeled += 1
+                if not existing_label.scalar_one_or_none():
+                    db.add(PaperLabel(paper_id=paper_id, label_id=lid))
+                    labeled += 1
 
     await db.flush()
     return {"saved": saved, "labeled": labeled, "skipped": skipped}
