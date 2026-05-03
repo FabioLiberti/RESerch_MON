@@ -93,6 +93,9 @@ export default function DiscoveryPage() {
       {/* Import Bibliography */}
       <ImportBibliography />
 
+      {/* Add Paper from DOI / publisher URL (academic papers not yet indexed by S2/PubMed) */}
+      <AddPaperFromDoiOrUrl />
+
       {/* Add External Document (grey literature) */}
       <AddExternalDocument />
 
@@ -1890,6 +1893,131 @@ function KeywordSuggestionsPanel({
     </div>
   );
 }
+
+// --- Add Paper from DOI / URL (academic papers not yet indexed by S2/PubMed/CrossRef) ---
+
+function AddPaperFromDoiOrUrl() {
+  const { isAdmin } = useAuth();
+  const [expanded, setExpanded] = useState(false);
+  const [input, setInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<
+    | { type: "success"; paperId: number; title: string; doi: string | null; resolvedVia: string | null; alreadyInDb: boolean }
+    | { type: "error"; text: string }
+    | null
+  >(null);
+
+  if (!isAdmin) return null;
+
+  const submit = async () => {
+    if (!input.trim()) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const r = await fetch("/api/v1/papers/from-doi-or-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ input: input.trim() }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      const d = await r.json();
+      setResult({
+        type: "success",
+        paperId: d.paper_id,
+        title: d.title,
+        doi: d.doi,
+        resolvedVia: d.resolved_via || null,
+        alreadyInDb: d.status === "already_in_db",
+      });
+      setInput("");
+    } catch (e: any) {
+      setResult({ type: "error", text: e.message || "Resolve failed" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-6 py-4 text-left"
+      >
+        <h3 className="font-medium flex items-center gap-2 text-sm">
+          <svg className="w-5 h-5 text-[var(--primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+          </svg>
+          Add Paper from DOI / URL
+          <span className="text-xs text-[var(--muted-foreground)] font-normal">
+            (Nature, Wiley, Elsevier, Springer — when discovery search misses it)
+          </span>
+        </h3>
+        <svg
+          className={cn("w-4 h-4 text-[var(--muted-foreground)] transition-transform", expanded && "rotate-180")}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="px-6 pb-6 space-y-3">
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Paste a DOI (e.g. <code className="text-[var(--primary)]">10.1038/s41598-026-50003-5</code>) or a publisher URL.
+            The system tries CrossRef first, then scrapes Highwire/Google-Scholar meta tags from the publisher page.
+            Useful for fresh papers that Semantic Scholar / PubMed haven&apos;t indexed yet.
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !submitting && submit()}
+              placeholder="DOI or paper URL..."
+              className="flex-1 px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] font-mono"
+            />
+            <button
+              onClick={submit}
+              disabled={submitting || !input.trim()}
+              className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? "Resolving..." : "Resolve & Add"}
+            </button>
+          </div>
+
+          {result && result.type === "success" && (
+            <div className="px-4 py-2.5 rounded-lg text-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+              {result.alreadyInDb ? "Already in DB" : "Created"}
+              {result.resolvedVia && (
+                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-400/70">
+                  via {result.resolvedVia}
+                </span>
+              )}
+              {": "}
+              <Link href={`/papers/${result.paperId}`} className="underline hover:text-emerald-200">
+                {result.title}
+              </Link>
+              {result.doi && (
+                <span className="ml-2 text-[10px] font-mono text-emerald-400/60">{result.doi}</span>
+              )}
+            </div>
+          )}
+          {result && result.type === "error" && (
+            <div className="px-4 py-2.5 rounded-lg text-sm bg-red-500/10 border border-red-500/20 text-red-400">
+              {result.text}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // --- Add External Document (grey literature) ---
 

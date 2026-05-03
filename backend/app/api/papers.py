@@ -943,6 +943,264 @@ async def create_external_document(
     return {"status": "created", "paper_id": paper.id, "title": paper.title}
 
 
+class FromDoiOrUrlRequest(BaseModel):
+    input: str  # DOI or paper URL (Nature, Wiley, Elsevier, Springer, generic doi.org)
+
+
+# URL → DOI extraction patterns. Order matters: more-specific publisher
+# patterns first so we don't accidentally truncate inside the DOI suffix.
+_URL_TO_DOI_PATTERNS = [
+    # Nature: nature.com/articles/<DOI-suffix> e.g. s41598-026-50003-5
+    (r'nature\.com/articles/([\w\-./]+?)(?:[?#]|$)', '10.1038/{}'),
+    # Wiley: onlinelibrary.wiley.com/doi/<...>/(<DOI>)
+    (r'onlinelibrary\.wiley\.com/doi/(?:abs/|full/|epdf/)?(10\.\d+/[^?#\s]+)', '{}'),
+    # Springer: link.springer.com/article/<DOI>
+    (r'link\.springer\.com/(?:article|chapter|book)/(10\.\d+/[^?#\s]+)', '{}'),
+    # Generic doi.org URL
+    (r'(?:dx\.)?doi\.org/(10\.\d+/[^?#\s]+)', '{}'),
+    # Bare DOI in the input (covers "DOI: 10.1038/..." as well as the DOI alone)
+    (r'\b(10\.\d{4,}/[^\s,;)]+)', '{}'),
+]
+
+
+def _extract_doi(input_str: str) -> str | None:
+    """Pull a DOI out of a URL or free-text input. Returns the canonical DOI string."""
+    import re
+    s = input_str.strip()
+    for pattern, template in _URL_TO_DOI_PATTERNS:
+        m = re.search(pattern, s, re.IGNORECASE)
+        if m:
+            doi = template.format(m.group(1))
+            # Trim trailing punctuation that may be part of surrounding text
+            doi = re.sub(r'[.,;)\]]+$', '', doi)
+            return doi
+    return None
+
+
+async def _scrape_publisher_metadata(url: str) -> dict | None:
+    """Fallback: scrape Highwire/Google-Scholar style meta tags from the publisher page.
+
+    Most academic publishers (Nature, Wiley, Elsevier, Springer, ACM, IEEE,
+    Frontiers, MDPI, ...) embed `<meta name="citation_*">` tags following the
+    Highwire convention. This works without the publisher API and without a
+    real HTML parser — a regex over the <head> section is enough because the
+    tags are well-formed.
+
+    Returns dict with title/authors/abstract/publication_date/journal/pdf_url
+    (any subset present), or None on hard failure.
+    """
+    import httpx
+    import re
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            res = await client.get(
+                url,
+                headers={
+                    # Browser-like UA — some publishers gate the meta tags behind UA detection.
+                    "User-Agent": "Mozilla/5.0 (compatible; FL-Research-Monitor/1.0; +https://resmon.fabioliberti.com)",
+                    "Accept": "text/html,application/xhtml+xml",
+                },
+            )
+            if res.status_code != 200 or not res.text:
+                return None
+            html = res.text
+    except Exception:
+        return None
+
+    # Restrict scan to <head>...</head> when present (faster + avoids body matches).
+    head_match = re.search(r'<head[^>]*>(.*?)</head>', html, re.DOTALL | re.IGNORECASE)
+    head = head_match.group(1) if head_match else html
+
+    def _meta(name: str, multi: bool = False) -> str | list[str] | None:
+        # Match <meta name="X" content="Y"> regardless of attribute order.
+        pattern = (
+            rf'<meta\s+(?:[^>]*?\s)?name=["\']({re.escape(name)})["\']'
+            rf'\s+(?:[^>]*?\s)?content=["\'](.*?)["\']'
+        )
+        # Also allow content before name (some publishers reverse the order).
+        pattern_alt = (
+            rf'<meta\s+(?:[^>]*?\s)?content=["\'](.*?)["\']'
+            rf'\s+(?:[^>]*?\s)?name=["\']({re.escape(name)})["\']'
+        )
+        matches: list[str] = []
+        for m in re.finditer(pattern, head, re.IGNORECASE):
+            matches.append(m.group(2))
+        for m in re.finditer(pattern_alt, head, re.IGNORECASE):
+            matches.append(m.group(1))
+        if multi:
+            return matches or None
+        return matches[0] if matches else None
+
+    title = _meta("citation_title") or _meta("dc.Title") or _meta("DC.title")
+    if not title:
+        # Last resort — og:title (often present even when citation_* are not)
+        og_match = re.search(
+            r'<meta\s+(?:[^>]*?\s)?property=["\']og:title["\']'
+            r'\s+(?:[^>]*?\s)?content=["\'](.*?)["\']',
+            head, re.IGNORECASE,
+        )
+        if og_match:
+            title = og_match.group(1)
+
+    if not title:
+        return None
+
+    authors_raw = _meta("citation_author", multi=True) or _meta("dc.Creator", multi=True) or []
+    if isinstance(authors_raw, str):
+        authors_raw = [authors_raw]
+    # Flip "Last, First" → "First Last" when comma-separated
+    authors: list[str] = []
+    for a in authors_raw:
+        if "," in a:
+            parts = [p.strip() for p in a.split(",", 1)]
+            if len(parts) == 2 and parts[0] and parts[1]:
+                authors.append(f"{parts[1]} {parts[0]}")
+                continue
+        authors.append(a.strip())
+
+    abstract = (
+        _meta("citation_abstract")
+        or _meta("dc.Description")
+        or _meta("description")
+    )
+    journal = _meta("citation_journal_title") or _meta("citation_conference_title")
+    pdf_url = _meta("citation_pdf_url")
+    pub_date = _meta("citation_publication_date") or _meta("citation_online_date") or _meta("citation_date")
+
+    # Normalize publication date: publishers use YYYY/MM/DD or YYYY-MM-DD or just YYYY.
+    if pub_date:
+        pub_date = pub_date.replace("/", "-").strip()
+        # Year-only is OK — formatDate on the frontend handles "YYYY" gracefully.
+
+    return {
+        "title": title.strip(),
+        "authors": authors,
+        "abstract": abstract.strip() if abstract else None,
+        "journal": journal.strip() if journal else None,
+        "publication_date": pub_date,
+        "pdf_url": pdf_url,
+    }
+
+
+@router.post("/from-doi-or-url")
+async def create_paper_from_doi_or_url(
+    body: FromDoiOrUrlRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manual paper ingestion when Discovery search misses an item.
+
+    Accepts a DOI or a publisher URL (Nature, Wiley, Elsevier, Springer,
+    doi.org, ...). Resolves metadata via:
+      1. DOI extraction from the input
+      2. CrossRef lookup (lower index lag than S2 for fresh papers)
+      3. Highwire meta-tag scrape on the publisher page (fallback when the
+         DOI was just minted and CrossRef hasn't ingested it yet)
+
+    Creates a Paper with `created_via='manual_ingest'`, `validated=False`.
+    Idempotent on DOI: re-submitting an existing paper returns its id.
+    """
+    from app.services.deduplication import normalize_doi
+    from app.clients.crossref import resolve_doi as crossref_resolve
+
+    raw_input = body.input.strip()
+    if not raw_input:
+        raise HTTPException(status_code=400, detail="Empty input")
+
+    # Detect input shape: URL vs DOI vs free text
+    is_url = raw_input.lower().startswith(("http://", "https://"))
+    doi = _extract_doi(raw_input)
+
+    # If we have a DOI, check the DB for an existing paper before any external call.
+    if doi:
+        rr = await db.execute(select(Paper).where(Paper.doi == normalize_doi(doi)))
+        existing = rr.scalar_one_or_none()
+        if existing:
+            return {
+                "status": "already_in_db",
+                "paper_id": existing.id,
+                "title": existing.title,
+                "doi": existing.doi,
+            }
+
+    # Resolution pipeline
+    metadata: dict | None = None
+    resolved_via: str | None = None
+
+    if doi:
+        metadata = await crossref_resolve(doi)
+        if metadata:
+            resolved_via = "crossref"
+
+    # Scrape fallback — only if input was a URL OR DOI resolution failed and we have a doi.org URL
+    if not metadata:
+        scrape_url: str | None = None
+        if is_url:
+            scrape_url = raw_input
+        elif doi:
+            scrape_url = f"https://doi.org/{doi}"
+        if scrape_url:
+            scraped = await _scrape_publisher_metadata(scrape_url)
+            if scraped:
+                metadata = scraped
+                resolved_via = "publisher_scrape"
+
+    if not metadata or not metadata.get("title"):
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Could not resolve metadata via CrossRef or publisher scrape. "
+                "Use 'Add External Document' for fully manual entry."
+            ),
+        )
+
+    # Build the Paper record
+    paper = Paper(
+        doi=normalize_doi(doi) if doi else None,
+        title=metadata["title"],
+        abstract=metadata.get("abstract"),
+        journal=metadata.get("journal"),
+        publication_date=metadata.get("publication_date"),
+        pdf_url=metadata.get("pdf_url"),
+        paper_type=metadata.get("paper_type") or "journal_article",
+        open_access=metadata.get("open_access", False),
+        citation_count=metadata.get("citation_count", 0),
+        validated=False,
+        created_via="manual_ingest",
+    )
+    db.add(paper)
+    await db.flush()
+
+    # Source attribution — record which resolver succeeded
+    db.add(PaperSource(
+        paper_id=paper.id,
+        source_name=resolved_via or "manual_ingest",
+        source_id=doi or raw_input[:200],
+    ))
+
+    # Authors
+    for i, name in enumerate(metadata.get("authors", []) or []):
+        if not name:
+            continue
+        rr = await db.execute(select(Author).where(Author.name == name))
+        author = rr.scalar_one_or_none()
+        if not author:
+            author = Author(name=name)
+            db.add(author)
+            await db.flush()
+        db.add(PaperAuthor(paper_id=paper.id, author_id=author.id, position=i))
+
+    await db.commit()
+
+    return {
+        "status": "created",
+        "paper_id": paper.id,
+        "title": paper.title,
+        "doi": paper.doi,
+        "resolved_via": resolved_via,
+    }
+
+
 class UpdatePaperMetadataRequest(BaseModel):
     title: str | None = None
     abstract: str | None = None
