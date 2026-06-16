@@ -143,17 +143,13 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
     <div>
       <div className="flex items-start gap-2">
         <h1 className="text-2xl font-bold leading-snug flex-1">{paper.title}</h1>
-        {(paper.paper_role === "my_manuscript"
-          || paper.paper_role === "reviewing"
-          || paper.created_via === "external_document") && (
-          <button
-            onClick={() => setEditing(true)}
-            className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0 mt-1"
-            title="Edit paper metadata"
-          >
-            Edit
-          </button>
-        )}
+        <button
+          onClick={() => setEditing(true)}
+          className="text-[10px] px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0 mt-1"
+          title="Edit paper metadata"
+        >
+          Edit
+        </button>
       </div>
       {(paper.conference_url || paper.conference_notes || paper.github_url || paper.overleaf_url) && (
         <div className="flex flex-wrap items-center gap-3 mt-1.5">
