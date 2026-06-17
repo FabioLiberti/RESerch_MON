@@ -1707,7 +1707,11 @@ async def get_paper_pdf(paper_id: int, db: AsyncSession = Depends(get_db)):
     path = Path(paper.pdf_local_path)
     if not path.exists():
         raise HTTPException(404, "PDF file not found on disk")
-    return FileResponse(path, media_type="application/pdf", filename=f"{paper.title[:80]}.pdf")
+    return FileResponse(
+        path, media_type="application/pdf",
+        filename=f"{paper.title[:80]}.pdf",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/{paper_id}/tex-file")
@@ -1719,7 +1723,11 @@ async def get_paper_tex(paper_id: int, db: AsyncSession = Depends(get_db)):
     path = Path(paper.tex_local_path)
     if not path.exists():
         raise HTTPException(404, "TEX file not found on disk")
-    return FileResponse(path, media_type="application/x-tex", filename=f"{paper.title[:80]}.tex")
+    return FileResponse(
+        path, media_type="application/x-tex",
+        filename=f"{paper.title[:80]}.tex",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/{paper_id}/md-file")
@@ -1731,7 +1739,11 @@ async def get_paper_md(paper_id: int, db: AsyncSession = Depends(get_db)):
     path = Path(paper.md_local_path)
     if not path.exists():
         raise HTTPException(404, "MD file not found on disk")
-    return FileResponse(path, media_type="text/markdown", filename=f"{paper.title[:80]}.md")
+    return FileResponse(
+        path, media_type="text/markdown",
+        filename=f"{paper.title[:80]}.md",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/{paper_id}/supplementary-file")
@@ -1745,7 +1757,11 @@ async def get_paper_supplementary(paper_id: int, db: AsyncSession = Depends(get_
         raise HTTPException(404, "Supplementary file not found on disk")
     ext = path.suffix.lower()
     media = "application/pdf" if ext == ".pdf" else "application/octet-stream"
-    return FileResponse(path, media_type=media, filename=f"{paper.title[:60]}_supplementary{ext}")
+    return FileResponse(
+        path, media_type=media,
+        filename=f"{paper.title[:60]}_supplementary{ext}",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.post("/{paper_id}/upload-supplementary")
