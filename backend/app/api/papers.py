@@ -1212,6 +1212,7 @@ class UpdatePaperMetadataRequest(BaseModel):
     github_url: str | None = None
     overleaf_url: str | None = None
     pdf_url: str | None = None
+    doi: str | None = None
 
 
 @router.put("/{paper_id}/metadata")
@@ -1245,6 +1246,14 @@ async def update_paper_metadata(
         paper.overleaf_url = body.overleaf_url
     if body.pdf_url is not None:
         paper.pdf_url = body.pdf_url
+    if body.doi is not None:
+        new_doi = body.doi.strip().lower() if body.doi.strip() else None
+        if new_doi != (paper.doi.lower() if paper.doi else None):
+            if new_doi:
+                existing = await db.execute(select(Paper).where(Paper.doi == new_doi, Paper.id != paper_id))
+                if existing.scalar_one_or_none():
+                    raise HTTPException(status_code=409, detail=f"DOI {new_doi} already exists in another paper")
+            paper.doi = new_doi
 
     await db.commit()
     return {"status": "updated", "paper_id": paper.id}

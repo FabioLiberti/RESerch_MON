@@ -29,10 +29,13 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
   const [githubUrl, setGithubUrl] = useState(paper.github_url || "");
   const [overleafUrl, setOverleafUrl] = useState(paper.overleaf_url || "");
   const [pdfUrl, setPdfUrl] = useState(paper.pdf_url || "");
+  const [doi, setDoi] = useState(paper.doi || "");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const save = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       const r = await fetch(`/api/v1/papers/${paperId}/metadata`, {
         method: "PUT",
@@ -48,11 +51,15 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
           github_url: githubUrl.trim() || null,
           overleaf_url: overleafUrl.trim() || null,
           pdf_url: pdfUrl.trim() || null,
+          doi: doi.trim() || null,
         }),
       });
       if (r.ok) {
         mutate(`/api/v1/papers/${paperId}`);
         setEditing(false);
+      } else {
+        const err = await r.json().catch(() => ({ detail: `HTTP ${r.status}` }));
+        setSaveError(err.detail || `Save failed (HTTP ${r.status})`);
       }
     } finally {
       setSaving(false);
@@ -114,23 +121,36 @@ function EditableHeader({ paper, paperId }: { paper: any; paperId: number }) {
               className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
           </div>
         </div>
-        <div>
-          <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Original URL / PDF link</label>
-          <input value={pdfUrl} onChange={e => setPdfUrl(e.target.value)}
-            placeholder="https://www.who.int/europe/publications/i/item/..."
-            className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">DOI</label>
+            <input value={doi} onChange={e => setDoi(e.target.value)}
+              placeholder="10.1007/s10462-024-10810-6"
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm font-mono focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Original URL / PDF link</label>
+            <input value={pdfUrl} onChange={e => setPdfUrl(e.target.value)}
+              placeholder="https://www.who.int/europe/publications/i/item/..."
+              className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none" />
+          </div>
         </div>
         <div>
           <label className="text-[10px] text-[var(--muted-foreground)] block mb-1">Abstract</label>
           <textarea value={abstract} onChange={e => setAbstract(e.target.value)} rows={3}
             className="w-full px-3 py-2 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-sm focus:outline-none resize-y" />
         </div>
+        {saveError && (
+          <div className="rounded-lg bg-red-950 border border-red-700 px-3 py-2 text-xs text-red-200">
+            {saveError}
+          </div>
+        )}
         <div className="flex gap-2">
           <button onClick={save} disabled={saving}
             className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-600 disabled:opacity-50">
             {saving ? "..." : "Save"}
           </button>
-          <button onClick={() => setEditing(false)}
+          <button onClick={() => { setEditing(false); setSaveError(null); }}
             className="px-4 py-2 rounded-lg bg-[var(--secondary)] text-xs hover:bg-[var(--muted)]">
             Cancel
           </button>
