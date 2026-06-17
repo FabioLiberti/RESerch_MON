@@ -145,7 +145,7 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
 @router.get("", response_model=PaperListResponse)
 async def list_papers(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=500),
     sort_by: str = Query("created_at", pattern="^(created_at|publication_date|citation_count|title|rating)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     topic: str | None = None,

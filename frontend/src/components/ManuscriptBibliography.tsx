@@ -115,7 +115,7 @@ export default function ManuscriptBibliography({ paperId, defaultCollapsed = fal
     setLabelLoading(true);
     setSelectedForImport(new Set());
     try {
-      const r = await fetch(`/api/v1/papers?label=${encodeURIComponent(labelName)}&per_page=100&sort_by=title&sort_order=asc`, {
+      const r = await fetch(`/api/v1/papers?label=${encodeURIComponent(labelName)}&per_page=500&sort_by=title&sort_order=asc`, {
         headers: authHeaders(),
       });
       if (r.ok) {
