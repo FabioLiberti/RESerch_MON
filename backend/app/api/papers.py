@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1247,13 +1247,23 @@ async def update_paper_metadata(
     if body.pdf_url is not None:
         paper.pdf_url = body.pdf_url
     if body.doi is not None:
-        new_doi = body.doi.strip().lower() if body.doi.strip() else None
+        raw = body.doi.strip()
+        for prefix in ("https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "http://dx.doi.org/", "doi:"):
+            if raw.lower().startswith(prefix):
+                raw = raw[len(prefix):]
+                break
+        new_doi = raw.lower() if raw else None
         if new_doi != (paper.doi.lower() if paper.doi else None):
             if new_doi:
                 existing = await db.execute(select(Paper).where(Paper.doi == new_doi, Paper.id != paper_id))
                 if existing.scalar_one_or_none():
                     raise HTTPException(status_code=409, detail=f"DOI {new_doi} already exists in another paper")
             paper.doi = new_doi
+            if new_doi:
+                await db.execute(
+                    text("UPDATE paper_sources SET source_id = :doi WHERE paper_id = :pid AND source_name = 'bibliography'"),
+                    {"doi": new_doi, "pid": paper_id},
+                )
 
     await db.commit()
     return {"status": "updated", "paper_id": paper.id}
