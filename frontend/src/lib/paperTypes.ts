@@ -15,6 +15,8 @@ export const PAPER_TYPE_OPTIONS = [
   { value: "regulation", label: "Regulation (EU/EC)", badge: "REGULATION", color: "bg-blue-800" },
   { value: "directive", label: "Directive (EU)", badge: "DIRECTIVE", color: "bg-sky-800" },
   { value: "decision", label: "Decision (EU)", badge: "DECISION", color: "bg-indigo-800" },
+  { value: "book", label: "Book", badge: "BOOK", color: "bg-orange-700" },
+  { value: "book_chapter", label: "Book Chapter", badge: "BOOK CHAPTER", color: "bg-orange-800" },
 ] as const;
 
 /** Subset shown in the "Add External Document" form (grey literature). */
@@ -23,6 +25,8 @@ export const EXTERNAL_DOCUMENT_TYPES = [
   { value: "guideline", label: "Guideline (clinical guideline, EMA, FDA, ...)" },
   { value: "white_paper", label: "White Paper (institutional, industry)" },
   { value: "standard", label: "Standard (ISO, IEEE, NIST)" },
+  { value: "book", label: "Book (academic, monograph)" },
+  { value: "book_chapter", label: "Book Chapter (edited volume)" },
 ] as const;
 
 export function getPaperTypeBadge(paperType: string) {
