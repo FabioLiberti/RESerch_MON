@@ -198,6 +198,39 @@ class PubMedClient(BaseAPIClient):
         if pmc_id:
             pdf_url = f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmc_id}/pdf/"
 
+        # Paper type — derive from MEDLINE PublicationType list (priority-ordered match)
+        # Source: https://www.nlm.nih.gov/mesh/pubtypes.html (subset most common, last verified 2026-06)
+        pub_type_texts: list[str] = []
+        if medline:
+            for pt_el in medline.findall(".//PublicationTypeList/PublicationType"):
+                if pt_el.text:
+                    pub_type_texts.append(pt_el.text.strip())
+        PUBMED_TYPE_PRIORITY = [
+            ("Systematic Review", "review"),
+            ("Meta-Analysis", "meta_analysis"),
+            ("Randomized Controlled Trial", "clinical_trial"),
+            ("Clinical Trial", "clinical_trial"),
+            ("Case Reports", "case_report"),
+            ("Review", "review"),
+            ("Editorial", "editorial"),
+            ("Letter", "letter"),
+            ("Comment", "letter"),
+            ("Guideline", "guideline"),
+            ("Practice Guideline", "guideline"),
+            ("Dataset", "dataset"),
+            ("Preprint", "preprint"),
+            ("Book", "book"),
+            ("Book Chapter", "book_chapter"),
+            ("Congresses", "conference"),
+            ("Conference", "conference"),
+            ("Journal Article", "journal_article"),
+        ]
+        paper_type = "journal_article"  # fallback
+        for keyword, canonical in PUBMED_TYPE_PRIORITY:
+            if any(keyword.lower() in pt.lower() for pt in pub_type_texts):
+                paper_type = canonical
+                break
+
         return RawPaperResult(
             source="pubmed",
             source_id=pmid,
@@ -209,7 +242,7 @@ class PubMedClient(BaseAPIClient):
             journal=journal,
             volume=volume_el.text if volume_el is not None else None,
             pages=pages_el.text if pages_el is not None else None,
-            paper_type="journal_article",
+            paper_type=paper_type,
             open_access=pmc_id is not None,
             pdf_url=pdf_url,
             keywords=keywords,

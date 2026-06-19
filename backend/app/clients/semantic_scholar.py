@@ -116,13 +116,30 @@ class SemanticScholarClient(BaseAPIClient):
         if not journal:
             journal = data.get("venue")
 
-        # Paper type
+        # Paper type — exhaustive S2 publicationTypes mapping to canonical frontend vocabulary
+        # Source: Semantic Scholar API publicationTypes enum (13 values, last verified 2026-06)
         pub_types = data.get("publicationTypes") or []
-        paper_type = "journal_article"
-        if "Conference" in pub_types:
-            paper_type = "conference"
-        elif "Review" in pub_types:
-            paper_type = "review"
+        S2_TYPE_MAP = {
+            "JournalArticle": "journal_article",
+            "Conference": "conference",
+            "Review": "review",
+            "CaseReport": "case_report",
+            "ClinicalTrial": "clinical_trial",
+            "MetaAnalysis": "meta_analysis",
+            "Editorial": "editorial",
+            "LettersAndComments": "letter",
+            "Dataset": "dataset",
+            "Book": "book",
+            "BookSection": "book_chapter",
+            "News": "other",
+            "Study": "journal_article",  # generic study
+        }
+        paper_type = "journal_article"  # fallback when no publicationTypes returned
+        for pt in pub_types:
+            mapped = S2_TYPE_MAP.get(pt)
+            if mapped:
+                paper_type = mapped
+                break  # first match wins (S2 may return multiple, e.g. ["Review", "JournalArticle"])
 
         # Keywords from fieldsOfStudy + s2FieldsOfStudy (more specific)
         keywords = []

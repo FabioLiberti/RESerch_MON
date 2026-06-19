@@ -56,13 +56,42 @@ async def resolve_doi(doi: str) -> dict | None:
             containers = data.get("container-title", [])
             journal = containers[0] if containers else None
 
-            # Type
-            cr_type = data.get("type", "")
-            paper_type = "journal_article"
-            if "proceedings" in cr_type or "conference" in cr_type:
-                paper_type = "conference"
-            elif "book" in cr_type:
-                paper_type = "journal_article"  # treat books as articles for simplicity
+            # Type — exhaustive Crossref `type` mapping to canonical frontend vocabulary
+            # Source: https://api.crossref.org/types (last verified 2026-06)
+            cr_type = (data.get("type") or "").lower().strip()
+            CROSSREF_TYPE_MAP = {
+                "journal-article": "journal_article",
+                "proceedings-article": "conference",
+                "book-chapter": "book_chapter",
+                "book": "book",
+                "book-section": "book_chapter",
+                "book-part": "book_chapter",
+                "edited-book": "book",
+                "monograph": "book",
+                "reference-book": "book",
+                "reference-entry": "book_chapter",
+                "dissertation": "dissertation",
+                "thesis": "dissertation",
+                "report": "report",
+                "report-component": "report",
+                "standard": "standard",
+                "dataset": "dataset",
+                "database": "dataset",
+                "posted-content": "preprint",  # most preprints
+                "preprint": "preprint",
+                "peer-review": "review",
+                "review": "review",
+                "editorial-material": "editorial",
+                "letter": "letter",
+                "other": "other",
+                "component": "other",
+                "grant": "other",
+                "journal-issue": "other",
+                "journal-volume": "other",
+                "proceedings": "conference",
+                "proceedings-series": "conference",
+            }
+            paper_type = CROSSREF_TYPE_MAP.get(cr_type, "journal_article")
 
             # Abstract (sometimes available)
             abstract = data.get("abstract")
