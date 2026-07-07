@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     zotero_api_key: str = ""
     zotero_user_id: str = ""
 
-    # Claude API
+    # Zenodo (research artifact deposition). Use https://sandbox.zenodo.org/api for testing.
+    zenodo_api_key: str = ""
+    zenodo_api_base: str = "https://zenodo.org/api"
+
+    # LLM API
     anthropic_api_key: str = ""
 
     # Authentication

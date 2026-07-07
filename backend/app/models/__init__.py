@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models."""
 
-from app.models.paper import Author, Paper, PaperAuthor, PaperSource
+from app.models.paper import Author, Paper, PaperAuthor, PaperDocument, PaperSource
 from app.models.topic import PaperTopic, Topic
 from app.models.analysis import AnalysisQueue, DailyReport, FetchLog, SmartSearchJob, SyntheticAnalysis
 from app.models.user import User
@@ -11,6 +11,7 @@ __all__ = [
     "Paper",
     "Author",
     "PaperAuthor",
+    "PaperDocument",
     "PaperSource",
     "Topic",
     "PaperTopic",

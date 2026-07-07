@@ -88,6 +88,8 @@ class PaperDetail(BaseModel):
     conference_notes: str | None = None
     github_url: str | None = None
     overleaf_url: str | None = None
+    zenodo_doi: str | None = None
+    zenodo_url: str | None = None
     has_tex: bool = False
     has_md: bool = False
     has_supplementary: bool = False

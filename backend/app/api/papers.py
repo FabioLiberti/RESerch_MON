@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.paper import Paper, PaperAuthor, PaperSource, Author
+from app.models.paper import Paper, PaperAuthor, PaperDocument, PaperSource, Author
 from app.models.topic import PaperTopic, Topic
 from app.models.analysis import SyntheticAnalysis
 from app.models.label import Label, PaperLabel
@@ -105,6 +105,8 @@ def _paper_to_detail(paper: Paper) -> PaperDetail:
         conference_notes=paper.conference_notes,
         github_url=paper.github_url,
         overleaf_url=paper.overleaf_url,
+        zenodo_doi=paper.zenodo_doi,
+        zenodo_url=paper.zenodo_url,
         has_tex=paper.tex_local_path is not None,
         has_md=paper.md_local_path is not None,
         has_supplementary=paper.supplementary_path is not None,
@@ -1211,6 +1213,8 @@ class UpdatePaperMetadataRequest(BaseModel):
     conference_notes: str | None = None
     github_url: str | None = None
     overleaf_url: str | None = None
+    zenodo_doi: str | None = None
+    zenodo_url: str | None = None
     pdf_url: str | None = None
     doi: str | None = None
 
@@ -1244,6 +1248,10 @@ async def update_paper_metadata(
         paper.github_url = body.github_url
     if body.overleaf_url is not None:
         paper.overleaf_url = body.overleaf_url
+    if body.zenodo_doi is not None:
+        paper.zenodo_doi = body.zenodo_doi.strip() or None
+    if body.zenodo_url is not None:
+        paper.zenodo_url = body.zenodo_url.strip() or None
     if body.pdf_url is not None:
         paper.pdf_url = body.pdf_url
     if body.doi is not None:
@@ -1812,3 +1820,186 @@ async def get_paper_analysis(paper_id: int, db: AsyncSession = Depends(get_db)):
         generated_at=analysis.generated_at,
         generator=analysis.generator,
     )
+
+
+# ======================================================================
+# Supporting documents (attachments): presentation, primer, companion, ...
+# An arbitrary number of labelled artifacts per paper, distinct from the
+# single supplementary_path and from submission-round documents.
+# ======================================================================
+import json as _json
+import re as _re
+from datetime import datetime as _dt
+
+_DOC_TYPES = {"presentation", "primer", "companion", "slides", "supplementary", "dataset", "code", "other"}
+_DOC_MEDIA = {
+    ".pdf": "application/pdf", ".md": "text/markdown", ".tex": "text/x-tex",
+    ".txt": "text/plain", ".zip": "application/zip", ".pptx":
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".csv": "text/csv", ".json": "application/json",
+}
+
+
+class PaperDocumentOut(BaseModel):
+    id: int
+    paper_id: int
+    filename: str
+    content_type: str | None = None
+    size: int | None = None
+    doc_type: str
+    description: str | None = None
+    uploaded_at: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+def _docs_dir():
+    from app.config import settings
+    d = Path(settings.pdf_storage_path) / "paper_documents"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@router.get("/{paper_id}/documents", response_model=list[PaperDocumentOut])
+async def list_paper_documents(paper_id: int, db: AsyncSession = Depends(get_db)):
+    """List all supporting documents attached to a paper."""
+    rows = (await db.execute(
+        select(PaperDocument).where(PaperDocument.paper_id == paper_id)
+        .order_by(PaperDocument.uploaded_at.desc())
+    )).scalars().all()
+    return [
+        PaperDocumentOut(
+            id=r.id, paper_id=r.paper_id, filename=r.filename, content_type=r.content_type,
+            size=r.size, doc_type=r.doc_type, description=r.description,
+            uploaded_at=r.uploaded_at.isoformat() if r.uploaded_at else None,
+        ) for r in rows
+    ]
+
+
+@router.post("/{paper_id}/documents", response_model=PaperDocumentOut)
+async def upload_paper_document(
+    paper_id: int,
+    file: UploadFile = File(...),
+    doc_type: str = Query("other"),
+    description: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Attach a supporting document (PDF/.tex/.md/.txt/.pptx/.zip/...) to a paper."""
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    dt = doc_type if doc_type in _DOC_TYPES else "other"
+
+    content = await file.read()
+    fname = file.filename or "document"
+    ext = Path(fname).suffix.lower()
+    safe_stem = _re.sub(r"[^\w.-]", "_", Path(fname).stem)[:80]
+    stored = f"{paper_id}_{dt}_{safe_stem}{ext}"
+    out_path = _docs_dir() / stored
+    out_path.write_bytes(content)
+
+    row = PaperDocument(
+        paper_id=paper_id, filename=fname, stored_name=stored,
+        content_type=file.content_type or _DOC_MEDIA.get(ext, "application/octet-stream"),
+        size=len(content), doc_type=dt, description=description, uploaded_at=_dt.utcnow(),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return PaperDocumentOut(
+        id=row.id, paper_id=row.paper_id, filename=row.filename, content_type=row.content_type,
+        size=row.size, doc_type=row.doc_type, description=row.description,
+        uploaded_at=row.uploaded_at.isoformat() if row.uploaded_at else None,
+    )
+
+
+@router.get("/documents/{doc_id}/file")
+async def get_paper_document_file(doc_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve the binary content of an attached document."""
+    row = await db.get(PaperDocument, doc_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    p = _docs_dir() / row.stored_name
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="File missing on disk")
+    return FileResponse(path=str(p), media_type=row.content_type or "application/octet-stream", filename=row.filename)
+
+
+@router.delete("/documents/{doc_id}")
+async def delete_paper_document(doc_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete an attached document (row + file)."""
+    row = await db.get(PaperDocument, doc_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    p = _docs_dir() / row.stored_name
+    try:
+        if p.exists():
+            p.unlink()
+    except OSError:
+        pass
+    await db.delete(row)
+    await db.commit()
+    return {"status": "deleted", "id": doc_id}
+
+
+# ======================================================================
+# Zenodo deposition: bundle the manuscript + attachments into one Zenodo
+# record and store the (reserved or published) DOI on the paper.
+# ======================================================================
+class ZenodoDepositRequest(BaseModel):
+    publish: bool = False            # default: draft only (safer; DOI reserved, not minted)
+    include_main_pdf: bool = True
+    include_supplementary: bool = True
+    include_documents: bool = True
+
+
+@router.post("/{paper_id}/zenodo-deposit")
+async def zenodo_deposit(
+    paper_id: int,
+    body: ZenodoDepositRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Deposit the paper's artifacts to Zenodo. Stores the resulting DOI/URL on the paper.
+
+    By default creates a DRAFT (publish=false): the DOI is reserved and the edit
+    URL is returned so the author reviews and publishes manually on Zenodo.
+    """
+    from app.services import zenodo as zsvc
+
+    paper = await db.get(Paper, paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    files: list[tuple[str, bytes]] = []
+    if body.include_main_pdf and paper.pdf_local_path and Path(paper.pdf_local_path).exists():
+        files.append((f"{paper_id}_manuscript.pdf", Path(paper.pdf_local_path).read_bytes()))
+    if body.include_supplementary and paper.supplementary_path and Path(paper.supplementary_path).exists():
+        files.append((Path(paper.supplementary_path).name, Path(paper.supplementary_path).read_bytes()))
+    if body.include_documents:
+        docs = (await db.execute(select(PaperDocument).where(PaperDocument.paper_id == paper_id))).scalars().all()
+        for d in docs:
+            fp = _docs_dir() / d.stored_name
+            if fp.exists():
+                files.append((d.filename, fp.read_bytes()))
+
+    try:
+        keywords = _json.loads(paper.keywords_json or "[]")
+    except Exception:
+        keywords = []
+
+    try:
+        result = await zsvc.deposit(
+            files=files,
+            metadata=zsvc.build_metadata(paper, keywords=keywords),
+            publish=body.publish,
+        )
+    except zsvc.ZenodoError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # persist DOI/URL on the paper
+    if result.get("doi"):
+        paper.zenodo_doi = result["doi"]
+    if result.get("html_url"):
+        paper.zenodo_url = result["html_url"]
+    await db.commit()
+    return {"status": "ok", **result}

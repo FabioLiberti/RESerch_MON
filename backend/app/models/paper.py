@@ -53,6 +53,8 @@ class Paper(Base):
     conference_notes = Column(Text, nullable=True)  # Free-text notes about the venue
     github_url = Column(Text, nullable=True)        # Link to the paper's code repository
     overleaf_url = Column(Text, nullable=True)      # Link to the Overleaf project
+    zenodo_doi = Column(String(255), nullable=True) # Zenodo DOI (e.g. 10.5281/zenodo.NNNN)
+    zenodo_url = Column(Text, nullable=True)        # Link to the Zenodo record/deposit
     tex_local_path = Column(Text, nullable=True)    # Local path to .tex source file
     md_local_path = Column(Text, nullable=True)     # Local path to .md source file
     supplementary_path = Column(Text, nullable=True) # Local path to supplementary file (PDF)
@@ -140,3 +142,23 @@ class PaperSource(Base):
     @raw_metadata.setter
     def raw_metadata(self, value: dict):
         self.raw_metadata_json = json.dumps(value, default=str)
+
+
+class PaperDocument(Base):
+    """A supporting document attached to a paper/manuscript (presentation, primer,
+    companion, slides, dataset, ...). The file lives in the storage volume; this row
+    is the index. Distinct from the single ``supplementary_path`` and from submission
+    rounds — allows an arbitrary number of labelled artifacts per paper."""
+
+    __tablename__ = "paper_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), index=True, nullable=False)
+    filename = Column(String(255), nullable=False)          # original filename
+    stored_name = Column(String(255), nullable=False)       # on-disk filename
+    content_type = Column(String(100), nullable=True)
+    size = Column(Integer, nullable=True)                   # bytes
+    # presentation | primer | companion | slides | supplementary | dataset | code | other
+    doc_type = Column(String(30), default="other")
+    description = Column(Text, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)

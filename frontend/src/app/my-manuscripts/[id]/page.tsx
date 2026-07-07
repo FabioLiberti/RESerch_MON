@@ -13,6 +13,7 @@ import ReviewJournal from "@/components/ReviewJournal";
 import ManuscriptBibliography from "@/components/ManuscriptBibliography";
 import UserNotes from "@/components/UserNotes";
 import VenueKeyDates from "@/components/VenueKeyDates";
+import PaperDocuments from "@/components/PaperDocuments";
 
 interface SubmissionRoundLite {
   id: number;
@@ -217,6 +218,17 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                 Overleaf
               </a>
             )}
+            {((paper as any).zenodo_url || (paper as any).zenodo_doi) && (
+              <a href={(paper as any).zenodo_url || `https://doi.org/${(paper as any).zenodo_doi}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                title={(paper as any).zenodo_doi || "Zenodo"}>
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 3.5l4.5 8h-9L12 5.5z"/>
+                </svg>
+                Zenodo{(paper as any).zenodo_doi ? ` · ${(paper as any).zenodo_doi}` : ""}
+              </a>
+            )}
             {(paper as any).conference_notes && (
               <span className="text-xs text-[var(--muted-foreground)] italic">{(paper as any).conference_notes}</span>
             )}
@@ -228,6 +240,11 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
             Paper Detail ↗
           </a>
         </div>
+      </div>
+
+      {/* Supporting documents (presentation, primer, companion, ...) + Zenodo deposit */}
+      <div className="mb-4">
+        <PaperDocuments paperId={paperId} />
       </div>
 
       {/* Side-by-side layout */}
