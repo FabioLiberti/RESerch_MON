@@ -50,7 +50,7 @@ export default function PaperDocuments({
   const [docType, setDocType] = useState("presentation");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
-  const [zenodo, setZenodo] = useState<string | null>(null);
+  const [zenodo, setZenodo] = useState<{ doi?: string; url?: string; n?: number } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   function toggle(id: number) {
@@ -131,7 +131,7 @@ export default function PaperDocuments({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.detail || "errore");
-      setZenodo(`Bozza creata — DOI riservato ${j.doi || "?"} (${j.n_files} file). Rivedi e pubblica su Zenodo: ${j.html_url || ""}`);
+      setZenodo({ doi: j.doi, url: j.html_url, n: j.n_files });
       mutate(`/api/v1/papers/${paperId}`);
     } catch (e) {
       alert("Zenodo: " + (e as Error).message);
@@ -158,7 +158,18 @@ export default function PaperDocuments({
       </div>
 
       {zenodo && (
-        <div className="mb-2 text-xs text-blue-300 bg-blue-950/40 rounded p-2 break-words">{zenodo}</div>
+        <div className="mb-2 text-xs rounded-lg p-2.5 bg-blue-50 text-blue-900 border border-blue-300 break-words flex items-start justify-between gap-2">
+          <span>
+            ✓ Bozza Zenodo creata — DOI riservato <b>{zenodo.doi || "?"}</b> ({zenodo.n} file).{" "}
+            {zenodo.url && (
+              <a href={zenodo.url} target="_blank" rel="noopener noreferrer"
+                className="underline font-semibold text-blue-700 hover:text-blue-900">
+                Rivedi e pubblica su Zenodo →
+              </a>
+            )}
+          </span>
+          <button onClick={() => setZenodo(null)} className="text-blue-500 hover:text-blue-800 shrink-0" title="Chiudi">✕</button>
+        </div>
       )}
 
       {/* Upload form */}
