@@ -1951,6 +1951,8 @@ class ZenodoDepositRequest(BaseModel):
     include_main_pdf: bool = True
     include_supplementary: bool = True
     include_documents: bool = True
+    # If provided, deposit ONLY these attached-document ids (overrides include_documents).
+    document_ids: list[int] | None = None
 
 
 @router.post("/{paper_id}/zenodo-deposit")
@@ -1975,8 +1977,11 @@ async def zenodo_deposit(
         files.append((f"{paper_id}_manuscript.pdf", Path(paper.pdf_local_path).read_bytes()))
     if body.include_supplementary and paper.supplementary_path and Path(paper.supplementary_path).exists():
         files.append((Path(paper.supplementary_path).name, Path(paper.supplementary_path).read_bytes()))
-    if body.include_documents:
-        docs = (await db.execute(select(PaperDocument).where(PaperDocument.paper_id == paper_id))).scalars().all()
+    if body.document_ids is not None or body.include_documents:
+        q = select(PaperDocument).where(PaperDocument.paper_id == paper_id)
+        if body.document_ids is not None:
+            q = q.where(PaperDocument.id.in_(body.document_ids))
+        docs = (await db.execute(q)).scalars().all()
         for d in docs:
             fp = _docs_dir() / d.stored_name
             if fp.exists():

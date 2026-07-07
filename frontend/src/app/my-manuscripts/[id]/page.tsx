@@ -64,6 +64,28 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
   const [roundBlobUrls, setRoundBlobUrls] = useState<Record<number, string>>({});
   const [roundLoading, setRoundLoading] = useState<Record<number, boolean>>({});
 
+  // Attached documents (presentation, primer, companion, ...) previewable in the viewer.
+  const { data: paperDocs } = useSWR<{ id: number; filename: string; doc_type: string }[]>(
+    `/api/v1/papers/${paperId}/documents`,
+    authFetcher
+  );
+  const inlineableDocs = (paperDocs || []).filter(d => /\.(pdf|txt|md)$/i.test(d.filename));
+  const [docBlobUrls, setDocBlobUrls] = useState<Record<number, string>>({});
+  const [docLoading, setDocLoading] = useState<Record<number, boolean>>({});
+
+  // Load an attached document into a blob URL on demand
+  useEffect(() => {
+    if (!docTab.startsWith("doc-")) return;
+    const did = parseInt(docTab.slice(4), 10);
+    if (!did || docBlobUrls[did] || docLoading[did]) return;
+    setDocLoading(prev => ({ ...prev, [did]: true }));
+    fetch(`/api/v1/papers/documents/${did}/file`, { headers: authHeaders() })
+      .then(r => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(blob => setDocBlobUrls(prev => ({ ...prev, [did]: URL.createObjectURL(blob) })))
+      .catch(() => {})
+      .finally(() => setDocLoading(prev => ({ ...prev, [did]: false })));
+  }, [docTab, docBlobUrls, docLoading]);
+
   // Load a round's PDF into a blob URL on demand
   useEffect(() => {
     if (!docTab.startsWith("round-")) return;
@@ -105,8 +127,9 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
       if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
       if (suppBlobUrl) URL.revokeObjectURL(suppBlobUrl);
       Object.values(roundBlobUrls).forEach(u => URL.revokeObjectURL(u));
+      Object.values(docBlobUrls).forEach(u => URL.revokeObjectURL(u));
     };
-  }, [pdfBlobUrl, suppBlobUrl, roundBlobUrls]);
+  }, [pdfBlobUrl, suppBlobUrl, roundBlobUrls, docBlobUrls]);
 
   const uploadFile = async (file: File) => {
     const fd = new FormData();
@@ -244,7 +267,7 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
 
       {/* Supporting documents (presentation, primer, companion, ...) + Zenodo deposit */}
       <div className="mb-4">
-        <PaperDocuments paperId={paperId} />
+        <PaperDocuments paperId={paperId} onPreview={(id) => setDocTab(`doc-${id}`)} />
       </div>
 
       {/* Side-by-side layout */}
@@ -357,7 +380,7 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
           </div>
 
           {/* Tab selector: Main / Supplementary / Rounds */}
-          {(paper.has_pdf || (paper as any).has_supplementary || inlineableRounds.length > 0) && (
+          {(paper.has_pdf || (paper as any).has_supplementary || inlineableRounds.length > 0 || inlineableDocs.length > 0) && (
             <div className="flex border-b border-gray-300 overflow-x-auto">
               <button
                 onClick={() => setDocTab("main")}
@@ -393,6 +416,23 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                     title={`Round ${r.round_number} — ${r.venue || "venue n/a"}${r.submitted_at ? ` · submitted ${r.submitted_at}` : ""}`}
                   >
                     R{r.round_number}{r.venue ? `: ${r.venue}` : ""}{dateShort ? ` · ${dateShort}` : ""}
+                  </button>
+                );
+              })}
+              {/* One tab per attached document (presentation, primer, companion, ...). */}
+              {inlineableDocs.map(d => {
+                const tabKey = `doc-${d.id}`;
+                const active = docTab === tabKey;
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => setDocTab(tabKey)}
+                    className={`shrink-0 text-[10px] font-bold py-1.5 px-3 text-center transition-colors whitespace-nowrap ${
+                      active ? "bg-white text-gray-800 border-b-2 border-emerald-600" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                    title={d.filename}
+                  >
+                    {d.doc_type}
                   </button>
                 );
               })}
@@ -485,6 +525,36 @@ export default function MyManuscriptDetailPage({ params }: { params: Promise<{ i
                           className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold hover:bg-amber-500"
                         >
                           Open Round {r.round_number}
+                        </a>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+            {/* Attached-document panels (presentation, primer, companion, ...) */}
+            {inlineableDocs.map(d => {
+              const tabKey = `doc-${d.id}`;
+              const blobUrl = docBlobUrls[d.id];
+              const isLoading = docLoading[d.id];
+              return (
+                <div key={d.id} className={`absolute inset-0 ${docTab === tabKey ? "" : "invisible"}`}>
+                  {isLoading || !blobUrl ? (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                      Caricamento {d.doc_type}…
+                    </div>
+                  ) : (
+                    <>
+                      <iframe
+                        title={d.filename}
+                        src={`${blobUrl}#view=FitH`}
+                        className="w-full h-full border-0 hidden sm:block"
+                      />
+                      <div className="sm:hidden h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+                        <p className="text-sm text-gray-600">Anteprima non disponibile su mobile.</p>
+                        <a href={blobUrl} target="_blank" rel="noopener noreferrer"
+                          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500">
+                          Apri {d.filename}
                         </a>
                       </div>
                     </>
